@@ -1,0 +1,12 @@
+{
+  "id": 18,
+  "name": "Главная",
+  "description": "Модуль дашборда",
+  "minimumCoreVersion": "0.1",
+  "title": "Дашборд",
+  "version": "0.1",
+  "author": "Боязитов Э.М.",
+  "path": "dashboard",
+  "icon": "dashboard",
+  "number": 0
+}

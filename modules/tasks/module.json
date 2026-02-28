@@ -1,0 +1,13 @@
+{
+  "id": 13,
+  "name": "Задачи",
+  "description": "Модуль позволяет создавать/удалять/редактировать задачи",
+  "minimumCoreVersion": "0.1",
+  "title": "Шаблоны задач",
+  "version": "0.1",
+  "author": "Боязитов Э.М.",
+  "path": "tasks",
+  "icon": "list_alt",
+  "number": 260,
+  "parentItem": "settings"
+}

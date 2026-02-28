@@ -1,0 +1,13 @@
+{
+  "id": 20,
+  "name": "API",
+  "description": "Модуль позволяет создавать/удалять/редактировать API",
+  "minimumCoreVersion": "0.1",
+  "title": "API",
+  "version": "0.1",
+  "author": "Боязитов Э.М.",
+  "path": "api",
+  "icon": "integration_instructions",
+  "number": 400,
+  "parentItem": "settings"
+}

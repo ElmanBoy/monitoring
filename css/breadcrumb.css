@@ -1,0 +1,80 @@
+.breadcrumb {
+    font: .75em sans-serif;
+    list-style: none;
+    width: 100%;
+    background: var(--color_06);
+    border-radius: 6px;
+}
+
+.breadcrumb.bc2x {
+    font-size: 1em;
+}
+
+.breadcrumb.bc3x {
+    font-size: 1.25em;
+}
+
+.breadcrumb p {
+    margin: 0;
+}
+
+.breadcrumb li {
+    display: inline-block;
+    margin-bottom: .2em;
+}
+
+.breadcrumb li a {
+    background-color: var(--color_04);
+    box-sizing: border-box;
+    color: #fff;
+    display: block;
+    max-height: 2em;
+    padding: .5em 1em .5em 1.5em;
+    position: relative;
+    text-decoration: none;
+    transition: .25s;
+}
+
+.breadcrumb li:first-child a{
+    border-radius: 5px 0 0 5px;
+}
+
+.breadcrumb li a:before {
+    border-top: 1em solid transparent;
+    border-bottom: 1em solid transparent;
+    border-left: 1em solid #fff;
+    content: "";
+    position: absolute;
+    top: 0;
+    right: -1.25em;
+    z-index: 1;
+}
+
+.breadcrumb li a:after {
+    border-top: 1em solid transparent;
+    border-bottom: 1em solid transparent;
+    border-left: 1em solid var(--color_04);
+    content: "";
+    position: absolute;
+    top: 0;
+    right: -1em;
+    transition: .25s;
+    z-index: 1;
+}
+
+.breadcrumb li a:hover {
+    background-color: var(--color_03);
+}
+
+.breadcrumb li a:hover:after {
+    border-left-color: var(--color_03);
+}
+
+.breadcrumb li:last-child a {
+    background-color: var(--color_03);
+    pointer-events: none;
+}
+
+.breadcrumb li:last-child a:after {
+    border-left-color: var(--color_03);
+}

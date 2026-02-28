@@ -1,0 +1,13 @@
+{
+  "id": 10,
+  "name": "Шаблоны",
+  "description": "Модуль позволяет создавать/редактировать шаблоны документов",
+  "minimumCoreVersion": "0.1",
+  "title": "Шаблоны",
+  "version": "0.1",
+  "author": "Боязитов Э.М.",
+  "path": "docs",
+  "icon": "article",
+  "number": 10,
+  "parentItem": "settings"
+}

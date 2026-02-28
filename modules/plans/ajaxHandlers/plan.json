@@ -1,0 +1,281 @@
+[
+  {
+    "units": "",
+    "periods": "I - II кварталы",
+    "check_types": "3",
+    "inspections": "1",
+    "institutions": "75",
+    "check_periods": "2024-01-01 - 2024-12-31",
+    "periods_hidden": "[\"01\",\"02\",\"03\",\"04\",\"05\",\"06\"]"
+  },
+  {
+    "units": "",
+    "periods": "I - II кварталы",
+    "check_types": "3",
+    "inspections": "1",
+    "institutions": "70",
+    "check_periods": "2024-01-01 - 2024-12-31",
+    "periods_hidden": "[\"01\",\"02\",\"03\",\"04\",\"05\",\"06\"]"
+  },
+  {
+    "units": "",
+    "periods": "I - II кварталы",
+    "check_types": "3",
+    "inspections": "1",
+    "institutions": "131",
+    "check_periods": "2023-01-01 - 2024-12-31",
+    "periods_hidden": "[\"01\",\"02\",\"03\",\"04\",\"05\",\"06\"]"
+  },
+  {
+    "units": "",
+    "periods": "I - II кварталы",
+    "check_types": "3",
+    "inspections": "1",
+    "institutions": "36",
+    "check_periods": "2023-01-01 - 2024-12-31",
+    "periods_hidden": "[\"01\",\"02\",\"03\",\"04\",\"05\",\"06\"]"
+  },
+  {
+    "units": "",
+    "periods": "I - II кварталы",
+    "check_types": "3",
+    "inspections": "1",
+    "institutions": "215",
+    "check_periods": "2024-01-01 - 2024-12-31",
+    "periods_hidden": "[\"01\",\"02\",\"03\",\"04\",\"05\",\"06\"]"
+  },
+  {
+    "units": "",
+    "periods": "I - II кварталы",
+    "check_types": "3",
+    "inspections": "1",
+    "institutions": "251",
+    "check_periods": "2023-01-01 - 2024-12-31",
+    "periods_hidden": "[\"01\",\"02\",\"03\",\"04\",\"05\",\"06\"]"
+  },
+  {
+    "units": "",
+    "periods": "I - II кварталы",
+    "check_types": "3",
+    "inspections": "1",
+    "institutions": "181",
+    "check_periods": "2023-01-01 - 2024-12-31",
+    "periods_hidden": "[\"01\",\"02\",\"03\",\"04\",\"05\",\"06\"]"
+  },
+  {
+    "units": "",
+    "periods": "I - II кварталы",
+    "check_types": "3",
+    "inspections": "1",
+    "institutions": "161",
+    "check_periods": "2023-01-01 - 2024-12-31",
+    "periods_hidden": "[\"01\",\"02\",\"03\",\"04\",\"05\",\"06\"]"
+  },
+  {
+    "units": "",
+    "periods": "I - II кварталы",
+    "check_types": "3",
+    "inspections": "1",
+    "institutions": "173",
+    "check_periods": "2023-01-01 - 2024-12-31",
+    "periods_hidden": "[\"01\",\"02\",\"03\",\"04\",\"05\",\"06\"]"
+  },
+  {
+    "units": "",
+    "periods": "I - II кварталы",
+    "check_types": "3",
+    "inspections": "1",
+    "institutions": "238",
+    "check_periods": "2023-01-01 - 2024-12-31",
+    "periods_hidden": "[\"01\",\"02\",\"03\",\"04\",\"05\",\"06\"]"
+  },
+  {
+    "units": "",
+    "periods": "I - II кварталы",
+    "check_types": "3",
+    "inspections": "1",
+    "institutions": "177",
+    "check_periods": "2025-01-01 - 2025-03-31",
+    "periods_hidden": "[\"01\",\"02\",\"03\",\"04\",\"05\",\"06\"]"
+  },
+  {
+    "units": "",
+    "periods": "II - III кварталы",
+    "check_types": "3",
+    "inspections": "1",
+    "institutions": "234",
+    "check_periods": "2025-01-01 - 2025-03-31",
+    "periods_hidden": "[\"04\",\"05\",\"06\",\"07\",\"08\",\"09\"]"
+  },
+  {
+    "units": "",
+    "periods": "II - III кварталы",
+    "check_types": "3",
+    "inspections": "1",
+    "institutions": "227",
+    "check_periods": "2025-01-01 - 2025-03-31",
+    "periods_hidden": "[\"04\",\"05\",\"06\",\"07\",\"08\",\"09\"]"
+  },
+  {
+    "units": "",
+    "periods": "II - III кварталы",
+    "check_types": "3",
+    "inspections": "1",
+    "institutions": "187",
+    "check_periods": "2025-01-01 - 2025-03-31",
+    "periods_hidden": "[\"04\",\"05\",\"06\",\"07\",\"08\",\"09\"]"
+  },
+  {
+    "units": "",
+    "periods": "II - III кварталы",
+    "check_types": "3",
+    "inspections": "1",
+    "institutions": "189",
+    "check_periods": "2025-01-01 - 2025-03-31",
+    "periods_hidden": "[\"04\",\"05\",\"06\",\"07\",\"08\",\"09\"]"
+  },
+  {
+    "units": "",
+    "periods": "II - III кварталы",
+    "check_types": "3",
+    "inspections": "1",
+    "institutions": "231",
+    "check_periods": "2024-01-01 - 2024-12-31",
+    "periods_hidden": "[\"04\",\"05\",\"06\",\"07\",\"08\",\"09\"]"
+  },
+  {
+    "units": "",
+    "periods": "II - III кварталы",
+    "check_types": "3",
+    "inspections": "1",
+    "institutions": "16",
+    "check_periods": "2025-01-01 - 2025-03-31",
+    "periods_hidden": "[\"04\",\"05\",\"06\",\"07\",\"08\",\"09\"]"
+  },
+  {
+    "units": "",
+    "periods": "II - III кварталы",
+    "check_types": "3",
+    "inspections": "1",
+    "institutions": "198",
+    "check_periods": "2023-01-01 - 2024-12-31",
+    "periods_hidden": "[\"04\",\"05\",\"06\",\"07\",\"08\",\"09\"]"
+  },
+  {
+    "units": "",
+    "periods": "II - III кварталы",
+    "check_types": "3",
+    "inspections": "1",
+    "institutions": "97",
+    "check_periods": "2023-01-01 - 2024-12-31",
+    "periods_hidden": "[\"04\",\"05\",\"06\",\"07\",\"08\",\"09\"]"
+  },
+  {
+    "units": "",
+    "periods": "II - III кварталы",
+    "check_types": "3",
+    "inspections": "1",
+    "institutions": "225",
+    "check_periods": "2024-01-01 - 2024-12-31",
+    "periods_hidden": "[\"04\",\"05\",\"06\",\"07\",\"08\",\"09\"]"
+  },
+  {
+    "units": "",
+    "periods": "III - IV кварталы",
+    "check_types": "3",
+    "inspections": "1",
+    "institutions": "113",
+    "check_periods": "2025-01-01 - 2025-03-31",
+    "periods_hidden": "[\"07\",\"08\",\"09\",\"10\",\"11\",\"12\"]"
+  },
+  {
+    "units": "",
+    "periods": "III - IV кварталы",
+    "check_types": "3",
+    "inspections": "1",
+    "institutions": "237",
+    "check_periods": "2024-01-01 - 2024-12-31",
+    "periods_hidden": "[\"07\",\"08\",\"09\",\"10\",\"11\",\"12\"]"
+  },
+  {
+    "units": "",
+    "periods": "III - IV кварталы",
+    "check_types": "3",
+    "inspections": "1",
+    "institutions": "82",
+    "check_periods": "2025-01-01 - 2025-03-31",
+    "periods_hidden": "[\"07\",\"08\",\"09\",\"10\",\"11\",\"12\"]"
+  },
+  {
+    "units": "",
+    "periods": "III - IV кварталы",
+    "check_types": "3",
+    "inspections": "1",
+    "institutions": "163",
+    "check_periods": "2023-01-01 - 2024-12-31",
+    "periods_hidden": "[\"07\",\"08\",\"09\",\"10\",\"11\",\"12\"]"
+  },
+  {
+    "units": "",
+    "periods": "III - IV кварталы",
+    "check_types": "3",
+    "inspections": "1",
+    "institutions": "183",
+    "check_periods": "2023-01-01 - 2024-12-31",
+    "periods_hidden": "[\"07\",\"08\",\"09\",\"10\",\"11\",\"12\"]"
+  },
+  {
+    "units": "",
+    "periods": "III - IV кварталы",
+    "check_types": "3",
+    "inspections": "1",
+    "institutions": "127",
+    "check_periods": "2023-01-01 - 2024-12-31",
+    "periods_hidden": "[\"07\",\"08\",\"09\",\"10\",\"11\",\"12\"]"
+  },
+  {
+    "units": "",
+    "periods": "III - IV кварталы",
+    "check_types": "3",
+    "inspections": "1",
+    "institutions": "30",
+    "check_periods": "2023-01-01 - 2024-12-31",
+    "periods_hidden": "[\"07\",\"08\",\"09\",\"10\",\"11\",\"12\"]"
+  },
+  {
+    "units": "",
+    "periods": "III - IV кварталы",
+    "check_types": "3",
+    "inspections": "1",
+    "institutions": "31",
+    "check_periods": "2024-01-01 - 2024-12-31",
+    "periods_hidden": "[\"07\",\"08\",\"09\",\"10\",\"11\",\"12\"]"
+  },
+  {
+    "units": "",
+    "periods": "III - IV кварталы",
+    "check_types": "3",
+    "inspections": "1",
+    "institutions": "91",
+    "check_periods": "2024-01-01 - 2024-12-31",
+    "periods_hidden": "[\"07\",\"08\",\"09\",\"10\",\"11\",\"12\"]"
+  },
+  {
+    "units": "",
+    "periods": "III - IV кварталы",
+    "check_types": "3",
+    "inspections": "1",
+    "institutions": "22",
+    "check_periods": "2024-01-01 - 2024-12-31",
+    "periods_hidden": "[\"07\",\"08\",\"09\",\"10\",\"11\",\"12\"]"
+  },
+  {
+    "units": "",
+    "periods": "III - IV кварталы",
+    "check_types": "3",
+    "inspections": "1",
+    "institutions": "1",
+    "check_periods": "2023-01-01 - 2024-12-31",
+    "periods_hidden": "[\"07\",\"08\",\"09\",\"10\",\"11\",\"12\"]"
+  }
+]

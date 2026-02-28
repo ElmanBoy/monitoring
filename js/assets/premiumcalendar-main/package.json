@@ -1,0 +1,31 @@
+{
+  "name": "premiumcalendar",
+  "version": "1.0.2",
+  "description": "A lightweight and customizable JavaScript + CSS calendar library for modern web applications.",
+  "main": "dist/premiumcalendar.min.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/malleeshkanna1/premiumcalendar.git"
+  },
+  "keywords": [
+    "JavaScript",
+    "Calendar",
+    "Datepicker",
+    "Range",
+    "Selection",
+    "Custom",
+    "Widget",
+    "Premium",
+    "MMK",
+    "Luxon"
+  ],
+  "author": "Malleeshkanna",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/malleeshkanna1/premiumcalendar/issues"
+  },
+  "homepage": "https://premiumcalendar.malleeshkanna.com/"
+}

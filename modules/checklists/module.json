@@ -1,0 +1,13 @@
+{
+  "id": 12,
+  "name": "Чек-листы",
+  "description": "Модуль позволяет создавать/удалять/редактировать чек-листы",
+  "minimumCoreVersion": "0.1",
+  "title": "Шаблоны чек-листов",
+  "version": "0.1",
+  "author": "Боязитов Э.М.",
+  "path": "checklists",
+  "icon": "checklist",
+  "number": 250,
+  "parentItem": "settings"
+}

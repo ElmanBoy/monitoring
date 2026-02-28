@@ -1,0 +1,37 @@
+*, *:before, *:after, *:first-letter, p:first-line, div:first-line, blockquote:first-line, li:first-line {
+    background: transparent !important;
+    color: #000 !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+}
+
+html, body {
+    font-size: 28px;
+    height: 297mm;
+    width: 210mm;
+}
+
+.main_nav {
+    display: none;
+}
+
+.button:not(.sort .button) {
+    display: none;
+}
+
+table {
+    page-break-inside: auto;
+}
+
+tr {
+    page-break-inside: auto;
+}
+
+@page {
+    margin: 0;
+}
+
+.main_data {
+    overflow: inherit;
+    width: auto;
+}

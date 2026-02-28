@@ -1,0 +1,13 @@
+{
+  "id": 8,
+  "name": "Роли",
+  "description": "Модуль позволяет создавать/удалять/редактировать роли пользователей",
+  "minimumCoreVersion": "0.1",
+  "title": "Роли",
+  "version": "0.1",
+  "author": "Боязитов Э.М.",
+  "path": "roles",
+  "icon": "admin_panel_settings",
+  "number": 200,
+  "parentItem": "settings"
+}

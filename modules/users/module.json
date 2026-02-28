@@ -1,0 +1,13 @@
+{
+  "id": 7,
+  "name": "Пользователи",
+  "description": "Модуль позволяет создавать/удалять/редактировать пользователей",
+  "minimumCoreVersion": "0.1",
+  "title": "Пользователи",
+  "version": "0.1",
+  "author": "Боязитов Э.М.",
+  "path": "users",
+  "icon": "people",
+  "number": 100,
+  "parentItem": "settings"
+}

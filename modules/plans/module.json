@@ -1,0 +1,12 @@
+{
+  "id": 1,
+  "name": "Планы",
+  "description": "Модуль позволяет создавать/редактировать планы проверок",
+  "minimumCoreVersion": "0.1",
+  "title": "Планы проверок",
+  "version": "0.1",
+  "author": "Боязитов Э.М.",
+  "path": "plans",
+  "icon": "assignment",
+  "number": 1
+}

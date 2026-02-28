@@ -1,0 +1,12 @@
+{
+  "id": 14,
+  "name": "Календарь",
+  "description": "Модуль просматривать календарь проверок",
+  "minimumCoreVersion": "0.1",
+  "title": "Календарь проверок",
+  "version": "0.1",
+  "author": "Боязитов Э.М.",
+  "path": "calendar",
+  "icon": "today",
+  "number": 2
+}

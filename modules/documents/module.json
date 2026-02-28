@@ -1,0 +1,12 @@
+{
+  "id": 17,
+  "name": "Документы",
+  "description": "Модуль позволяет согласовывать документы",
+  "minimumCoreVersion": "0.1",
+  "title": "Шаблоны документов",
+  "version": "0.1",
+  "author": "Боязитов Э.М.",
+  "path": "documents",
+  "icon": "verified",
+  "number": 5
+}

@@ -1,0 +1,728 @@
+<?php
+
+use Dompdf\Dompdf;
+use Core\Gui;
+use Core\Db;
+use Core\Auth;
+use Core\Registry;
+use Core\Date;
+
+require_once $_SERVER['DOCUMENT_ROOT'] . '/core/connect.php';
+//print_r($_POST);
+$gui = new Gui;
+$db = new Db;
+$auth = new Auth();
+$reg = new Registry();
+$date = new Date();
+
+$perms = $auth->getCurrentModulePermission();
+$in_calendar = isset($_POST['params']['in_calendar']) && intval($_POST['params']['in_calendar']) == 1;
+
+$taskStr = 0;
+$insStr = 0;
+if(isset($_POST['params']['taskId'])) {
+    $taskStr = $_POST['params']['taskId'];
+}
+if(isset($_POST['params']['insId'])){
+    $insStr = $_POST['params']['insId'];
+}
+$task = 0;
+$new_order_number = '';
+$new_order_num = 1000;
+$dates = '';
+$exist_task = [];
+$agreement_data = [];
+$plan_uid = '0';
+$actionPeriods = [];
+
+if ($auth->isLogin()) {
+    if (strlen($insStr) > 1) {
+        //Номер задачи пуст - Новая задача
+        $taskArr = explode('_', $insStr);
+        $plan_uid = $taskArr[0];
+        $insId = intval($taskArr[1]);
+        $taskId = 0;
+
+        $exist_task = $db->select('checkstaff', " WHERE check_uid = '$plan_uid' AND institution = " . $insId);
+        $plan_uid = $exist_task[$taskId]->check_uid;
+
+    } else {
+        //Есть номер задачи - Редактирование существующей задачи
+        $taskArr = explode('_', $taskStr);
+        //$plan_uid = $taskArr[0];
+        $taskId = intval($taskArr[1]);
+        $current_task = $db->select('checkstaff', " WHERE id = ?", [$taskId]);
+        $insId = intval($current_task[$taskId]->institution);
+        $plan_uid = $current_task[$taskId]->check_uid;
+        $exist_task = $db->select('checkstaff', " WHERE check_uid = '$plan_uid' AND institution = " . $insId);
+        //echo '<pre>';print_r($exist_task);echo '</pre>';
+    }
+
+    if (count($exist_task) > 0) {
+        //Если такой приказ уже есть
+        $agreement_data = $db->selectOne('agreement', " WHERE 
+     source_table = 'checkinstitutions' AND source_id = " . $insId
+        );
+    } else {
+        //Если новый приказ, то генерим новый номер приказа
+        $doc = $db->selectOne('agreement', " WHERE source_table = 'checkinstitutions' 
+        AND doc_number LIKE 'ПРП%' ORDER BY id DESC");
+        if (strlen($doc->doc_number) > 0) {
+            $plan_number = $doc->doc_number;
+            $plan_numberArr = explode('-', $plan_number);
+            if ($plan_numberArr[1] == date('Y')) {
+                $new_order_num = intval(str_replace('ПРП', '', $plan_numberArr[0])) + 1;
+                $new_plan_number = 'ПРП' . $new_order_num . '-' . date('Y');
+            }
+        }
+    }
+
+
+    //Открываем транзакцию
+    $busy = $db->transactionOpen('roles', 1);
+    $trans_id = $busy['trans_id'];
+
+    if ($busy != []) {
+
+        $units = $db->getRegistry('units', 'where institution = 1 and active =1');
+        $ins = $db->getRegistry('institutions');
+        $insector = $db->getRegistry('institutions', 'WHERE inspectors = 1');
+        $tasks = $db->getRegistry('tasks');
+        $ousr = $db->getRegistry('ousr');
+        $orders = $db->getRegistry('documents', ' WHERE documentacial = 1');
+
+        //Если это уже назначенная задача
+        if ($taskId > 0) {
+            $chStaff = $db->selectOne('checkstaff', ' WHERE id = ?', [$taskId]);
+
+            $dates = $chStaff->dates;
+            $datesEventArr = explode(' - ', $dates);
+            $insId = $chStaff->institution;
+            $task = $chStaff->task_id;
+
+            if ($chStaff->object_type == 0) {
+                $ins = $db->getRegistry('persons', '', [], ['surname', 'first_name', 'middle_name', 'birth']);
+                $object = stripslashes(htmlspecialchars($ins['array'][$insId][0])) . ' ' .
+                    stripslashes(htmlspecialchars($ins['array'][$insId][1])) . ' ' .
+                    stripslashes(htmlspecialchars($ins['array'][$insId][2])) . ' ' .
+                    (strlen(trim($ins['array'][$insId][3])) > 0 ?
+                        $date->correctDateFormatFromMysql($ins['array'][$insId][3]) : '');
+            } else {
+                $object = stripslashes(htmlspecialchars($ins['result'][$insId]->short));
+            }
+        } else {
+            $object = stripslashes(htmlspecialchars($ins['array'][$insId]));
+        }//Иначе это новая задача по клику по учреждению
+
+        if(strlen($plan_uid) == 0){
+            $plan_uid = '0';
+        }
+
+        if($plan_uid != '0') {
+            $plan = $db->selectOne('checksplans', " WHERE uid = '$plan_uid' ORDER BY version DESC LIMIT 1");
+            if (strlen($plan->addinstitution) > 0) {
+                $actionPeriods = $date->getReviewPeriodsFromJson($plan->addinstitution, $plan->year);
+                $insArr = json_decode($plan->addinstitution, true);
+                $plan_name = $plan->short;
+                for ($i = 0; $i < count($insArr); $i++) {
+                    if (intval($insArr[$i]['institutions']) == $insId) {
+                        $actionPeriod = $actionPeriods[$insId]['actionPeriod'];
+                        $check_dates = json_decode($insArr[$i]['periods_hidden']);
+                        $datesArr = $date->getDatesFromMonths($check_dates, $plan->year);
+                        $minDate = $datesArr['start'];
+                        $maxDate = $datesArr['end'];
+                    }
+                }
+            }
+        }
+
+        $users = $db->getRegistry('users', "where roles <> '2'", [], ['surname', 'name', 'middle_name']);
+        $new_order_number = 'ПРП' . $new_order_num . '-' . date('Y');
+        $prevDate = date('Y-m-d', strtotime($datesEventArr[0] .' -1 day'));
+
+        ?>
+            <style>
+                /*.datesInputWrapper{
+                    display: none;
+                }*/
+            </style>
+        <div class='pop_up drag' style="max-width: 70rem">
+            <div class='title handle'>
+                <div class='name'><?= ($taskId > 0 || count($exist_task) > 0 ? 'Редактирование назначения на проверку' : 'Назначение на проверку') ?></div>
+                <div class='button icon close'><span class='material-icons'>close</span></div>
+            </div>
+            <div class='pop_up_body'>
+                <form class='ajaxFrm' id='check_staff' onsubmit="return false">
+                    <input type='hidden' name='uid' value="<?= $plan_uid ?>">
+                    <input type='hidden' name='minDate' value="<?= $minDate ?>">
+                    <input type='hidden' name='maxDate' value="<?= $maxDate ?>">
+                    <input type='hidden' name='path' value="calendar">
+                    <input type="hidden" name="actionPeriod" value="<?=$actionPeriod?>">
+
+                    <ul class='tab-pane' style=''>
+                        <li id='tab_executors' class='active'>Проверяющие</li>
+                        <li id='tab_order'>Приказ</li>
+                        <li id='tab_agreement'>Согласование</li>
+                    </ul>
+                    <div class='group plan_block tab-panel' id='tab_executors-panel'>
+                        <?
+                        if ($plan_uid == '0') { //Если задача создается не из плана
+                            ?>
+                            <div class='item w_50'>
+                                <select data-label='План' name='plan'>
+                                    <option value="0">Внеплановая проверка</option>
+                                    <?
+                                    $plans = $db->getRegistry('checksplans', " WHERE active = 1");
+                                    echo $gui->buildSelectFromRegistry($plans['result'], [], false,
+                                        ['short'], ' '
+                                    );
+                                    ?>
+                                </select>
+                            </div>
+                            <div class='item w_50' style="display: none">
+                                <select data-label='Объект проверки' name='ins'>
+                                </select>
+                            </div>
+                            <?
+                        } else {
+                            ?>
+                            <input type='hidden' name='uid' value="<?= $plan_uid ?>">
+                            <input type='hidden' name='task_id' value="<?= $taskId ?>">
+                            <input type='hidden' name='ins' value="<?= $insId ?>">
+                            <div class='item w_50'>
+                                <div class='el_data'>
+                                    <label>План:</label>
+                                    <strong><?=$plan_name?></strong>
+                                </div>
+                            </div>
+                            <div class="item w_50">
+                                <div class="el_data">
+                                    <label>Объект проверки:</label>
+                                    <strong><?= $object ?></strong>
+                                </div>
+                            </div>
+                            <?
+                        }
+                        ?>
+                        <h3 class='item w_100'>
+                            <strong>ПРОВЕРЯЮЩИЕ</strong>
+                        </h3>
+                        <?
+                        if (count($exist_task) > 0) {
+                            $staff_number = 1;
+                            foreach ($exist_task as $chStaff) {
+                                $dates = $chStaff->dates;
+                                $insId = $chStaff->institution;
+                                $task = $chStaff->task_id;
+                                ?>
+                                <div class='group staff'>
+                                    <h5 class='item w_100 question_number'>Сотрудник №<?= $staff_number ?></h5>
+                                    <input type="hidden" name="user_task[]" value="<?=$chStaff->id?>">
+                                    <div class='item w_50'>
+                                        <div class='el_data datesInputWrapper'>
+                                            <label>Период проверки</label>
+                                            <input class='el_input range_date' type='text' name='dates[]'
+                                                   value="<?= $dates ?>">
+                                        </div>
+                                    </div>
+                                    <?/*div class='item w_50'>
+                                        <select data-label='Ведомство' name='institutions[]' id="inst<?=$staff_number?>">
+                                            <?
+                                            echo $gui->buildSelectFromRegistry($insector['result'], [1], true);
+                                            ?>
+                                        </select>
+                                    </div>
+                                    <div class='item w_50'>
+                                        <input type='hidden' name='ministries_hidden[]' value="<?= $chStaff->ministry ?>">
+                                        <select data-label='Управление' name='ministries[]'>
+
+                                        </select>
+                                    </div>
+                                    <div class='item w_50'>
+                                        <input type="hidden" name="units_hidden[]" value="<?=$chStaff->unit?>">
+                                        <select data-label='Отдел' name='units[]'>
+                                            <? /*
+                                    echo $gui->buildSelectFromRegistry($units['result'], [$chStaff->unit], true);
+                                            ?>
+                                        </select>
+                                    </div*/
+                                    ?>
+
+                                    <div class='item w_50'>
+                                        <input type='hidden' name='executors_hidden[]' value="<?= $chStaff->user ?>">
+                                        <select data-label='Сотрудник' name='executors[]'>
+                                            <?
+                                            echo $gui->buildSelectFromRegistry($users['result'], [$chStaff->user], true,
+                                                ['surname', 'name', 'middle_name'], ' '
+                                            );
+                                            ?>
+                                        </select>
+                                    </div>
+
+                                    <div class='item w_50'>
+                                        <div class='custom_checkbox'>
+                                            <label class='container' style="top: 12px;">
+                                                <span class='label-text'>Является руководителем проверки</span>
+                                                <input type='radio' name='is_head[<?= ($staff_number - 1) ?>]'
+                                                       class='is_claim'
+                                                       tabindex='-1'
+                                                       value='1'<?= (intval($chStaff->is_head) == 1 ? ' checked="checked"' : '') ?>>
+                                                <span class='checkmark radio'></span>
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <div class='item w_50' style="display: none">
+                                        <select data-label='Структурное подразделение' name='ousr[]'>
+                                            <?
+                                            echo $gui->buildSelectFromRegistry($ousr['result'], [$chStaff->ousr], true);
+                                            ?>
+                                            ?>
+                                        </select>
+                                    </div>
+                                    <div class='item w_50'>
+                                        <select data-label='Шаблон задачи' name='tasks[]'>
+                                            <?
+                                            echo $gui->buildSelectFromRegistry($tasks['result'], [$task], true);
+                                            ?>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class='item w_100'>
+                                    <div class='el_data'>
+                                        <div class='custom_checkbox'>
+                                            <label class='container' style='left: 4px;'>
+                                                <span class='label-text'>Включить напоминание</span>
+                                                <input type='checkbox' name='allowremind[]'
+                                                       class='is_claim' tabindex='-1'
+                                                       value='1'<?= $chStaff->allowremind == 1 ? ' checked="checked"' : '' ?>>
+                                                <span class='checkmark'></span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                                <?
+                                $reminder = $db->selectOne('reminders', ' WHERE task_id = ? AND employee = ?', [$task, $chStaff->user]);
+                                if ($reminder != null) {
+                                    echo '<input type="hidden" name="remind_id" value="' . $reminder->id . '">';
+                                }
+                                ?>
+                                <div class='group reminder' style='margin-top: -10px;'><h5
+                                            class='item w_100 remind_number'>Напоминание</h5>
+                                    <?
+                                    echo $reg->buildForm(71, [], [
+                                            'datetime' => strlen($reminder->datetime) > 0 ? $reminder->datetime : $prevDate . ' 10:00',
+                                            'employee' => intval($reminder->employee) > 0 ? $reminder->employee : $chStaff->user,
+                                            'comment' => $reminder->comment
+                                        ]
+                                    );
+                                    ?>
+                                </div>
+                                <?
+                                $staff_number++;
+                            }
+                        } else {
+                            ?>
+                            <div class='group staff'>
+                                <h5 class='item w_100 question_number'>Сотрудник №1</h5>
+
+                                <div class='item w_50'>
+                                    <div class='el_data datesInputWrapper'>
+                                        <label>Период проверки</label>
+                                        <input class='el_input range_date' type='text' name='dates[]'
+                                               value="<?= $dates ?>">
+                                    </div>
+                                </div>
+                                <?/*div class='item w_50'>
+                                <select data-label='Ведомство' name='institutions[]'>
+                                    <?
+                                    echo $gui->buildSelectFromRegistry($insector['result'], [1], true);
+                                    ?>
+                                </select>
+                            </div>
+                            <div class='item w_50'>
+                                <input type='hidden' name='ministries_hidden[]' value="<?= $chStaff->ministry ?>">
+                                <select data-label='Управление' name='ministries[]'>
+
+                                </select>
+                            </div>
+                            <div class='item w_50'>
+                                <input type="hidden" name="units_hidden[]" value="<?=$chStaff->unit?>">
+                                <select data-label='Отдел' name='units[]'>
+                                    <?
+                                    echo $gui->buildSelectFromRegistry($units['result'], [$chStaff->unit], true);
+                                    ?>
+                                </select>
+                            </div*/
+                                ?>
+
+                                <div class='item w_50'>
+                                    <input type='hidden' name='executors_hidden[]' value="<?= $chStaff->user ?>">
+                                    <select data-label='Сотрудник' name='executors[]'>
+                                        <?
+                                        echo $gui->buildSelectFromRegistry($users['result'], [$chStaff->user], true,
+                                            ['surname', 'name', 'middle_name'], ' '
+                                        );
+                                        ?>
+                                    </select>
+                                </div>
+
+                                <div class='item w_50'>
+                                    <div class='custom_checkbox'>
+                                        <label class='container' style="top: 12px;">
+                                            <span class='label-text'>Является руководителем проверки</span>
+                                            <input type='radio' name='is_head[0]' class='is_claim'
+                                                   tabindex='-1'
+                                                   value='1'<?= (intval($chStaff->is_head) == 1 ? ' checked="checked"' : '') ?>>
+                                            <span class='checkmark radio'></span>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div class='item w_50' style="display: none">
+                                    <select data-label='Структурное подразделение' name='ousr[]'>
+                                        <?
+                                        echo $gui->buildSelectFromRegistry($ousr['result'], [$chStaff->ousr], true);
+                                        ?>
+                                    </select>
+                                </div>
+                                <div class='item w_50'>
+                                    <select data-label='Шаблон задачи' name='tasks[]'>
+                                        <?
+                                        echo $gui->buildSelectFromRegistry($tasks['result'], [$task], true);
+                                        ?>
+                                    </select>
+                                </div>
+                                <div class='item w_50'>
+                                    <div class='el_data'>
+                                        <div class='custom_checkbox'>
+                                            <label class='container' style='left: 4px;'>
+                                                <span class='label-text'>Включить напоминание</span>
+                                                <input type='checkbox' name='allowremind[]'
+                                                       class='is_claim' tabindex='-1'
+                                                       value='1'<?= $chStaff->allowremind == 1 ? ' checked="checked"' : '' ?>>
+                                                <span class='checkmark'></span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                                <?
+                                $reminder = $db->selectOne('reminders', ' WHERE task_id = ? AND employee = ?', [$taskId, $chStaff->user]);
+                                if ($reminder != null) {
+                                    echo '<input type="hidden" name="remind_id" value="' . $reminder->id . '">';
+                                }
+                                ?>
+                                <div class='group reminder' style='margin-top: -10px;'><h5
+                                            class='item w_100 remind_number'>Напоминание</h5>
+                                <?
+                                echo $reg->buildForm(71, [], [
+                                        'datetime' => strlen($reminder->datetime) > 0 ? $reminder->datetime : $prevDate . ' 10:00',
+                                        'employee' => intval($reminder->employee) > 0 ? $reminder->employee : $chStaff->user,
+                                        'comment' => $reminder->comment
+                                    ]
+                                );
+                                ?>
+                                </div>
+                            </div>
+                            <?
+                        }
+                        ?>
+                        <script>
+                        <?php
+                        if($chStaff->allowremind == 1){
+                            ?>
+                            $('.reminder, .reminder ~ div:first()').show();
+                            <?php
+                        }else{
+                            ?>
+                            $('.reminder, .reminder ~ div:first()').hide();
+                            <?php
+                        }
+                        ?>
+                        </script>
+                        <button class='button icon text new_staff'>
+                            <span class='material-icons'>add</span>Еще сотрудник
+                        </button>
+                    </div>
+
+                    <div class="agreement_block tab-panel" id='tab_order-panel' style='display: none'>
+                        <div class='group'>
+                            <h3 class='item w_100'>
+                                <strong>ПРИКАЗ О ПРОВЕДЕНИИ ПРОВЕРКИ</strong>
+                            </h3>
+
+                            <div class='item w_50'>
+                                <div class='el_data'>
+                                    <label>Номер приказа</label>
+                                    <input class='el_input' type='text' name='order_number'
+                                           value="<?= $taskId > 0 || count($exist_task) > 0 ? $agreement_data->doc_number : $new_order_number ?>">
+                                </div>
+                            </div>
+                            <div class='item w_50'>
+                                <div class='el_data'>
+                                    <label>Дата приказа</label>
+                                    <input class='el_input single_date' type='date' name='order_date'
+                                           value="<?= $taskId > 0 || count($exist_task) > 0 ? $agreement_data->docdate : date('Y-m-d') ?>">
+                                </div>
+                            </div>
+                            <div class='item w_50'>
+                                <select data-label='Шаблон приказа' name='order'>
+                                    <?
+                                    echo $gui->buildSelectFromRegistry($orders['result'], [$agreement_data->document], true);
+                                    ?>
+                                </select>
+                            </div>
+                            <? /*div class='item w_50'>
+                                <select data-label='Подписанты приказа' name='signers[]' multiple>
+                                    <?
+                                    $signers = strlen($agreement_data->signators) > 0 ? json_decode($agreement_data->signators) : [];
+                                    echo $gui->buildSelectFromRegistry($users['result'], $signers,
+                                        true, ['surname', 'name', 'middle_name'], ' ');
+                                    ?>
+                                </select>
+                            </div*/ ?>
+                        </div>
+                    </div>
+                    <div class='agreement_block tab-panel' id='tab_agreement-panel' style="display: none">
+                        <div class='group'>
+                            <h3 class='item w_100'>
+                                <strong>ЛИСТ СОГЛАСОВАНИЯ</strong>
+                            </h3>
+                        </div>
+                        <?= $reg->buildForm(67, [], (array)$agreement_data); ?>
+                    </div>
+                    <div style="height: 100px"></div>
+                    <div class='confirm'>
+                        <!--<button class='button icon text' id="save_doc"><span class='material-icons'>save</span>Сохранить
+                        </button>-->
+                        <?
+                        if($in_calendar && intval($perms['delete']) == 1){
+                            ?>
+                            <button class='button icon text red' id='remove_event'><span class='material-icons'>delete</span>Удалить
+                            </button>
+                            <?
+                        }
+                        if(intval($perms['edit']) == 1){
+                            ?>
+                            <button class='button icon text' id="save_doc"><span class='material-icons'>save</span>Сохранить</button>
+                            <?
+                        }else{
+                            ?>
+                            <button class='button icon text' id='close'><span class='material-icons'>close</span>Закрыть
+                            </button>
+                            <?
+                        }
+                        ?>
+                    </div>
+                </form>
+            </div>
+        </div>
+        <script src="/modules/calendar/js/registry.js"></script>
+        <script src='/js/assets/agreement_list.js'></script>
+        <script>
+            $(document).ready(function () {
+                el_app.initTabs();
+                //el_registry.bindCalendar("<?=$minDate?>", "<?=$maxDate?>");
+                let $cal = $("#check_staff [name='dates[]']").flatpickr({
+                        locale: 'ru',
+                        mode: 'range',
+                        time_24hr: true,
+                        dateFormat: 'Y-m-d',
+                        altFormat: 'd.m.Y',
+                        conjunction: '-',
+                        altInput: true,
+                        allowInput: true,
+                    <?php
+                    if($dates != ''){
+                    ?>
+                        defaultDate: ["<?= implode('", "', explode(' - ', $dates)) ?>"],
+                    <?php
+                    }
+                    ?>
+                        minDate: "<?=$minDate?>",
+                        maxDate: "<?=$maxDate?>",
+                        altInputClass: 'el_input',
+                        firstDayOfWeek: 1
+                    }),
+                    $staffs = $('.staff');
+
+                /*for (let i = 0; i < $staffs.length; i++) {
+                    el_app.bindSetMinistriesByOrg($($staffs[i]));
+                    el_app.bindSetUnitsByOrg($($staffs[i]));
+                    //el_registry.bindSetExecutorByUnit($($staffs[i]));
+                }*/
+                $("select[name='institutions[]']").trigger('change');
+
+                //agreement_list.agreement_list_init();
+
+                $("[name='plan']").on("change", function () {
+                    let $self = $(this);
+                    $.post("/", {ajax: 1, action: "getInsFromPlan", planId: $(this).val(),
+                        selected: (<?=intval($insId)?>)}, function (data) {
+                        let $ins = $('select[name=ins]'),
+                            $uid = $("[name='uid']");
+                        //$('.datesInputWrapper').hide();
+                        if(data.length > 0){
+                            let answer = JSON.parse(data);
+                            $ins.html(answer.ins).trigger("chosen:updated").closest(".item").show();
+                            setTimeout(function(){$ins.trigger("change")}, 500, $ins);
+                            $uid.val(answer.uid);
+
+                        }else{
+                            $ins.html("").trigger('chosen:updated').closest('.item').hide();
+                            //$uid.val("0");
+                        }
+                    });
+
+                }).trigger("change");
+
+                $("[name=ins]").on("change", function(){
+                    let $self = $(this),
+                        $minDate = $("[name='minDate']"),
+                        $maxDate = $("[name='maxDate']"),
+                        $actionPeriod = $("[name='actionPeriod']");
+                    $.post('/', {ajax: 1, action: 'getPeriodByIns', uid: $("[name=uid]").val(), insId: $self.val()},
+                        function (data) {
+                            if(data.length > 0) {
+                                let answer = JSON.parse(data);
+
+                                $(".datesInputWrapper").show();
+                                /*$cal.set('minDate', answer.minDate);
+                                $cal.set('maxDate', answer.maxDate);*/
+                                // Находим ВСЕ элементы с flatpickr и обновляем каждый
+                                $("#check_staff [name='dates[]']").each(function() {
+                                    // Получаем объект flatpickr из элемента
+                                    let fpInstance = this._flatpickr;
+
+                                    if (fpInstance && typeof fpInstance.set === 'function') {
+                                        fpInstance.set('minDate', answer.minDate);
+                                        fpInstance.set('maxDate', answer.maxDate);
+                                    }
+                                });
+                                $minDate.val(answer.minDate);
+                                $maxDate.val(answer.maxDate);
+                                $actionPeriod.val(answer.actionPeriod);
+                            }
+                        });
+
+                    /*if($("[name='plan']").val() === '0' && $self.val() !== '0'){
+                        $('.datesInputWrapper').show();
+                        $cal.set('minDate', '');
+                        $cal.set('maxDate', '');
+                    }*/
+                });
+
+                $("[name='allowremind[]']").off('change').on('change', function () {
+                    let $reminder = $(this).closest('.group').find('.reminder');
+                    if ($(this).prop('checked')) {
+                        $reminder.show();
+                        $reminder.find('input, select, textarea').attr('disabled', false);
+                    } else {
+                        $reminder.hide();
+                        $reminder.find('input, select, textarea').attr('disabled', true);
+                    }
+                });
+
+                $('#remove_event').off('click').on('click', async function (e) {
+                    e.preventDefault();
+                    let calEvent = calendarGrid.getEventById('<?=$taskStr?>');
+                    let ok = await confirm('Вы уверены, что хотите удалить это задание?');
+                    if (ok) {
+                        calEvent.remove();
+                        $.post('/', {ajax: 1, action: 'event_delete', id: '<?=$taskId?>'}, function (data) {
+                            let answer = JSON.parse(data);
+                            if (answer.result) {
+                                inform('Отлично!', answer.resultText);
+                            } else {
+                                el_tools.notify('error', 'Ошибка', answer.resultText);
+                            }
+                        });
+                        el_app.dialog_close('view_staff');
+                    }
+                });
+
+                $('#save_doc').on('mousedown keypress', function () {
+                    let calEvent = calendarGrid.getEventById('<?=$taskStr?>'),
+                        datesArr = $("[name='dates[]']").val().split(' - ');
+                    calEvent.setProp('title', $("[name='executors[]']").find('option:selected').text());
+                    calEvent.setDates(datesArr[0], datesArr[1]);
+                });
+
+                $('#close').off('click').on('click', function (e) {
+                    e.preventDefault();
+                    el_app.dialog_close('assign_staff');
+                });
+
+                /*$("#check_staff input[name='dates[]'], #check_staff select[name='units[]']," +
+                    "#check_staff select[name='ministries[]']")
+                    .on('change input', function () {
+
+                    let dates = $("input[name='dates[]']").val(),
+                        units = $("select[name='units[]']").val(),
+                        task_id = $("#check_staff input[name='task_id']").val(),
+                        user_selected = $("input[name='executors_hidden[]']").val(),
+                        $users = $("select[name='executors[]']");
+                    if (dates.length > 0 && units !== null) {
+                        //Если это уже назначенная задача
+                        if (parseInt(task_id) > 0) {
+                            dates = '';
+                        }
+                        $.post('/', {
+                                ajax: 1,
+                                path: 'calendar',
+                                action: 'available_staff',
+                                dates: dates,
+                                units: units,
+                                user_selected: user_selected
+                            },
+                            function (data) {
+                                $users.html(data).trigger('chosen:updated');
+                            });
+                    }
+                });*/
+                $("input[name='dates[]'] ~ input").mask('99.99.9999 - 99.99.9999');
+                $("input[name='dates[]']").trigger('input');
+
+                $('[name=initiator]').val("<?=$_SESSION['user_id']?>").trigger('chosen:updated');
+
+                $('select[name=agreementtemplate]').off('change').on('change', function () {
+                    $.post('/', {ajax: 1, action: 'getDocTemplate', temp_id: $(this).val()}, function (data) {
+                        let answer = JSON.parse(data),
+                            agreementlist = JSON.parse(answer.agreementlist);
+                        $('[name=brief]').val(answer.brief);
+                        $('[name=initiator]').val(answer.initiator).trigger('chosen:updated');
+                        $.post('/', {
+                            ajax: 1,
+                            action: 'buildAgreement',
+                            agreementlist: answer.agreementlist
+                        }, function (data) {
+                            $('.agreement_list_group').html(data);
+                            el_app.mainInit();
+                            agreement_list.agreement_list_init();
+                        });
+                    });
+                });
+
+                $('#save_doc').on('mousedown keypress', function () {
+                    $(".agreement_block select[name='institutions[]']").attr('disabled', true);
+                });
+
+                agreement_list.agreement_list_init();
+                $('.staff').show();
+            });
+        </script>
+        <?php
+    } else {
+        ?>
+        <script>
+            alert("Эта запись редактируется пользователем <?=$busy->user_name?>");
+            el_app.dialog_close("assign_staff");
+        </script>
+        <?
+    }
+
+} else {
+    echo '<script>alert("Ваша сессия устарела.");document.location.href = "/"</script>';
+}
+
+?>

@@ -1,0 +1,88 @@
+/*!
+ * jQuery.tipsy
+ * Copyright (c) 2014 CreativeDream
+ * Version: 1.0 (18-11-2014)
+*/
+
+.tipsy {
+    position: absolute;
+    top: 0;
+    left: 0;
+    padding: 0.5rem 1rem;
+    font-size: 0.75rem;
+    line-height: normal;
+    color: var(--color_01);
+    border-radius: 0.25rem;
+    background: var(--dark);
+    z-index: 99999;
+    font-weight: 300;
+    transition-delay: 1s;
+}
+
+.tipsy:before {
+    position: absolute;
+    bottom: -0.5rem;
+    left: 0.5rem;
+    display: inline-block;
+    content: '';
+    border-right: 0.5rem solid transparent;
+    border-top: 0.5rem solid var(--dark);
+    border-bottom: 0 solid var(--dark);
+    border-left: 0.5rem solid transparent;
+}
+
+.tipsy.arrow-top:before {
+    bottom: auto;
+    top: -0.5rem;
+    border-top-width: 0;
+    border-bottom-width: 0.5rem;
+}
+
+.tipsy.arrow-bottom:before {
+    bottom: -0.5rem;
+    top: auto;
+    border-top-width: 0.5rem;
+    border-bottom-width: 0;
+}
+
+.tipsy.arrow-left:before {
+    left: 0.5rem;
+    right: auto;
+}
+
+.tipsy.arrow-center:before {
+    left: 50%;
+    right: auto;
+    margin-left: -0.5rem;
+}
+
+.tipsy.arrow-right:before {
+    right: 0.5rem;
+    left: auto;
+}
+
+.tipsy.arrow-side-left:before {
+    top: 50%;
+    bottom: auto;
+    left: 0;
+    right: auto;
+    margin-top: -0.5rem;
+    margin-left: -0.5rem;
+    border-right-color: var(--dark);
+    border-top: 0.5rem solid transparent;
+    border-bottom: 0.5rem solid transparent;
+    border-left: 0;
+}
+
+.tipsy.arrow-side-right:before {
+    top: 50%;
+    bottom: auto;
+    right: 0;
+    left: auto;
+    margin-top: -0.5rem;
+    margin-right: -0.5rem;
+    border-left-color: var(--dark);
+    border-top: 0.5rem solid transparent;
+    border-bottom: 0.5rem solid transparent;
+    border-right: 0;
+}

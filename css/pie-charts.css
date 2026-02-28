@@ -1,0 +1,47 @@
+@charset "utf-8";
+/*pie charts*/
+
+.svg_wrap {
+    margin: 1rem auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 4rem;
+    /*! height: 3rem; */
+    position: relative;
+}
+
+.svg_wrap svg {
+    width: 6rem;
+    border-radius: 50%;
+    /*! background: yellowgreen; */
+    transform: rotate(-90deg);
+}
+
+.svg_wrap svg circle {
+    fill: none;
+    /*! stroke-width: 32px; */
+    r: 16px;
+    cx: 16px;
+    cy: 16px;
+    stroke-width: 5;
+}
+
+.svg_wrap svg circle.svg_background {
+    stroke: #DFDFDF;
+    /*! filter: blur(1px); */
+    filter: hue-rotate(197deg);
+}
+
+.svg_wrap svg circle.svg_calc {
+    stroke: cornflowerblue;
+}
+
+.svg_wrap .svg_value {
+    position: absolute;
+    font-weight: 500;
+}
+
+.svg_wrap .svg_value:after {
+    content: "%";
+}

@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html id="previewPage" lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Подсистема контроля и надзора">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <!-- The above 4 meta tags *must* come first in the head; any other head content must come *after* these tags -->
+
+    <meta name="theme-color" content="#0134d4">
+    <!--meta name="apple-mobile-web-app-capable" content="yes"-->
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+
+    <!-- Title -->
+    <title>Подсистема контроля и надзора</title>
+
+    <!-- Favicon -->
+    <link rel="icon" href="/favicons/favicon.ico">
+    <link rel="apple-touch-icon" href="/favicons/favicon-96x96.png">
+    <link rel="apple-touch-icon" sizes="192x192" href="/favicons/icons-192x192.png">
+    <link rel="apple-touch-icon" sizes="512x512" href="/favicons/icons-512x512.png">
+
+    <link href="/css/start.css" rel="stylesheet"/>
+    <link href="/css/fonts.css" rel="stylesheet"/>
+    <link href="/css/button.css" rel="stylesheet"/>
+    <link href="/css/check-radio.css" rel="stylesheet"/>
+    <link href="/css/el-data.css" rel="stylesheet"/>
+    <link href="/css/style00.css" rel="stylesheet"/>
+    <link href="/css/custom.css" rel="stylesheet"/>
+
+    <link href="/js/assets/flatpickr.mobile.css" rel="stylesheet"/>
+    <!-- Style CSS -->
+    <link rel="stylesheet" href="style.css">
+
+    <!-- Web App Manifest -->
+    <link rel="manifest" href="manifest.json">
+</head>
+
+<body>
+
+<div id="preloader">
+    <div class="spinner-grow text-primary" role="status">
+        <span class="visually-hidden">Загрузка...</span>
+    </div>
+</div>
+
+<!-- Internet Connection Status -->
+<div class="internet-connection-status" id="internetStatus"></div>
+
+<!-- Dark mode switching -->
+<div class="dark-mode-switching">
+    <div class="d-flex w-100 h-100 align-items-center justify-content-center">
+        <div class="dark-mode-text text-center">
+            <i class="bi bi-moon"></i>
+            <p class="mb-0">Тёмная тема</p>
+        </div>
+        <div class="light-mode-text text-center">
+            <i class="bi bi-brightness-high"></i>
+            <p class="mb-0">Светаля тема</p>
+        </div>
+    </div>
+</div>
+
+<!-- Setting Popup Overlay -->
+<div id="setting-popup-overlay"></div>
+
+<!-- Setting Popup Card -->
+<div class="card setting-popup-card shadow-lg" id="settingCard">
+    <div class="card-body">
+        <div class="container">
+            <div class="setting-heading d-flex align-items-center justify-content-between mb-3">
+                <p class="mb-0">Настройки</p>
+                <div class="btn-close" id="settingCardClose"></div>
+            </div>
+
+            <div class="single-setting-panel">
+                <div class="form-check form-switch mb-2">
+                    <input class="form-check-input" type="checkbox" id="availabilityStatus" checked>
+                    <label class="form-check-label" for="availabilityStatus">Статус подключения</label>
+                </div>
+            </div>
+
+            <div class="single-setting-panel">
+                <div class="form-check form-switch mb-2">
+                    <input class="form-check-input" type="checkbox" id="sendMeNotifications" checked>
+                    <label class="form-check-label" for="sendMeNotifications">Включить уведомления</label>
+                </div>
+            </div>
+
+            <div class="single-setting-panel">
+                <div class="form-check form-switch mb-2">
+                    <input class="form-check-input" type="checkbox" id="darkSwitch">
+                    <label class="form-check-label" for="darkSwitch">Тёмная тема</label>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="preview-iframe-wrapper">
+    <!-- Header Area -->
+    <div class="demo-header-wrapper">
+        <div class="container demo-container">
+            <!-- Header Content -->
+            <div class="header-content header-style-five position-relative d-flex align-items-center justify-content-between">
+                <!-- Logo Wrapper -->
+                <div class="logo-wrapper">
+                    <a href="index.html">
+                        <img src="/images/logo.svg" alt="">
+                    </a>
+                </div>
+
+                <div class="navbar--toggler" id="affanNavbarToggler" data-bs-toggle="offcanvas" data-bs-target="#affanOffcanvas" aria-controls="affanOffcanvas">
+                    <span class="d-block"></span>
+                    <span class="d-block"></span>
+                    <span class="d-block"></span>
+                </div>
+
+                <!-- Settings -->
+                <!--<div class="setting-wrapper">
+                    <div class="setting-trigger-btn" id="settingTriggerBtn">
+                        <i class="bi bi-gear"></i>
+                    </div>
+                </div>-->
+                <a href="index.html" id="logout" class="btn btn-light" role="button"><i class="bi bi-box-arrow-right"></i> Выход</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Login Wrapper Area -->
+    <div class="login-wrapper align-items-center justify-content-center" style="display: none">
+        <div class="custom-container">
+
+            <!-- Register Form -->
+            <div class="register-form mt-4">
+                <h6 class="mb-3 text-center">Подсистема контроля и надзора</h6>
+
+                <form method="post" class="ajaxFrm" onsubmit="return false" id="loginForm">
+                    <div class="form-group">
+                        <input class="form-control" type="text" id="user" name="user" placeholder="Логин">
+                    </div>
+
+                    <div class="form-group position-relative">
+                        <input class="form-control" id="psw-input" type="password" name="password" placeholder="Пароль">
+                        <div class="position-absolute" id="password-visibility">
+                            <i class="bi bi-eye"></i>
+                            <i class="bi bi-eye-slash"></i>
+                        </div>
+                    </div>
+
+                    <button class="btn btn-primary w-100" type="submit">Войти</button>
+                </form>
+            </div>
+
+
+        </div>
+    </div>
+
+    <div class="page-content-wrapper py-3" style="display: none">
+
+        <div id="calendar"></div>
+
+        <div class="container">
+            <div class="element-heading mt-3">
+                <h6>Мои задачи на сегодня</h6>
+            </div>
+        </div>
+
+
+        <div class="container">
+            <div class="card">
+                <div class="card-body">
+                    <div class="list-group">
+
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+
+    <div class="offcanvas offcanvas-start" id="affanOffcanvas" data-bs-scroll="true" tabindex="-1" aria-labelledby="affanOffcanvsLabel">
+
+        <button class="fs-2 mb-3 btn-xl px-4 p-3 bi-chevron-left right" type="button" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+
+        <div class="offcanvas-body p-0">
+            <div class="sidenav-wrapper" style="padding: 30px">
+
+
+
+            </div>
+        </div>
+    </div>
+
+
+
+    <!-- Static Backdrop Modal -->
+    <div class="modal fade" id="staticBackdrop" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1"
+         aria-labelledby="staticBackdropLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h6 class="modal-title" id="staticBackdropLabel"></h6>
+                    <button class="btn btn-close p-1 ms-auto" type="button" data-bs-dismiss="modal"
+                            aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-0"></p>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-sm btn-primary" type="button" data-bs-dismiss="modal">Закрыть</button>
+                    <!--<button class="btn btn-sm btn-success" type="button">I Understood</button>-->
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- All JavaScript Files -->
+    <script src="js/bootstrap.bundle.min.js"></script>
+    <script src="js/slideToggle.min.js"></script>
+    <script src="js/internet-status.js"></script>
+    <script src="js/dark-rtl.js"></script>
+    <script src="js/active.js"></script>
+    <script src="/js/assets/jquery-3.6.0.min.js"></script>
+    <script src="js/pwa.js"></script>
+    <script src="/js/assets/flatpickr.js"></script>
+    <script src="/js/assets/flatpickr/l10n/ru.js"></script>
+    <script src='https://api-maps.yandex.ru/2.1/?lang=ru-RU&amp;apikey=4fb6d7dc-97e6-4520-af12-1fda7d2bfe41' type='text/javascript'></script>
+
+    <script>
+        $(document).ready(function () {
+            fetch('/cache/tasks/' + userId + '/dates.json')
+                .then(response => response.text())
+                .then(text => {
+                    // Преобразуем строку в массив
+                    const datesArray = JSON.parse(text); console.log(datesArray)
+                    $("#calendar").flatpickr({
+                        locale: 'ru',
+                        inline: true,
+                        mode: 'single',
+                        time_24hr: true,
+                        enable: datesArray,
+                        dateFormat: 'Y-m-d',
+                        altFormat: 'd.m.Y',
+                        allowInput: true,
+                        conjunction: '-',
+                        altInput: true,
+                        altInputClass: "el_input",
+                        firstDayOfWeek: 1,
+                        onChange: function(selectedDates, dateStr, instance) {
+                            console.log(dateStr)
+                            initTasks(dateStr);
+                        }
+                    });
+                }).catch(error => console.error('Error loading dates:', error));
+
+        });
+    </script>
+
+</body>
+
+</html>

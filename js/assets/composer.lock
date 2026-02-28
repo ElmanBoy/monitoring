@@ -1,0 +1,71 @@
+{
+    "_readme": [
+        "This file locks the dependencies of your project to a known state",
+        "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
+        "This file is @generated automatically"
+    ],
+    "content-hash": "4b20c0df1253dd2f8b9d2b6546f74d78",
+    "packages": [],
+    "packages-dev": [
+        {
+            "name": "webmasterskaya/crypto-pro-php-stubs",
+            "version": "1.0.5",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/crypto-pro-web/crypto-pro-php-stubs.git",
+                "reference": "92219ce4944c376e1fdb003cd73b0be395913f4b"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/crypto-pro-web/crypto-pro-php-stubs/zipball/92219ce4944c376e1fdb003cd73b0be395913f4b",
+                "reference": "92219ce4944c376e1fdb003cd73b0be395913f4b",
+                "shasum": ""
+            },
+            "require": {
+                "php": ">=7.2 || ^8.0"
+            },
+            "type": "library",
+            "autoload": {
+                "classmap": [
+                    "src/"
+                ]
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Artem Vasilev",
+                    "email": "kern.usr@gmail.com"
+                }
+            ],
+            "description": "Самая полная библиотека подсказок IDE libphpcades (КриптоПро), которая обеспечивает автозаполнение в современных IDE.",
+            "keywords": [
+                "Devtools",
+                "Eclipse",
+                "autocomplete",
+                "cryptopro",
+                "ide",
+                "netbeans",
+                "phpstorm",
+                "stub",
+                "stubs",
+                "КриптоПро"
+            ],
+            "support": {
+                "issues": "https://github.com/webmasterskaya/crypto-pro-php-stubs/issues",
+                "source": "https://github.com/webmasterskaya/crypto-pro-php-stubs"
+            },
+            "time": "2024-08-06T15:11:21+00:00"
+        }
+    ],
+    "aliases": [],
+    "minimum-stability": "stable",
+    "stability-flags": [],
+    "prefer-stable": false,
+    "prefer-lowest": false,
+    "platform": [],
+    "platform-dev": [],
+    "plugin-api-version": "2.6.0"
+}

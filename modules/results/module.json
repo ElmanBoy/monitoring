@@ -1,0 +1,12 @@
+{
+  "id": 16,
+  "name": "Отчеты",
+  "description": "Модуль позволяет просматривать результаты проверок",
+  "minimumCoreVersion": "0.1",
+  "title": "Результаты проверок",
+  "version": "0.1",
+  "author": "Боязитов Э.М.",
+  "path": "results",
+  "icon": "sports_score",
+  "number": 6
+}

@@ -1,0 +1,102 @@
+@charset "utf-8";
+/*кнопки*/
+
+button {
+    appearance: none;
+    -webkit-appearance: none;
+}
+
+button, .button {
+    background: inherit;
+    border: none;
+    display: flex;
+    /*! font-size: 0.75rem; */
+    font-family: inherit;
+    padding: 0.875rem 1.25rem;
+    /*! max-width: 12rem; */
+    text-align: center;
+    /*! margin: 1rem; */
+    align-items: center;
+    cursor: pointer;
+    transition: ease-in-out 0.2s;
+    color: inherit;
+    /*! border-radius: var(--radius); */
+    /*! min-width: 8rem; */
+    justify-content: center;
+    font-weight: 400;
+    /*! height: 46px; */
+    /*! line-height: 1.5rem; */
+    white-space: nowrap;
+    border-radius: 5px;
+}
+
+button:hover, .button:hover {
+    /*! filter: brightness(1.5); */
+    /*! color: black; */
+    background: var(--color_04);
+    /*! box-shadow: var(--shadow-button); */
+}
+
+button:disabled, button[disabled], .button.disabled {
+    cursor: no-drop;
+    opacity: 0.6;
+    /*! color: var(--grey); */
+    /*! opacity: 0.75; */
+    /*! background: var(--color_03); */
+}
+
+button.icon.text .material-icons, .button.text.icon .material-icons {
+    padding: 0 0.5rem 0 0;
+    margin-left: -0.25rem;
+}
+
+.button.short{
+    width: min-content;
+}
+
+.red, .redText {
+    color: var(--red);
+}
+.material-icons.redText{
+    color: var(--red) !important;
+    display: inline !important;
+    vertical-align: bottom;
+}
+
+.greyText{
+    color: var(--color_02) !important;
+}
+
+.green, .greenText {
+    color: var(--green) !important;
+}
+.blueText{
+    color: var(--color_04) !important;
+}
+button.green, .button.green{
+    background: var(--green) !important;
+    color: var(--color_01) !important;
+}
+
+button.red, .button.red{
+    background: var(--red) !important;
+    color: var(--color_01) !important;
+}
+
+button.red:hover, .button.red:hover{
+    background: var(--dark_red) !important;
+    color: var(--color_01) !important;
+}
+
+button.blue, .button.blue{
+    background: var(--color_04) !important;
+    color: var(--color_01) !important;
+}
+
+button.green:hover, .button.green:hover{
+    background: var(--dark-green) !important;
+}
+
+button.blue:hover, .button.blue:hover{
+    background: var(--dark) !important;
+}

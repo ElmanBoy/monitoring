@@ -1,0 +1,47 @@
+.tabStrip ul, .tabStrip1 ul, .tabStrip2 ul {
+	margin: 0;
+	padding: 0;
+	list-style-type: none;
+}
+.tabStrip li, .tabStrip1 li, .tabStrip2 li {
+	margin: 0 2px 0 0;
+	list-style-type: none;
+	float: left;
+}
+.tabLink, .tabLink1, .tabLink2 {
+	display: block;
+	text-decoration: none;
+	padding: 5px;
+	background: #e8e8e8;
+	border: #dadada solid;
+	border-width: 1px 1px 0 1px;
+	color: #475767;
+	font-size:14px;
+}
+.tabLinkActive, .tabLinkActive1, .tabLinkActive2 {
+	display: block;
+	text-decoration: none;
+	padding: 5px;
+	background: #fff;
+	border: #c0c0c0 solid;
+	border-width: 1px 1px 0 1px;
+	color: #3e76b9;
+	font-size:14px;
+}
+.tabContent, .tabContent1, .tabContent2 {
+	display: none;
+}
+.tabContentActive, .tabContentActive1, .tabContentActive2 {
+	display: block;
+	clear: both;
+	background: #fff;
+	border: 1px #dedede solid;
+	text-align:center;
+	padding:14px 0 10px 0;
+
+}
+.tabContentActive .plan1 img {border:1px #b6b6b6 solid;}
+.tabContentActive .miniIMG ul { margin:10px 0 10px 1px;}
+.tabContentActive .miniIMG ul li { float:left; text-align:center;}
+.tabContentActive .miniIMG ul li img {border:2px #b6b6b6 solid;}
+.tabContentActive .plan1 .active img { border:2px #e64551 solid;}

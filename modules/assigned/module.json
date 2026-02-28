@@ -1,0 +1,12 @@
+{
+  "id": 15,
+  "name": "Задания",
+  "description": "Модуль позволяет создавать/удалять/редактировать задачи",
+  "minimumCoreVersion": "0.1",
+  "title": "Нзаначенные задания",
+  "version": "0.1",
+  "author": "Боязитов Э.М.",
+  "path": "assigned",
+  "icon": "list_alt",
+  "number": 3
+}

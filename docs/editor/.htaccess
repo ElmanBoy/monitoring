@@ -1,0 +1,2 @@
+php_flag error_reporting On
+php_flag display_errors On

@@ -1,0 +1,32 @@
+{
+    "jost": {
+        "normal": "\/var\/www\/html\/core\/vendor\/dompdf\/dompdf\/lib\/fonts\/Jost-Regular",
+        "bold": "\/var\/www\/html\/core\/vendor\/dompdf\/dompdf\/lib\/fonts\/Jost-SemiBold",
+        "italic": "\/var\/www\/html\/core\/vendor\/dompdf\/dompdf\/lib\/fonts\/Jost-Regular",
+        "bold_italic": "\/var\/www\/html\/core\/vendor\/dompdf\/dompdf\/lib\/fonts\/Jost-Regular"
+    },
+    "times-roman": {
+        "normal": "\/var\/www\/html\/core\/vendor\/dompdf\/dompdf\/lib\/fonts\/timesnrcyrmt",
+        "bold": "\/var\/www\/html\/core\/vendor\/dompdf\/dompdf\/lib\/fonts\/timesnrcyrmt",
+        "italic": "\/var\/www\/html\/core\/vendor\/dompdf\/dompdf\/lib\/fonts\/timesnrcyrmt",
+        "bold_italic": "\/var\/www\/html\/core\/vendor\/dompdf\/dompdf\/lib\/fonts\/timesnrcyrmt"
+    },
+    "times-bold": {
+        "normal": "\/var\/www\/html\/core\/vendor\/dompdf\/dompdf\/lib\/fonts\/timesnrcyrmt_bold",
+        "bold": "\/var\/www\/html\/core\/vendor\/dompdf\/dompdf\/lib\/fonts\/timesnrcyrmt_bold",
+        "italic": "\/var\/www\/html\/core\/vendor\/dompdf\/dompdf\/lib\/fonts\/timesnrcyrmt_bold",
+        "bold_italic": "\/var\/www\/html\/core\/vendor\/dompdf\/dompdf\/lib\/fonts\/timesnrcyrmt_bold"
+    },
+    "times-italic": {
+        "normal": "\/var\/www\/html\/core\/vendor\/dompdf\/dompdf\/lib\/fonts\/timesnrcyrmt_inclined",
+        "bold": "\/var\/www\/html\/core\/vendor\/dompdf\/dompdf\/lib\/fonts\/timesnrcyrmt_inclined",
+        "italic": "\/var\/www\/html\/core\/vendor\/dompdf\/dompdf\/lib\/fonts\/timesnrcyrmt_inclined",
+        "bold_italic": "\/var\/www\/html\/core\/vendor\/dompdf\/dompdf\/lib\/fonts\/timesnrcyrmt_inclined"
+    },
+    "times-bolditalic": {
+        "normal": "\/var\/www\/html\/core\/vendor\/dompdf\/dompdf\/lib\/fonts\/timesnrcyrmt_boldinclined",
+        "bold": "\/var\/www\/html\/core\/vendor\/dompdf\/dompdf\/lib\/fonts\/timesnrcyrmt_boldinclined",
+        "italic": "\/var\/www\/html\/core\/vendor\/dompdf\/dompdf\/lib\/fonts\/timesnrcyrmt_boldinclined",
+        "bold_italic": "\/var\/www\/html\/core\/vendor\/dompdf\/dompdf\/lib\/fonts\/timesnrcyrmt_boldinclined"
+    }
+}

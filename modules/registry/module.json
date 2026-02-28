@@ -1,0 +1,13 @@
+{
+  "id": 5,
+  "name": "Справочники",
+  "description": "Модуль позволяет создавать/удалять/редактировать справочники",
+  "minimumCoreVersion": "0.1",
+  "title": "Справочники",
+  "version": "0.1",
+  "author": "Боязитов Э.М.",
+  "path": "registry",
+  "icon": "folder",
+  "number": 300,
+  "parentItem": "settings"
+}

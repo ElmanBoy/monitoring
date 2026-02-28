@@ -1,0 +1,13 @@
+{
+  "id": 21,
+  "name": "ЭЦП",
+  "description": "Модуль позволяет просматривать журнал ЭЦП",
+  "minimumCoreVersion": "0.1",
+  "title": "Журнал ЭЦП",
+  "version": "0.1",
+  "author": "Боязитов Э.М.",
+  "path": "signs",
+  "icon": "verified",
+  "number": 500,
+  "parentItem": "settings"
+}

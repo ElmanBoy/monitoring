@@ -1,0 +1,47 @@
+{
+  "name": "Подсистема контроля и надзора",
+  "short_name": "MonitoringCRM",
+  "start_url": "https://monitoring.msr.mosreg.ru/pwa/index.html",
+  "display": "standalone",
+  "background_color": "#0d5afd",
+  "theme_color": "#0d5afd",
+  "categories": ["mobile", "multipurpose", "pwa"],
+  "orientation": "portrait",
+  "description": "Подсистема мониторинга контрольно-надзорной деятельности",
+  "scope": "/",
+  "id": "/",
+  "icons": [
+    {
+      "src": "/favicons/icons-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/favicons/icons-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/favicons/icons-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/favicons/icons-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/favicons/icons-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

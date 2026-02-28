@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>OpenStreetMap Example</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+  <style>
+    #osm-map { height: 300px; }
+  </style>
+</head>
+<body>
+<div id="osm-map"></div>
+
+
+<iframe width="100%" height="600" frameborder="0" scrolling="no" marginheight="0" marginwidth="0" src="https://www.openstreetmap.org/export/embed.html?bbox=51.2016004294,35.6079433209,51.5569619459,35.7819296463&amp;layer=mapnik" style="border: 1px solid black"></iframe>
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script>
+  // Element where we will render the map
+  var mapElement = document.getElementById('osm-map');
+
+  // Create a map in the specified element
+  var map = L.map(mapElement);
+
+  // Load and display tile layers from OpenStreetMap
+  L.tileLayer('https://int.rgis.mosreg.ru/wmts/m10/${z}/${x}/${y}.png', {
+    attribution: '&copy; <a href="http://osm.org/copyright">OpenStreetMap</a> contributors'
+  }).addTo(map);
+
+  // Define the desired geographic coordinates
+  var targetCoordinates = L.latLng('47.50737', '19.04611');
+
+  // Set the initial view of the map
+  map.setView(targetCoordinates, 14);
+
+  // Add a marker at the defined coordinates
+  L.marker(targetCoordinates).addTo(map);
+</script>
+</body>
+</html>

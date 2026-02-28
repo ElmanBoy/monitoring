@@ -1,0 +1,46 @@
+.calendar
+{
+	color: #545454;
+	font-size: 11px;
+	width:100%;
+}
+.calendar td
+{
+	padding: 4px 3px;
+	text-decoration: none;
+	text-align:center;
+	color:#3d75b8;
+	font-weight:bold;
+}
+.calendar th {padding: 4px 3px; text-decoration: none; text-align:center; color:#000000;}
+.day a
+{
+	text-decoration: underline;
+	color:#3d75b8;
+}
+.weekday a
+{
+	text-decoration: underline;
+	color:#e54554;
+}
+.monthlink
+{
+	color: #902504;
+	text-decoration: none;
+}
+.monthselect { font-size:16px; font-weight:bold; color:#e54554;}
+.workday {text-align:center;}
+.weekday {text-align:center;}
+.calendar td.weekday
+{
+	padding: 4px 3px;
+	text-decoration: none;
+	text-align:center;
+	color:#e54554;
+	font-weight:bold;
+}
+.day span{background:#eceef0; display:block; padding:0;}
+.weekday span{background:#eceef0; display:block; padding:0;}
+.day-current span{background:#e54554; color:#fff;}
+.day-current  a { color:#fff; text-decoration: underline;}
+

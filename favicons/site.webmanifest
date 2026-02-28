@@ -1,0 +1,47 @@
+{
+  "name": "Подсистема контроля и надзора",
+  "description": "Подсистема мониторинга контрольно-надзорной деятельности",
+  "short_name": "MonitoringCRM",
+  "theme_color": "#a9e9f8",
+  "background_color": "#a9e9f8",
+  "display": "standalone",
+  "scope": "/",
+  "start_url": "/",
+  "id": "/",
+  "icons": [
+    {
+      "src": "/favicons/web-app-manifest-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/favicons/web-app-manifest-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+         {
+           "src": "/favicons/web-app-manifest-192x192.png",
+           "sizes": "192x192",
+           "type": "image/png",
+           "purpose": "any"
+         }
+  ],
+  "screenshots": [
+                   {
+                     "src": "/favicons/web-app-manifest-512x512.png",
+                     "sizes": "512x512",
+                     "type": "image/png",
+                     "purpose": "maskable",
+                     "form_factor": "no_wide"
+                   },
+                   {
+                     "src": "/favicons/web-app-manifest-512x512.png",
+                     "sizes": "512x512",
+                     "type": "image/png",
+                     "purpose": "maskable",
+                     "form_factor": "wide"
+                   }
+                 ]
+}

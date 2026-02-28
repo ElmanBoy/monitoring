@@ -1,0 +1,13 @@
+{
+  "id": 11,
+  "name": "Учреждения",
+  "description": "Модуль позволяет создавать/удалять/редактировать профили учреждений",
+  "minimumCoreVersion": "0.1",
+  "title": "Реестр учреждений",
+  "version": "0.1",
+  "author": "Боязитов Э.М.",
+  "path": "institutions",
+  "icon": "business",
+  "number": 5,
+  "parentItem": "settings"
+}

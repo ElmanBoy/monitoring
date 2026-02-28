@@ -1,0 +1,23 @@
+#nav {margin: 0; padding: 0; width:100%;}
+
+#nav li.on ul, #nav li.off ul {margin: 0; padding: 0;}
+
+#nav a {text-decoration: none;}
+
+#nav li {margin: 0; float: left; display: block;}
+
+#nav li ul {display: none;}
+
+#nav li.off ul, #nav li.on ul { position: absolute; left:0px; line-height:12px;}
+
+#nav li a {color: #3d75b8; font-family:Arial, Helvetica, sans-serif; font-size:14px; display: block; padding: 5px 20px 5px 20px; text-transform:uppercase; margin:3px 0 0 0;}
+
+#nav li.on a {color: #7a8566;}
+
+#nav li.on ul a, #nav li.off ul a {float: left;  border: 0; font-family:Tahoma, Geneva, sans-serif; font-size:12px; color: #fff; text-transform:none; padding:0 8px 0 8px;}
+
+#nav li.on ul {display: block;}
+
+#nav li.current ul {display: block; z-index: 6000;}
+
+#nav li.off a:hover, #nav li:hover a, #nav li.current a {background: #909fb0; color: #fff;}

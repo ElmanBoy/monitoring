@@ -1,0 +1,5 @@
+{
+    "require-dev": {
+        "webmasterskaya/crypto-pro-php-stubs": "^1.0"
+    }
+}

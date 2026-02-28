@@ -1,0 +1,61 @@
+body {
+	font-family: Arial, sans-serif;
+}
+
+.tm-icon-picker {
+	display:  flex;
+	align-items: center;
+}
+
+.tm-icon-picker label {
+	margin-right:  5px;
+}
+
+.tm-icon-picker .tm-icon-picker-input-wrapper {
+	display:  flex;
+	position: relative;
+}
+
+.tm-icon-picker .tm-icon-picker-input input {
+	font-size: 20px;
+	color:  #07616a;
+	padding: 5px 5px;
+	border:  1px solid #07616a;
+	border-radius: 5px;
+	border-top-right-radius: 0px;
+	border-bottom-right-radius: 0px;
+}
+
+.tm-icon-picker .tm-icon-picker-append {
+	min-width: 50px;
+	background: #ccc;
+	border:  1px solid #a2b1b3;
+	border-top-right-radius: 5px;
+	border-bottom-right-radius: 5px;
+	text-align: center;
+	padding: 8px 5px;
+}
+
+.tm-icon-picker .icons-grid {
+	width:  79%;
+    height: 162px;
+	position: absolute;
+	border: 1px solid #ccc;
+	display: none;
+	overflow-y: scroll;
+	padding: 5px;
+}
+
+.tm-icon-picker .icons-grid .icon {
+	display: inline-block;
+    font-size: 32px;
+    margin: 4px 3px;
+    cursor: pointer;
+    transition: all 0.3s;
+    padding: 2px;
+}
+
+.tm-icon-picker .icons-grid .icon:hover {
+	border:  1px solid #ccc;
+	border-radius: 3px;
+}
