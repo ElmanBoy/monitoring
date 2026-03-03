@@ -14,14 +14,35 @@ var el_registry = {
             el_app.dialog_open("order_staff", {}, "calendar");
         });
 
-        $("#button_nav_delete").on("click", async function () {
+
+        // Архивирование выбранных записей
+        $("#button_nav_archive").on("click", async function () {
             if (!$(this).hasClass("disabled")) {
-                let ok = await confirm("Уверены, что хотите удалить этот элемент справочника?");
+                let ok = await confirm("Переместить выбранные записи в архив?");
                 if (ok) {
-                    $("form#registry_items_delete").trigger("submit");
+                    let $checked = $("#registry_items_delete_real").find("input[name='reg_id[]']:checked");
+                    if ($checked.length === 0) return;
+                    $("#registry_items_archive").find("input[name='reg_id[]']").remove();
+                    $checked.clone().appendTo("#registry_items_archive");
+                    $("form#registry_items_archive").trigger("submit");
                 }
             }
         });
+
+        // Восстановление из архива
+        $("#button_nav_restore").on("click", async function () {
+            if (!$(this).hasClass("disabled")) {
+                let ok = await confirm("Восстановить выбранные записи из архива?");
+                if (ok) {
+                    let $checked = $("#registry_items_delete_real").find("input[name='reg_id[]']:checked");
+                    if ($checked.length === 0) return;
+                    $("#registry_items_restore").find("input[name='reg_id[]']").remove();
+                    $checked.clone().appendTo("#registry_items_restore");
+                    $("form#registry_items_restore").trigger("submit");
+                }
+            }
+        });
+
         $("#button_nav_clone").on("click", async function () {
             if (!$(this).hasClass("disabled")) {
                 $("form#registry_items_delete").attr("id", "registry_items_clone").trigger("submit").attr("id", "registry_items_delete");
@@ -229,7 +250,7 @@ var el_registry = {
 
     bindDadata: function (){
         $("input[name=inn]").suggestions({
-            token: "eb83a00ad060d6cca3d2341f2acb15cdb76b67df",
+            token: window.DADATA_TOKEN,
             type: "PARTY",
             /* Вызывается, когда пользователь выбирает одну из подсказок */
             onSelect: function(suggestion) {

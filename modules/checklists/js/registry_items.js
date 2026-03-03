@@ -87,7 +87,7 @@ var el_registry = {
 
     bindDadata: function (){
         $("input[name=inn]").suggestions({
-            token: "eb83a00ad060d6cca3d2341f2acb15cdb76b67df",
+            token: window.DADATA_TOKEN,
             type: "PARTY",
             /* Вызывается, когда пользователь выбирает одну из подсказок */
             onSelect: function(suggestion) {

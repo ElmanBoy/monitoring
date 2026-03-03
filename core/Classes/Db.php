@@ -14,18 +14,21 @@ use Core\Files;
  */
 class Db
 {
-    public /*int*/ $last_insert_id;
-    private /*array*/ $_get, $_post, $_session;
-    public /*\R*/ $db;
+    public /*int*/
+        $last_insert_id;
+    private /*array*/
+        $_get, $_post, $_session;
+    public /*\R*/
+        $db;
     private \Core\Files $files;
 
 
     /**
-	 * Конструктор Db.
-	 *
-	 * Инициализируется так же класс R от ORM RedBeanPHP
-	 */
-	public function __construct()
+     * Конструктор Db.
+     *
+     * Инициализируется так же класс R от ORM RedBeanPHP
+     */
+    public function __construct()
     {
         $this->_get = $_GET;
         $this->_post = $_POST;
@@ -35,78 +38,119 @@ class Db
         $this->files = new Files();
     }
 
-	/**
-	 * Метод утсановки значения извне для приватных параметров класса.
-	 *
-	 * @param mixed $key Имя параметра
-	 * @param mixed $val Значение параметра
-	 * @return void Ничего не возвращает
-	 */
+    /**
+     * Метод утсановки значения извне для приватных параметров класса.
+     *
+     * @param mixed $key Имя параметра
+     * @param mixed $val Значение параметра
+     * @return void Ничего не возвращает
+     */
     public function set($key, $val)
     {
         $this->$key = $val;
     }
 
 
-	/**
-	 * Метод получения данных из справочника в виде массива
-	 *
-	 * @param string $regName Строковый идентификатор справочника
-	 * @param string $where SQL условие для выборки. Например, ' where id = ? '.
-	 * @param array $slots Массив подстановочных значений в SQL условии.
-	 *                     Они после очистки будут вставлены вместо вопросительного знака.
+    /**
+     * Метод получения данных из справочника в виде массива
+     *
+     * @param string $regName Строковый идентификатор справочника
+     * @param string $where SQL условие для выборки. Например, ' where id = ? '.
+     * @param array $slots Массив подстановочных значений в SQL условии.
+     *                     Они после очистки будут вставлены вместо вопросительного знака.
      * @param array $fields Массив имен полей, извлекаемых из таблицы. Если не задан, то извлекается только поле name.
-	 * @return array Результат в виде массив в формате [id, name]
-	 */
-	public function getRegistry(string $regName, string $where = '', array $slots = [], $fields = []): array
+     * @return array Результат в виде массив в формате [id, name]
+     */
+    public function getRegistry(string $regName, string $where = '', array $slots = [], $fields = []): array
     {
         /*if(isset($_SESSION['registry'][$regName]) && $where == ''){
             return $_SESSION['registry'][$regName];
         }else {*/
-            $regArr = array();
-            $reg = $this->select($regName, $where, $slots);
-            foreach ($reg as $r) {
-                if ($fields == []) {
-                    $regArr[$r->id] = $r->name;
-                } else {
-                    $fArr = [];
-                    foreach ($fields as $field) {
-                        $fArr[] = $r->$field;
-                    }
-                    $regArr[$r->id] = $fArr;
+        $regArr = array();
+        $reg = $this->select($regName, $where, $slots);
+        foreach ($reg as $r) {
+            if ($fields == []) {
+                $regArr[$r->id] = $r->name;
+            } else {
+                $fArr = [];
+                foreach ($fields as $field) {
+                    $fArr[] = $r->$field;
                 }
+                $regArr[$r->id] = $fArr;
             }
-            if($where == '') {
-                $_SESSION['registry'][$regName]['result'] = $reg;
-                $_SESSION['registry'][$regName]['array'] = $regArr;
-            }
-            return ['result' => $reg, 'array' => $regArr];
+        }
+        if ($where == '') {
+            $_SESSION['registry'][$regName]['result'] = $reg;
+            $_SESSION['registry'][$regName]['array'] = $regArr;
+        }
+        return ['result' => $reg, 'array' => $regArr];
         //}
     }
 
 
-	/**
-	 * Метод удаления записи из базы данных.
-	 *
-	 * @param string $tableName Имя таблицы базы данных
-	 * @param array  $ids Массив ID удаляемых строк
-	 */
-	public function delete(string $tableName, array $ids)
+    /**
+     * Метод удаления записи из базы данных.
+     *
+     * @param string $tableName Имя таблицы базы данных
+     * @param array $ids Массив ID удаляемых строк
+     */
+    public function delete(string $tableName, array $ids)
     {
         $this->db::trashBatch(TBL_PREFIX . $tableName, $ids);
     }
 
+    /**
+     * Мягкое удаление: помечает записи как архивные (active = -1).
+     * Данные остаются в БД и могут быть восстановлены через restore().
+     *
+     * @param string $tableName Имя таблицы без префикса
+     * @param array $ids Массив ID архивируемых записей
+     * @param int $userId ID пользователя, выполняющего архивирование
+     */
+    public function archive(string $tableName, array $ids, int $userId = 0): void
+    {
+        if (empty($ids)) return;
+        $slots = array_map('intval', $ids);
+        $in = implode(', ', array_fill(0, count($slots), '?'));
+        $now = date('Y-m-d H:i:s');
+        $this->db::exec(
+            'UPDATE ' . TBL_PREFIX . $tableName .
+            ' SET active = -1, archived_by = ?, archived_at = ?' .
+            ' WHERE id IN (' . $in . ')',
+            array_merge([$userId, $now], $slots)
+        );
+    }
 
-	/**
-	 * Метод записи в базу данных.
-	 *
-	 * @param string $tableName Имя таблицы базы данных
-	 * @param array  $values Ассоциативный массив вставляемых данных. Формат массива: "имя поля" => "значение"
-	 * @return bool TRUE в случае успешной записи, иначе FALSE.
-	 *              В случае успешной вставки записи в поле last_insert_id класса Db вносится ID новой записи
-	 * @throws \RedBeanPHP\RedException
-	 */
-	public function insert(string $tableName, array $values): bool
+    /**
+     * Восстановление из архива: возвращает active = 1, очищает метки архива.
+     *
+     * @param string $tableName Имя таблицы без префикса
+     * @param array $ids Массив ID восстанавливаемых записей
+     */
+    public function restore(string $tableName, array $ids): void
+    {
+        if (empty($ids)) return;
+        $slots = array_map('intval', $ids);
+        $in = implode(', ', array_fill(0, count($slots), '?'));
+        $this->db::exec(
+            'UPDATE ' . TBL_PREFIX . $tableName .
+            ' SET active = 1, archived_by = NULL, archived_at = NULL' .
+            ' WHERE id IN (' . $in . ')',
+            $slots
+        );
+    }
+
+
+    /**
+     * Метод записи в базу данных.
+     *
+     * @param string $tableName Имя таблицы базы данных
+     * @param array $values Ассоциативный массив вставляемых данных. Формат массива: "имя поля" => "значение"
+     * @return bool TRUE в случае успешной записи, иначе FALSE.
+     *              В случае успешной вставки записи в поле last_insert_id класса Db вносится ID новой записи
+     * @throws \RedBeanPHP\RedException
+     */
+    public function insert(string $tableName, array $values): bool
     {
         $this->db::debug(1, 3);
 
@@ -116,7 +160,8 @@ class Db
 
         $this->db::ext('xdispense', function ($type) {
             return $this->db::getRedBean()->dispense($type);
-        });
+        }
+        );
         $result = $this->db::xdispense(TBL_PREFIX . $tableName);
 
         foreach ($values as $field => $value) {
@@ -128,33 +173,34 @@ class Db
         try {
             //if(isset())
             //$this->db->transaction( function() use ($result) {
-                $this->db->store($result);
-           // } );
-            if(isset($_SESSION['registry'][$tableName])){
+            $this->db->store($result);
+            // } );
+            if (isset($_SESSION['registry'][$tableName])) {
                 unset($_SESSION['registry'][$tableName]);
             }
-            file_put_contents(ROOT.'/logs/pg_log.txt', $logs->grep('INSERT'));
+            file_put_contents(ROOT . '/logs/pg_log.txt', $logs->grep('INSERT'));
             $this->last_insert_id = $result->id;//$this->db->getInsertID();
             return true;
         } catch (SQL $e) {
-            echo 'Ошибка: '.$e->getMessage();
+            echo 'Ошибка: ' . $e->getMessage();
             return false;
         }
     }
 
     public function count(string $tableName, string $exp = '', array $slots = []): int
     {
-        return $this->db::count( $tableName, $exp, $slots);
+        return $this->db::count($tableName, $exp, $slots);
     }
 
     public function cloneRows(string $tableName, array $ids)
     {
         $rows = $this->select($tableName,
-            ' WHERE id IN ('.$this->db::genSlots( $ids ).')', $ids);
-        foreach($rows as $index => $key){
+            ' WHERE id IN (' . $this->db::genSlots($ids) . ')', $ids
+        );
+        foreach ($rows as $index => $key) {
             $new_row = [];
             foreach ($key as $field => $value) {
-                if($field != 'id')
+                if ($field != 'id')
                     $new_row[$field] = $value;
             }
             $this->insert($tableName, $new_row);
@@ -195,7 +241,8 @@ class Db
         $this->db::begin();
         $this->db::ext('xdispense', function ($type) {
             return $this->db::getRedBean()->dispense($type);
-        });
+        }
+        );
 
         $result = $this->db::load(TBL_PREFIX . $tableName, intval($update_id));
 
@@ -209,7 +256,7 @@ class Db
 
             $this->db::store($result);
             $this->db::commit();
-            if(isset($_SESSION['registry'][$tableName])){
+            if (isset($_SESSION['registry'][$tableName])) {
                 unset($_SESSION['registry'][$tableName]);
             }
             return true;
@@ -222,7 +269,7 @@ class Db
 
     public function prepare(string $data): string
     {
-        $ivlen = openssl_cipher_iv_length($cipher = "AES-128-CBC");
+        $ivlen = openssl_cipher_iv_length($cipher = 'AES-128-CBC');
         $iv = openssl_random_pseudo_bytes($ivlen);
         $ciphertext_raw = openssl_encrypt($data, $cipher, ENCRYPTION_KEY, $options = OPENSSL_RAW_DATA, $iv);
         $hmac = hash_hmac('sha256', $ciphertext_raw, ENCRYPTION_KEY, $as_binary = true);
@@ -234,7 +281,7 @@ class Db
     {
         if (is_string($data) && strlen($data) > 0) {
             $c = base64_decode($data);
-            $ivlen = openssl_cipher_iv_length($cipher = "AES-128-CBC");
+            $ivlen = openssl_cipher_iv_length($cipher = 'AES-128-CBC');
             $iv = substr($c, 0, $ivlen);
             $hmac = substr($c, $ivlen, $sha2len = 32);
             $ciphertext_raw = substr($c, $ivlen + $sha2len);
@@ -249,16 +296,16 @@ class Db
     }
 
 
-	/**
-	 * Создаёт транзакцию при редактировании данных в базе данных.
-	 *
-	 * Создает запись в таблице ohs_transactions.
-	 *
-	 * @param string $tableName Имя таблицы, в которой идёт редактирование
-	 * @param int    $row_id ID редактируемой записи
-	 * @return array Ассоциативный массив в формате ['trans_id', 'user_name']
-	 */
-	public function transactionOpen(string $tableName, int $row_id): array
+    /**
+     * Создаёт транзакцию при редактировании данных в базе данных.
+     *
+     * Создает запись в таблице ohs_transactions.
+     *
+     * @param string $tableName Имя таблицы, в которой идёт редактирование
+     * @param int $row_id ID редактируемой записи
+     * @return array Ассоциативный массив в формате ['trans_id', 'user_name']
+     */
+    public function transactionOpen(string $tableName, int $row_id): array
     {
         $busy = $this->selectOne(TBL_PREFIX . 'transactions', 'table_name = ? AND row_id = ?', [$tableName, $row_id]);
 
@@ -270,31 +317,31 @@ class Db
                 'user_id' => intval($this->_session['user_id']),
                 'user_name' => $this->_session['user_fio']
             );
-	        try {
-		        $this->insert('transactions', $trans);
-	        } catch (RedException $e) {
-	            die(implode("<br>\n", $e));
-	        }
-	        return ['trans_id' => $this->last_insert_id, 'user_name' => $busy->user_name];
+            try {
+                $this->insert('transactions', $trans);
+            } catch (RedException $e) {
+                die(implode("<br>\n", $e));
+            }
+            return ['trans_id' => $this->last_insert_id, 'user_name' => $busy->user_name];
         }
 
         return [];
     }
 
 
-	/**
-	 * Закрывает транзакцию и удаляет запись из таблицы ohs_transactions.
-	 *
-	 * @param int $trans_id ID транзакции
-	 */
-	public function transactionClose(int $trans_id)
+    /**
+     * Закрывает транзакцию и удаляет запись из таблицы ohs_transactions.
+     *
+     * @param int $trans_id ID транзакции
+     */
+    public function transactionClose(int $trans_id)
     {
         $this->db::trash(TBL_PREFIX . 'transactions', intval($trans_id));
     }
 
     public function parseFilterQuery($filter): array
     {
-        if(!empty($filter)) {
+        if (!empty($filter)) {
             $filterArr = explode(';', $filter);
             $filterQuery = ' AND ';
             $filterSection = [];
@@ -312,7 +359,7 @@ class Db
 
                 for ($v = 0; $v < count($filterValues); $v++) {
 
-                    if ($filterValuesArr[0] === "m.age") {
+                    if ($filterValuesArr[0] === 'm.age') {
                         switch (intval($filterValuesArr[1])) {
                             case 7318:
                                 $filterQueryArr[] = "m.age >= '18'";
@@ -331,10 +378,10 @@ class Db
                                 $filterSlots[] = [56];
                                 break;
                         }
-                    } else if ($filterValuesArr[0] === "a.claim_category") {
+                    } else if ($filterValuesArr[0] === 'a.claim_category') {
                         $filterQueryArr[] = "a.is_claim = '1' AND a.category = '" . intval($filterValues[$v]) . "'";
                         $filterSlots[] = [$filterValues[$v]];
-                    } else if ($filterValuesArr[0] === "m.phone") {
+                    } else if ($filterValuesArr[0] === 'm.phone') {
                         $phone = str_replace(' 7', '+7', $filterValues[$v]);
                         $filterQueryArr[] = "m.phone = '" . $phone . "'";
                         $filterSlots[] = $phone;
@@ -364,16 +411,18 @@ class Db
             $filterQuery .= implode(' AND ', $filterSection);
 
             return ['filterQuery' => $filterQuery, 'filterSlots' => $filterSlots, 'filterArr' => $filterArr];
-        }else{
+        } else {
             return [];
         }
     }
-    
-    public function addSign($docId){
+
+    public function addSign($docId)
+    {
 
     }
 
-    public function getSigns($docId){
+    public function getSigns($docId)
+    {
 
     }
 
@@ -382,15 +431,17 @@ class Db
      * @param string $table_name - имя таблицы без префикса
      * @return array|int|\RedBeanPHP\Cursor|NULL
      */
-    public function getColumnTypes(string $table_name){
-	    $out = [];
+    public function getColumnTypes(string $table_name)
+    {
+        $out = [];
         $result = $this->db::getAll("SELECT column_name, data_type FROM
-            information_schema.columns WHERE table_name = '" . TBL_PREFIX . $table_name . "'");
+            information_schema.columns WHERE table_name = '" . TBL_PREFIX . $table_name . "'"
+        );
 
-	    foreach($result as $index => $pair){
-	        $out[$pair['column_name']] = $pair['data_type'];
+        foreach ($result as $index => $pair) {
+            $out[$pair['column_name']] = $pair['data_type'];
         }
-	    return $out;
+        return $out;
     }
 
     /**

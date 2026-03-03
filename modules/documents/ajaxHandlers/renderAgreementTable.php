@@ -6,178 +6,233 @@ use Core\Notifications;
 
 require_once $_SERVER['DOCUMENT_ROOT'] . '/core/connect.php';
 
-$db        = new Db();
-$reg       = new Registry();
+$db = new Db();
+$reg = new Registry();
+$alert = new Notifications();
 $user_signs = [];
 
 $docId = intval($_POST['docId']);
+$agreementList = $_POST['agreementList'];
 
-if (!is_array($_POST['agreementList'])) {
-    echo json_encode(['result' => false, 'html' => '']);
-    exit;
-}
+// ============ Декодируем JSON и преобразуем в правильную структуру ============
+function convertArrayToObject($arr) {
+    if (!is_array($arr)) {
+        return $arr;
+    }
 
-// ============ НОРМАЛИЗУЕМ ВХОДЯЩИЙ agreementList ============
-// БАГ #9 ИСПРАВЛЕН: убрана хрупкая эвристика convertArrayToObject.
-// Структура данных теперь единообразна — всегда ассоциативные массивы.
-// Если элемент пришёл как строка JSON — декодируем его.
-function normalizeAgreementList(array $raw): array
-{
-    $result = [];
-    foreach ($raw as $item) {
-        if (is_string($item)) {
-            $decoded = json_decode($item, true);
-            $result[] = (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) ? $decoded : $item;
-        } else {
-            $result[] = $item;
+    // Проверяем, является ли это массивом с числовыми индексами
+    $isNumericArray = true;
+    foreach (array_keys($arr) as $key) {
+        if (!is_int($key)) {
+            $isNumericArray = false;
+            break;
         }
     }
-    return $result;
+
+    // Если это ассоциативный массив (уже объект), возвращаем как есть
+    if (!$isNumericArray) {
+        $result = [];
+        foreach ($arr as $key => $value) {
+            $result[$key] = convertArrayToObject($value);
+        }
+        return $result;
+    }
+
+    // Если это числовой массив, преобразуем в объект на основе структуры
+    if (count($arr) > 0 && is_array($arr[0])) {
+        // Проверяем, похоже ли на секцию согласования
+        if (isset($arr[0][0]) && ($arr[0][0] === '1' || $arr[0][0] === '' || $arr[0][0] === 'stage')) {
+            // Это заголовок секции
+            $section = [];
+            if (count($arr[0]) >= 3) {
+                $section['stage'] = $arr[0][0] === '' ? '' : $arr[0][0];
+                $section['urgent'] = $arr[0][1] ?? '1';
+                $section['list_type'] = $arr[0][2] ?? '2';
+            }
+
+            // Остальные элементы - сотрудники
+            $result = [$section];
+            for ($i = 1; $i < count($arr); $i++) {
+                $user = [];
+                if (count($arr[$i]) >= 2) {
+                    $user['id'] = intval($arr[$i][0]);
+                    $user['type'] = intval($arr[$i][1]);
+
+                    // Дополнительные поля
+                    if (isset($arr[$i][2]) && $arr[$i][2] !== '') {
+                        $user['vrio'] = $arr[$i][2];
+                    }
+                    if (isset($arr[$i][3]) && $arr[$i][3] !== '') {
+                        $user['role'] = $arr[$i][3];
+                    }
+                    if (isset($arr[$i][4]) && $arr[$i][4] !== '') {
+                        $user['urgent'] = $arr[$i][4];
+                    }
+
+                    // Результат
+                    if (isset($arr[$i][5]) && is_array($arr[$i][5]) && count($arr[$i][5]) >= 2) {
+                        $user['result'] = [
+                            'id' => intval($arr[$i][5][0]),
+                            'date' => $arr[$i][5][1]
+                        ];
+                    }
+
+                    // Перенаправление
+                    if (isset($arr[$i][6]) && is_array($arr[$i][6])) {
+                        $user['redirect'] = [];
+                        foreach ($arr[$i][6] as $redirect) {
+                            if (is_array($redirect) && count($redirect) >= 2) {
+                                $user['redirect'][] = [
+                                    'id' => intval($redirect[0]),
+                                    'type' => intval($redirect[1])
+                                ];
+                            }
+                        }
+                    }
+                }
+                $result[] = $user;
+            }
+            return $result;
+        }
+    }
+
+    return $arr;
 }
 
-$agreementList = normalizeAgreementList($_POST['agreementList']);
+// Декодируем JSON и преобразуем структуру
+$decodedAgreementList = [];
+foreach ($agreementList as $item) {
+    if (is_string($item)) {
+        $decoded = json_decode($item, true);
+        if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+            $decodedAgreementList[] = convertArrayToObject($decoded);
+        } else {
+            $decodedAgreementList[] = $item;
+        }
+    } else {
+        $decodedAgreementList[] = convertArrayToObject($item);
+    }
+}
+$agreementList = $decodedAgreementList;
 
-// ============ ЗАГРУЖАЕМ СПРАВОЧНИКИ ============
-$users = $db->getRegistry('users', '', [],
-    ['surname', 'name', 'middle_name', 'institution', 'ministries', 'division', 'position']
-);
-
+// Получаем все необходимые данные
+$users = $db->getRegistry('users', '', [], ['surname', 'name', 'middle_name', 'institution', 'ministries', 'division', 'position']);
 $urgent_types = [
     1 => 'Обычный',
     2 => '<span style="color: #d8720b">Срочный</span>',
     3 => '<span style="color: #d8110b">Незамедлительно</span>'
 ];
 
-// ============ ЗАГРУЖАЕМ ПОДПИСИ ЭЦП ============
-$signs = $db->select('signs', " where table_name = 'agreement' AND doc_id = ?", [$docId]);
+// Получаем подписи
+$signs = $db->select('signs', " where table_name = 'agreement' AND  doc_id = ?", [$docId]);
 if (count($signs) > 0) {
     foreach ($signs as $s) {
         $user_signs[$s->user_id][$s->section] = ['type' => $s->type, 'date' => $s->created_at];
     }
 }
 
-// ============ ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ============
+// Получаем данные об учреждениях для title
+$ins = $db->getRegistry('institutions', '', [], ['short']);
+$mins = $db->getRegistry('ministries');
+$units = $db->getRegistry('units');
 
-function getApproverStatus(array $approver): array
-{
-    $result = $approver['result'] ?? null;
-    if (!$result || !is_array($result)) {
-        return ['status' => 'pending', 'result_id' => 0];
-    }
-    switch (intval($result['id'] ?? 0)) {
-        case 1: case 2: case 3:
-        return ['status' => 'approved',   'result_id' => intval($result['id'])];
-        case 4:
-            return ['status' => 'redirected', 'result_id' => 4];
-        case 5:
-            return ['status' => 'rejected',   'result_id' => 5];
-        default:
-            return ['status' => 'pending',    'result_id' => 0];
-    }
-}
-
-function isRedirectChainComplete(array $redirects): bool
-{
-    foreach ($redirects as $r) {
-        if (!isset($r['id'])) continue;
-        $st = getApproverStatus($r);
-        if ($st['status'] === 'pending' || $st['status'] === 'rejected') return false;
-        if ($st['status'] === 'redirected') {
-            if (!isset($r['redirect']) || !isRedirectChainComplete($r['redirect'])) return false;
-        }
-    }
-    return true;
-}
-
-/**
- * БАГ #5 ИСПРАВЛЕН: этап завершён, если каждый участник approved
- * либо redirected с полностью закрытой цепочкой.
- */
+// Функция для проверки завершенности этапа
 function checkStageComplete(array $itemArr): bool
 {
-    $startIndex = isset($itemArr[0]['stage']) ? 1 : 0;
-    $approvers  = array_slice($itemArr, $startIndex);
-
-    if (empty($approvers)) return false;
-
-    foreach ($approvers as $approver) {
-        if (!isset($approver['id'])) continue;
-        $st = getApproverStatus($approver);
-
-        if ($st['status'] === 'pending' || $st['status'] === 'rejected') return false;
-
-        if ($st['status'] === 'redirected') {
-            if (!isset($approver['redirect']) || !isRedirectChainComplete($approver['redirect'])) {
-                return false;
+    $itemUsers = [];
+    $itemResults = [];
+    foreach ($itemArr as $item) {
+        if (is_array($item) && isset($item['id'])) {
+            $itemUsers[] = $item['id'];
+            if (isset($item['result']) && is_array($item['result']) && isset($item['result']['id'])) {
+                $resultId = intval($item['result']['id']);
+                if (!in_array($resultId, [4, 5])) {
+                    $itemResults[] = $item['result'];
+                }
             }
         }
     }
-    return true;
+    return count($itemUsers) > 0 && count($itemUsers) <= count($itemResults);
 }
 
-// ============ ОПРЕДЕЛЯЕМ ТИП СОГЛАСОВАНИЯ ДЛЯ ШАПКИ ============
+// Определяем типы согласования для заголовка
 $list_types = [];
-foreach ($agreementList as $itemArr) {
-    if (is_array($itemArr) && isset($itemArr[0]['list_type'])) {
-        $lt = (string)$itemArr[0]['list_type'];
-        if (!in_array($lt, $list_types)) {
-            $list_types[] = $lt;
+for ($i = 0; $i < count($agreementList); $i++) {
+    $itemArr = $agreementList[$i];
+    if (is_array($itemArr) && isset($itemArr[0]) && is_array($itemArr[0]) && isset($itemArr[0]['list_type'])) {
+        $list_type = (string)$itemArr[0]['list_type'];
+        if (!in_array($list_type, $list_types)) {
+            $list_types[] = $list_type;
         }
     }
 }
 
-if (count($list_types) === 0) {
-    $listTypeText = 'параллельное';
-} elseif (count($list_types) > 1) {
-    $listTypeText = 'смешанное';
-} else {
-    $listTypeText = ($list_types[0] === '1') ? 'последовательное' : 'параллельное';
+$listTypeText = 'параллельное';
+if (count($list_types) > 0) {
+    $listTypeText = (count($list_types) > 1) ? 'смешанное' : (($list_types[0] == '1') ? 'последовательное' : 'параллельное');
 }
 
-// ============ ГЕНЕРИРУЕМ HTML ТАБЛИЦЫ ============
-$html = '<div class="agreement_list">' .
-    '<h4>ЛИСТ СОГЛАСОВАНИЯ</h4>' .
+// Генерируем HTML всей таблицы ПОЛНОСТЬЮ
+$html = '<style>
+/* Правило 5: индикация очерёдности для текущего пользователя */
+.agreement-table tr.my-turn-active td { color: #000; font-weight: 500; }
+.agreement-table tr.my-turn-waiting td { color: #9e9e9e; }
+.agreement-table tr.my-turn-active td:first-child::before {
+    content: "";
+    display: inline-block;
+    width: 6px; height: 6px;
+    background: #086a9b;
+    border-radius: 50%;
+    margin-right: 4px;
+    vertical-align: middle;
+}
+</style>' .
+    '<div class="agreement_list"><h4>ЛИСТ СОГЛАСОВАНИЯ</h4>' .
     '<div class="list_type">Тип согласования: <strong>' . $listTypeText . '</strong></div>' .
     '<table class="agreement-table">' .
     '<thead><tr>' .
-    '<th>№</th>' .
-    '<th style="width: 30%;">ФИО</th>' .
+    '<th>№</th><th style="width: 30%;">ФИО</th>' .
     '<th>Срок согласования</th>' .
     '<th style="width:30%">Результат согласования</th>' .
     '<th>Комментарии</th>' .
     '</tr></thead>';
 
-$jsonOptions = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRESERVE_ZERO_FRACTION;
-
+// Листаем секции
 for ($i = 0; $i < count($agreementList); $i++) {
     $itemArr = $agreementList[$i];
 
-    if (!is_array($itemArr) || count($itemArr) === 0) continue;
+    if (!is_array($itemArr) || count($itemArr) == 0) {
+        continue;
+    }
 
+    // Определяем завершен ли этап
     $stageComplete = checkStageComplete($itemArr);
-    $listType      = isset($itemArr[0]['list_type']) ? (string)$itemArr[0]['list_type'] : '2';
-    $stageNum      = isset($itemArr[0]['stage']) ? intval($itemArr[0]['stage']) : 0;
 
     $html .= '<tbody' . ($stageComplete ? '' : ' class="notComplete"') . '>';
-
-    // Заголовок секции
-    // БАГ #4 ИСПРАВЛЕН: htmlspecialchars + ENT_QUOTES для value атрибута
-    $jsonString = htmlspecialchars(json_encode($itemArr, $jsonOptions), ENT_QUOTES, 'UTF-8');
-
     $html .= '<tr><td class="divider" colspan="5">';
-    if ($stageNum > 0) {
-        $html .= '<strong>Этап ' . $stageNum . '</strong><br>';
+
+    // Заголовок этапа
+    if (isset($itemArr[0]['stage']) && $itemArr[0]['stage'] !== '' && intval($itemArr[0]['stage']) > 0) {
+        $html .= '<strong>Этап ' . intval($itemArr[0]['stage']) . '</strong><br>';
     } else {
         $html .= '<strong>Подписанты</strong><br>';
     }
+
+    // Тип согласования
+    $listType = isset($itemArr[0]['list_type']) ? $itemArr[0]['list_type'] : '2';
     $html .= 'Тип согласования: <strong>' .
-        ($listType === '1' ? 'последовательное' : 'параллельное') .
+        ((string)$listType == '1' ? 'последовательное' : 'параллельное') .
         '</strong>';
-    $html .= '<input type="hidden" name="addAgreement" id="ag' . $i . '" value="' . $jsonString . '">';
+
+    // Кодируем JSON с ключами
+    $jsonOptions = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRESERVE_ZERO_FRACTION;
+    $jsonString = json_encode($itemArr, $jsonOptions);
+
+    $html .= '<input type="hidden" name="addAgreement" id="ag' . $i . '" value=\'' . $jsonString . '\'>';
     $html .= '</td></tr>';
 
-    // Строки участников
-    $html .= $reg->buildAgreementList($itemArr, $i, $users, $urgent_types, $user_signs, $reg, 0, $agreementList);
+    // Генерируем строки согласования через buildAgreementList
+    $html .= $reg->buildAgreementList($itemArr, $i, $users, $urgent_types, $user_signs, $reg, 0,$agreementList);
 
     $html .= '</tbody>';
 }

@@ -4,9 +4,6 @@ namespace Core;
 
 use PHPMailer\PHPMailer\Exception;
 use PHPMailer\PHPMailer\PHPMailer;
-use Core\Registry;
-use Core\Db;
-use Core\Date;
 use Fgribreau\MailChecker;
 
 class Mail
@@ -123,24 +120,16 @@ class Mail
                 $mail->setLanguage('ru', '/core/vendor/phpmailer/phpmailer/language/');
                 if ($mode == 'smtp' || $mode == '')
                     $mail->isSMTP();                                            // Send using SMTP
-                /*
-                 *  address: "smtp.mosreg.ru"
-            port: 587
-            domain: "mosreg.ru" # 'your.domain.com' for GoogleApps
-            authentication: :plain
-            user_name: "noreply"
-            password: "2ky2QP({}8"*/
-                $mail->Host = 'smtp.mosreg.ru';                    // Set the SMTP server to send through smtp.mass.mail.mosreg.ru
-                $mail->SMTPAuth = true;                                   // Enable SMTP authentication
-                $mail->Username = 'noreply';                     // SMTP username
-                $mail->Password = '2ky2QP({}8';// SMTP password
+                $mail->Host = SMTP_HOST;
+                $mail->SMTPAuth = true;
+                $mail->Username = SMTP_USER;
+                $mail->Password = SMTP_PASSWORD;
                 $mail->SMTPAutoTLS = true;
                 $mail->SMTPSecure = 'tls';
                 $mail->CharSet = 'utf-8';
 
                 $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;         // Enable TLS encryption; `PHPMailer::ENCRYPTION_SMTPS` encouraged
-                $mail->Port = 587;                                    // TCP port to connect to, use 465 for
-                // `PHPMailer::ENCRYPTION_SMTPS` above
+                $mail->Port = SMTP_PORT;
 
                 $mail->SMTPOptions = array(
                     'ssl' => array(
@@ -151,11 +140,12 @@ class Mail
                 );
 
                 //Recipients
-                $mail->setFrom($sender, 'МИНСОЦРАЗВИТИЯ');
-                $mail->addAddress($recipient);               // Name is optional
+                $mail->setFrom(strlen($sender) > 0 ? $sender : SMTP_FROM, 'МИНСОЦРАЗВИТИЯ');
+                $mail->addAddress($recipient);
                 $mail->addReplyTo($replayTo, $replayName);
-                //$mail->addCC('cc@example.com');
-                $mail->addBCC('flobus@mail.ru');
+                if (strlen(SMTP_BCC) > 0) {
+                    $mail->addBCC(SMTP_BCC);
+                }
 
                 // Attachments
                 if (strlen($fileList) > 0) {

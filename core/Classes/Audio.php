@@ -17,13 +17,12 @@ class Audio
 
     public function generateVoiceFile($text)
     {
-        $token = 'AQVN0EIfNcRzWqoz8CqB09GrSITNj-yAJR53pyEx'; # Укажите IAM-токен.
+        $token = YANDEX_TTS_TOKEN;
 
         $url = 'https://tts.api.cloud.yandex.net/speech/v1/tts:synthesize';
         $headers = ['Authorization: Api-Key ' . $token];
         $post = array(
             'text' => $text,
-            //'folderId' => $folderId,
             'lang' => 'ru-RU',
             'emotion' => 'good',
             'voice' => 'ermil',
@@ -33,7 +32,9 @@ class Audio
 
         $ch = curl_init();
 
-        curl_setopt($ch, CURLOPT_PROXY, 'http://10.12.127.11:3128');
+        if (strlen(PROXY_URL) > 0) {
+            curl_setopt($ch, CURLOPT_PROXY, PROXY_URL);
+        }
         curl_setopt($ch, CURLOPT_AUTOREFERER, TRUE);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
         curl_setopt($ch, CURLOPT_URL, $url);

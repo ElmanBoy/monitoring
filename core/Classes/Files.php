@@ -199,14 +199,14 @@ class Files
         try {
             // Получаем информацию о файле из БД
             $db = new Db();
-            $file = $db->selectOne('files',' WHERE id = ?', [$fileId]);
+            $file = $db->selectOne('files', ' WHERE id = ?', [$fileId]);
 
             if (!$file) {
                 throw new Exception('Файл не найден');
             }
 
             // Полный путь к файлу (ВНЕ webroot)
-            $filePath = $file->file_path.'/'.$file->system_filename;
+            $filePath = $file->file_path . '/' . $file->system_filename;
 
             // Проверяем существование файла
             if (!file_exists($filePath)) {
@@ -332,7 +332,7 @@ class Files
         clearstatcache(true, $filePath); // Очищаем кэш статуса файла
 
         if (!file_exists($filePath)) {
-            throw new Exception('Файл не существует: ' . $filePath );
+            throw new Exception('Файл не существует: ' . $filePath);
         }
 
         if (!is_readable($filePath)) {
@@ -374,40 +374,47 @@ class Files
      */
     public function attachFiles(array $files, array $custom_names): array
     {
-        $userDir = $_SERVER['DOCUMENT_ROOT'].'/files/'.$_SESSION['user_id'];
-        $userYearDir = $userDir.'/'.date('Y');
-        $userYearMonthDir = $userYearDir.'/'.date('m');
+        $userDir = $_SERVER['DOCUMENT_ROOT'] . '/files/' . $_SESSION['user_id'];
+        $userYearDir = $userDir . '/' . date('Y');
+        $userYearMonthDir = $userYearDir . '/' . date('m');
         $err = 0;
         $message = [];
         $ids = [];
         $result = false;
 
-        if(is_array($files) && count($files) > 0){
-            if(!is_dir($userDir)){
+        if (is_array($files) && count($files) > 0) {
+            if (!is_dir($userDir)) {
                 mkdir($userDir, 0755);
             }
-            if(!is_dir($userYearDir)){
+            if (!is_dir($userYearDir)) {
                 mkdir($userYearDir, 0755);
             }
-            if(!is_dir($userYearMonthDir)){
+            if (!is_dir($userYearMonthDir)) {
                 mkdir($userYearMonthDir, 0755);
             }
 
-            for($c = 0; $c < count($files['name']); $c++){
+            for ($c = 0; $c < count($files['name']); $c++) {
                 $err = 0;
                 $fileInfo = $this->getFileInfo($files['tmp_name'][$c]);
                 $newFileName = $this->safeGenerateFilename($files['name'][$c]);
 
-                if(!$this->checkAllowedType($fileInfo['mime_type'])){
+                // Проверка размера (макс. 50 МБ)
+                $maxSize = 50 * 1024 * 1024;
+                if ($fileInfo['size'] > $maxSize) {
                     $err++;
-                    $message[] = 'Недопустимый тип &laquo;'.$fileInfo['mime_type'].'&raquo; у файла &laquo;'.$files['name'][$c].'&raquo;';
-                }
-                if($err == 0 && !move_uploaded_file($files['tmp_name'][$c], $userYearMonthDir.'/'.$newFileName)){
-                    $err++;
-                    $message[] = 'Не удалось переместить файл &laquo;'.$files['name'][$c].'&raquo;';
+                    $message[] = 'Файл &laquo;' . $files['name'][$c] . '&raquo; превышает максимально допустимый размер (50 МБ)';
                 }
 
-                if($err == 0){
+                if (!$this->checkAllowedType($fileInfo['mime_type'])) {
+                    $err++;
+                    $message[] = 'Недопустимый тип &laquo;' . $fileInfo['mime_type'] . '&raquo; у файла &laquo;' . $files['name'][$c] . '&raquo;';
+                }
+                if ($err == 0 && !move_uploaded_file($files['tmp_name'][$c], $userYearMonthDir . '/' . $newFileName)) {
+                    $err++;
+                    $message[] = 'Не удалось переместить файл &laquo;' . $files['name'][$c] . '&raquo;';
+                }
+
+                if ($err == 0) {
                     try {
 
                         /*echo 'MIME-type: ' . $fileInfo['mime_type'] . "\n";
@@ -445,9 +452,11 @@ class Files
     public function getAttachedFiles(?array $ids): array
     {
         $out = [];
-        if(is_array($ids) && count($ids) > 0) {
+        if (is_array($ids) && count($ids) > 0) {
             $db = new Db();
-            $files = $db->db::getAll("SELECT * FROM " . TBL_PREFIX . "files WHERE id IN (" . implode(", ", $ids) . ")");
+            $ids = array_map('intval', $ids);
+            $slots = $db->db::genSlots($ids);
+            $files = $db->db::getAll('SELECT * FROM ' . TBL_PREFIX . "files WHERE id IN ($slots)", $ids);
 
             foreach ($files as $file) {
                 $out[] = [
@@ -471,10 +480,10 @@ class Files
         $exist = $this->getAttachedFiles([$file_id])[0];
         $result = [];
 
-        if($exist['author'] == $_SESSION['user_list'] || $auth->isAdmin()){
+        if ($exist['author'] == $_SESSION['user_id'] || $auth->isAdmin()) {
             $db->delete('files', [$file_id]);
-            $filPath = $exist['file_path'].'/'.$exist['system_filename'];
-            if($filPath != '/') {
+            $filPath = $exist['file_path'] . '/' . $exist['system_filename'];
+            if ($filPath != '/') {
                 if (!unlink($filPath)) {
                     $result['result'] = false;
                     $result['resultText'] = 'Не удалось удалить файл. Возможно, недостаточно прав для этой операции.';
@@ -484,7 +493,7 @@ class Files
                 }
             }
 
-        }else{
+        } else {
             $result['result'] = false;
             $result['resultText'] = 'У Вас недостаточно прав для удаления этого файла';
         }

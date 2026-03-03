@@ -62,7 +62,7 @@ class Gui
 
     public function getModuleProps($module_path)
     {
-        if(substr_count($module_path, '?') >0){
+        if (substr_count($module_path, '?') > 0) {
             $mArr = explode('?', $module_path);
             $module_path = $mArr[0];
         }
@@ -80,7 +80,6 @@ class Gui
         $insertArr = [];
         $out = '';
 
-        $this->rb::wipe(TBL_PREFIX.'modules');
 
         $dir = dir($dirName);
         while ($file = $dir->read()) {
@@ -94,7 +93,7 @@ class Gui
 
                             $htmlArr[] = [
                                 'number' => $module_props['number'],
-                                'html' => '<div class="item" title="' . $module_props['name'] . '"'.($_COOKIE['widthPage'] == 'thin' ? ' data-tipsy-disabled' : '').'>
+                                'html' => '<div class="item" title="' . $module_props['name'] . '"' . ($_COOKIE['widthPage'] == 'thin' ? ' data-tipsy-disabled' : '') . '>
                                         <a href="' . ($module_props['path'] == 'wiki' ? '#' : '/' . $module_props['path']) . '"' . (($this->_get['url'] == $module_props['path']) ?
                                         ' class="active"' : '') . '>
                                             <div class="icon"><span class="material-icons">' . $module_props['icon'] . '</span></div>
@@ -106,18 +105,19 @@ class Gui
 
                         $insertArr = array(
                             'id' => intval($module_props['id']),
-                            'name' => "'".addslashes($module_props['name'])."'",
-                            'path' => "'/".addslashes($module_props['path'])."'",
+                            'name' => "'" . addslashes($module_props['name']) . "'",
+                            'path' => "'/" . addslashes($module_props['path']) . "'",
                             'active' => 1
                         );
-                        $this->rb->exec('INSERT INTO '.TBL_PREFIX.'modules (id, name, path, active) VALUES ('.implode(', ',$insertArr).')');
+                        $this->rb->exec('INSERT INTO ' . TBL_PREFIX . 'modules (id, name, path, active) VALUES (' . implode(', ', $insertArr) . ') ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, path = EXCLUDED.path, active = EXCLUDED.active');
                     }
                 }
             }
         }
         usort($htmlArr, function ($a, $b) {
             return ($a['number'] > $b['number']);
-        });
+        }
+        );
         foreach ($htmlArr as $item) {
             $out .= $item['html'];
         }
@@ -132,7 +132,6 @@ class Gui
         $insertArr = [];
         $out = '';
 
-        $this->rb::wipe(TBL_PREFIX.'modules');
 
         $dir = dir($dirName);
         while ($file = $dir->read()) {
@@ -145,7 +144,7 @@ class Gui
                         if ($this->_session['user_permissions'][$module_props['id']]['view']) {
                             $menuItem = [
                                 'number' => $module_props['number'],
-                                'html' => '<div class="item" title="' . $module_props['name'] . '"'.($_COOKIE['widthPage'] == 'thin' ? ' data-tipsy-disabled' : '').'>
+                                'html' => '<div class="item" title="' . $module_props['name'] . '"' . ($_COOKIE['widthPage'] == 'thin' ? ' data-tipsy-disabled' : '') . '>
                                     <a href="' . ($module_props['path'] == 'wiki' ? '#' : '/' . $module_props['path']) . '"' . (($this->_get['url'] == $module_props['path']) ?
                                         ' class="active"' : '') . '>
                                         <div class="icon"><span class="material-icons">' . $module_props['icon'] . '</span></div>
@@ -164,11 +163,11 @@ class Gui
 
                         $insertArr = array(
                             'id' => intval($module_props['id']),
-                            'name' => "'".addslashes($module_props['name'])."'",
-                            'path' => "'/".addslashes($module_props['path'])."'",
+                            'name' => "'" . addslashes($module_props['name']) . "'",
+                            'path' => "'/" . addslashes($module_props['path']) . "'",
                             'active' => 1
                         );
-                        $this->rb->exec('INSERT INTO '.TBL_PREFIX.'modules (id, name, path, active) VALUES ('.implode(', ',$insertArr).')');
+                        $this->rb->exec('INSERT INTO ' . TBL_PREFIX . 'modules (id, name, path, active) VALUES (' . implode(', ', $insertArr) . ') ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, path = EXCLUDED.path, active = EXCLUDED.active');
                     }
                 }
             }
@@ -179,7 +178,8 @@ class Gui
             // Сортируем элементы настроек
             usort($settingsItems, function ($a, $b) {
                 return ($a['number'] > $b['number']);
-            });
+            }
+            );
 
             // Собираем HTML для дочерних элементов
             $settingsContent = '';
@@ -190,8 +190,8 @@ class Gui
             // Добавляем родительский пункт "Настройки" с дочерними элементами
             $htmlArr[] = [
                 'number' => 9999, // Устанавливаем высокий номер для сортировки в конец
-                'html' => '<div class="settings-group'.($_COOKIE['settings_show'] == 'true' ? ' expanded" style="display:block"' : '').'">
-                        <div class="item parent-item" title="Настройки"'.($_COOKIE['widthPage'] == 'thin' ? ' data-tipsy-disabled' : '').'>
+                'html' => '<div class="settings-group' . ($_COOKIE['settings_show'] == 'true' ? ' expanded" style="display:block"' : '') . '">
+                        <div class="item parent-item" title="Настройки"' . ($_COOKIE['widthPage'] == 'thin' ? ' data-tipsy-disabled' : '') . '>
                             <a href="#" class="parent_item">
                                 <div class="icon"><span class="material-icons">settings</span></div>
                                 <div class="title">Настройки</div>
@@ -206,7 +206,8 @@ class Gui
         // Сортируем основное меню
         usort($htmlArr, function ($a, $b) {
             return ($a['number'] > $b['number']);
-        });
+        }
+        );
 
         // Собираем окончательный HTML
         foreach ($htmlArr as $item) {
@@ -218,7 +219,7 @@ class Gui
 
     public function getTableData(string $tableName, string $defaultParams = ''): array
     {
-        if($this->auth->isLogin()) {
+        if ($this->auth->isLogin()) {
             if ($defaultParams == '') {
                 $sortQuery = ' ORDER BY id DESC';
             }
@@ -290,11 +291,11 @@ class Gui
                             $filterQueryArr[] = 'middle_name LIKE ?';
                         } else {
                             if (substr_count($filterValuesArr[0], '_from') > 0) {
-                                $filterQueryArr[] = str_replace('_from', '', $filterValuesArr[0]) . " >= ?";
+                                $filterQueryArr[] = str_replace('_from', '', $filterValuesArr[0]) . ' >= ?';
                             } elseif (substr_count($filterValuesArr[0], '_to') > 0) {
-                                $filterQueryArr[] = str_replace('_to', '', $filterValuesArr[0]) . " <= ?";
+                                $filterQueryArr[] = str_replace('_to', '', $filterValuesArr[0]) . ' <= ?';
                             } else {
-                                $filterQueryArr[] = $filterValuesArr[0] . ((is_numeric($filterValues[$v]) ) ? " = ?" : " LIKE ?");
+                                $filterQueryArr[] = $filterValuesArr[0] . ((is_numeric($filterValues[$v])) ? ' = ?' : ' LIKE ?');
                             }
                         }
                         if ($filterValuesArr[0] == 'user_fio') {
@@ -303,7 +304,7 @@ class Gui
                             $filterSlots[] = '%' . $user_fio[1] . '%';
                             $filterSlots[] = '%' . $user_fio[2] . '%';
                         } else {
-                            $filterSlots[] = (is_numeric($filterValues[$v]) ) ? $filterValues[$v] : '%' . $filterValues[$v] . '%';
+                            $filterSlots[] = (is_numeric($filterValues[$v])) ? $filterValues[$v] : '%' . $filterValues[$v] . '%';
                         }
                         $this->filterFields[$filterValuesArr[0]][] = $filterValues[$v];
                     }
@@ -317,12 +318,12 @@ class Gui
                 }
             }
 
-            $filterQueryMain = ' WHERE id > 0 '.$defaultParams;
+            $filterQueryMain = ' WHERE id > 0 AND (active IS NULL OR active != -1) ' . $defaultParams;
             $filterQueryTotal = '';
-            if($filterQuery != ''/* && $defaultParams != ''*/){
-                $filterQueryMain = ' WHERE id > 0 '. $defaultParams . ' AND ' . $filterQuery;
+            if ($filterQuery != ''/* && $defaultParams != ''*/) {
+                $filterQueryMain = ' WHERE id > 0 ' . $defaultParams . ' AND ' . $filterQuery;
                 $filterQueryTotal = ' WHERE id > 0 AND ' . $filterQuery;
-            }else{
+            } else {
                 $filterSlots = [];
             }
             /*$filterQueryMain = $defaultParams . (($filterQuery != '' && $defaultParams != '') ? ' AND ' . $filterQuery : '');
@@ -341,7 +342,7 @@ class Gui
                     LEFT JOIN ".TBL_PREFIX . "ext_answers ON ".TBL_PREFIX . "registryitems.id = ".TBL_PREFIX . "ext_answers.question_id
                     WHERE ".TBL_PREFIX . "registryitems.parent=14 $filterQuery GROUP BY ".TBL_PREFIX . "registryitems.id $sortQuery"; print_r($filterSlots);*/
             /*return $this->rb->getAll("SELECT COUNT(".TBL_PREFIX . "ext_answers.answer) AS ext_answers, ".TBL_PREFIX . "registryitems.*
-                FROM ".TBL_PREFIX . "registryitems 
+                FROM ".TBL_PREFIX . "registryitems
                 LEFT JOIN ".TBL_PREFIX . "ext_answers ON ".TBL_PREFIX . "registryitems.id = ".TBL_PREFIX . "ext_answers.question_id
                 WHERE ".TBL_PREFIX . "registryitems.parent=14 $filterQuery GROUP BY ".TBL_PREFIX . "registryitems.id $sortQuery", $filterSlots);
         }else{
@@ -349,7 +350,7 @@ class Gui
         }*/
             //echo $filterQueryMain . $sortQuery; print_r($filterSlots);
             return $this->db->select($tableName, $filterQueryMain . $sortQuery, $filterSlots);
-        }else{
+        } else {
             echo '<script>alert("Ваша сессия устарела.");document.location.href = "/"</script>';
         }
     }
@@ -363,8 +364,8 @@ class Gui
 
         $this->set('tableName', TBL_PREFIX . 'appeals');
 
-        $fields_appeals = $this->rb::inspect( TBL_PREFIX . 'appeals' );
-        $fields_main = $this->rb::inspect( TBL_PREFIX . 'main' );
+        $fields_appeals = $this->rb::inspect(TBL_PREFIX . 'appeals');
+        $fields_main = $this->rb::inspect(TBL_PREFIX . 'main');
 
         if (intval($this->_get['pn']) > 0) {
             $this->set('currentPageNumber', intval($this->_get['pn']));
@@ -418,45 +419,45 @@ class Gui
                 $filterQueryArr = [];
                 for ($v = 0; $v < count($filterValues); $v++) {
 
-                    if($filterValuesArr[0] === "m.age"){
-                        switch(intval($filterValuesArr[1])){
+                    if ($filterValuesArr[0] === 'm.age') {
+                        switch (intval($filterValuesArr[1])) {
                             case 7318:
-                                $filterQueryArr[] = "m.age < ?";
+                                $filterQueryArr[] = 'm.age < ?';
                                 $filterSlots[] = 18;
                                 break;
                             case 7319:
-                                $filterQueryArr[] = "m.age >= ? AND m.age <= ?";
+                                $filterQueryArr[] = 'm.age >= ? AND m.age <= ?';
                                 $filterSlots[] = 18;
                                 $filterSlots[] = 35;
                                 break;
                             case 7320:
-                                $filterQueryArr[] = "m.age >= ? AND m.age <= ?";
+                                $filterQueryArr[] = 'm.age >= ? AND m.age <= ?';
                                 $filterSlots[] = 36;
                                 $filterSlots[] = 55;
                                 break;
                             case 7321:
-                                $filterQueryArr[] = "m.age >= ?";
+                                $filterQueryArr[] = 'm.age >= ?';
                                 $filterSlots[] = 56;
                                 break;
                         }
-                    }else if($filterValuesArr[0] === "a.claim_category") {
+                    } else if ($filterValuesArr[0] === 'a.claim_category') {
                         $filterQueryArr[] = "a.is_claim = '1' AND a.category = ?";
                         $filterSlots[] = $filterValues[$v];
-                    }else {
+                    } else {
 
                         if (substr_count($filterValuesArr[0], '_from') > 0) {
-                            $filterQueryArr[] = str_replace('_from', '', $filterValuesArr[0]) . " >= ?";
+                            $filterQueryArr[] = str_replace('_from', '', $filterValuesArr[0]) . ' >= ?';
                         } elseif (substr_count($filterValuesArr[0], '_to') > 0) {
-                            $filterQueryArr[] = str_replace('_to', '', $filterValuesArr[0]) . " <= ?";
+                            $filterQueryArr[] = str_replace('_to', '', $filterValuesArr[0]) . ' <= ?';
                         } else {
 
-                            if(substr_count($filterValuesArr[0], 'm.') > 0){
+                            if (substr_count($filterValuesArr[0], 'm.') > 0) {
                                 $fieldType = $fields_main[str_replace('m.', '', $filterValuesArr[0])];
                             }
-                            if(substr_count($filterValuesArr[0], 'a.') > 0){
+                            if (substr_count($filterValuesArr[0], 'a.') > 0) {
                                 $fieldType = $fields_appeals[str_replace('a.', '', $filterValuesArr[0])];
                             }
-                            if($filterValuesArr[0] === "a.urgent") {
+                            if ($filterValuesArr[0] === 'a.urgent') {
                                 $fieldType = 'smallint';
                                 $filterValuesArr[0] = 'urgent';
                             }
@@ -464,16 +465,16 @@ class Gui
                             switch ($fieldType) {
                                 case 'integer':
                                 case 'bigint':
-                                    $filterQueryArr[] = $filterValuesArr[0] . " = ?";
+                                    $filterQueryArr[] = $filterValuesArr[0] . ' = ?';
                                     $filterValues[$v] = intval($filterValues[$v]);
                                     break;
                                 case 'time without time zone':
                                 case 'date':
                                     break;
-                                    $filterQueryArr[] = $filterValuesArr[0] . " = ?";
+                                    $filterQueryArr[] = $filterValuesArr[0] . ' = ?';
                                     break;
                                 case 'smallint':
-                                    $filterQueryArr[] = $filterValuesArr[0] . " = ?";
+                                    $filterQueryArr[] = $filterValuesArr[0] . ' = ?';
                                     $filterValues[$v] = intval($filterValues[$v]);
                                     break;
                                 default:
@@ -499,19 +500,20 @@ class Gui
 
         $filterQuery = $defaultParams . (($filterQuery != '' && $defaultParams != '') ? ' AND ' . $filterQuery : $filterQuery);
 
-        if($_SESSION['user_id'] == 6 && isset($_GET['debug'])){
+        if ($_SESSION['user_id'] == 6 && isset($_GET['debug'])) {
             //print_r($fields_main); print_r($fields_appeals);
-            echo "SELECT *, a.question AS quest, a.answer AS answ, a.resolved AS resolv,
+            echo 'SELECT *, a.question AS quest, a.answer AS answ, a.resolved AS resolv,
        a.category AS cat, a.subcategory AS subcat, a.redirected AS redir, a.appeal_status AS status
-        FROM ".TBL_PREFIX . "appeals a, ".TBL_PREFIX . "main m
-        WHERE a.appeal_id = m.id AND " . $filterQuery . $sortQuery; //print_r($filterSlots);
+        FROM ' . TBL_PREFIX . 'appeals a, ' . TBL_PREFIX . 'main m
+        WHERE a.appeal_id = m.id AND ' . $filterQuery . $sortQuery; //print_r($filterSlots);
         }
 
 
-        $total = $this->rb->getAll("SELECT 
+        $total = $this->rb->getAll('SELECT 
         COUNT(a.id) AS total_appeals
-        FROM ".TBL_PREFIX . "appeals a, ".TBL_PREFIX . "main m
-        WHERE a.appeal_id = m.id AND ".$filterQuery, $filterSlots); //print_r($total);
+        FROM ' . TBL_PREFIX . 'appeals a, ' . TBL_PREFIX . 'main m
+        WHERE a.appeal_id = m.id AND ' . $filterQuery, $filterSlots
+        ); //print_r($total);
         $this->set('totalRows', $total[0]['total_appeals']);
 
         $sortQuery .= ' LIMIT ? OFFSET ? ';
@@ -519,12 +521,12 @@ class Gui
         $filterSlots[] = $this->currentPageNumber * $this->rowsLimit;
 
 
-
-        return $this->rb->getAll("SELECT *, a.question AS quest, a.answer AS answ, a.resolved AS resolv, 
+        return $this->rb->getAll('SELECT *, a.question AS quest, a.answer AS answ, a.resolved AS resolv, 
        a.category AS cat, a.subcategory AS subcat, a.redirected AS redir, a.appeal_status AS status, a.is_claim AS claim,
        a.urgency AS urgent
-        FROM ".TBL_PREFIX . "appeals a, ".TBL_PREFIX . "main m
-        WHERE a.appeal_id = m.id AND " . $filterQuery . $sortQuery, $filterSlots);
+        FROM ' . TBL_PREFIX . 'appeals a, ' . TBL_PREFIX . 'main m
+        WHERE a.appeal_id = m.id AND ' . $filterQuery . $sortQuery, $filterSlots
+        );
     }
 
 
@@ -537,176 +539,7 @@ class Gui
 
         $this->set('tableName', TBL_PREFIX . 'vdn');
 
-        $fields_main = $this->rb::inspect( TBL_PREFIX . 'vdn' );
-
-        if (intval($this->_get['pn']) > 0) {
-            $this->set('currentPageNumber', intval($this->_get['pn']));
-        }
-        if (isset($this->_post['params']) > 0) {
-            parse_str($this->_post['params'], $params);
-            $this->set('currentPageNumber', intval($params['pn']));
-        }
-
-        if (isset($this->_post['params'])) {
-            parse_str($this->_post['params'], $out);
-            $this->_get['sort'] = $out['sort'];
-            $this->_get['filter'] = $out['filter'];
-        }
-
-        if (isset($this->_get['sort'])) {
-            $sortArr = explode(':', $this->_get['sort']);
-            $sortQueryArr = [];
-
-            for ($i = 0; $i < count($sortArr); $i++) {
-                $direction = 'ASC';
-                if (substr_count($sortArr[$i], '_r') > 0) {
-                    $direction = 'DESC';
-                    $sortArr[$i] = str_replace('_r', '', $sortArr[$i]);
-                    $this->sortFields[$sortArr[$i]]['arrow'] = 'north';
-                    $this->sortFields[$sortArr[$i]]['value'] = $sortArr[$i];
-                } else {
-                    $this->sortFields[$sortArr[$i]]['arrow'] = 'south';
-                    $this->sortFields[$sortArr[$i]]['value'] = $sortArr[$i] . '_r';
-                }
-                $sortQueryArr[] = $sortArr[$i] . ' ' . $direction;
-            }
-            if (count($sortQueryArr) > 0) {
-                $sortQuery = ' ORDER BY ' . implode(', ', $sortQueryArr);
-            }
-        }
-
-        if (isset($this->_get['filter'])) {
-
-            $filterArr = explode(';', $this->_get['filter']);
-
-            $filterSection = [];
-            $this->filterFields = [];
-            $fieldType = '';
-
-            //Листаем фильтруемые поля
-            for ($f = 0; $f < count($filterArr); $f++) {
-                //Листаем фильтруемые значения
-                $filterValuesArr = explode(':', $filterArr[$f]);
-                $filterValues = explode('|', $filterValuesArr[1]);
-                $filterQueryArr = [];
-                for ($v = 0; $v < count($filterValues); $v++) {
-
-                    /*if($filterValuesArr[0] === "m.age"){
-                        switch(intval($filterValuesArr[1])){
-                            case 7318:
-                                $filterQueryArr[] = "m.age < ?";
-                                $filterSlots[] = 18;
-                                break;
-                            case 7319:
-                                $filterQueryArr[] = "m.age >= ? AND m.age <= ?";
-                                $filterSlots[] = 18;
-                                $filterSlots[] = 35;
-                                break;
-                            case 7320:
-                                $filterQueryArr[] = "m.age >= ? AND m.age <= ?";
-                                $filterSlots[] = 36;
-                                $filterSlots[] = 55;
-                                break;
-                            case 7321:
-                                $filterQueryArr[] = "m.age >= ?";
-                                $filterSlots[] = 56;
-                                break;
-                        }
-                    }else if($filterValuesArr[0] === "a.claim_category") {
-                        $filterQueryArr[] = "a.is_claim = '1' AND a.category = ?";
-                        $filterSlots[] = $filterValues[$v];
-                    }else {*/
-
-                        if (substr_count($filterValuesArr[0], '_from') > 0) {
-                            $filterQueryArr[] = str_replace('_from', '', $filterValuesArr[0]) . " >= ?";
-                        } elseif (substr_count($filterValuesArr[0], '_to') > 0) {
-                            $filterQueryArr[] = str_replace('_to', '', $filterValuesArr[0]) . " <= ?";
-                        } else {
-
-                            /*if(substr_count($filterValuesArr[0], 'm.') > 0){
-                                $fieldType = $fields_main[str_replace('m.', '', $filterValuesArr[0])];
-                            }
-                            if(substr_count($filterValuesArr[0], 'a.') > 0){
-                                $fieldType = $fields_appeals[str_replace('a.', '', $filterValuesArr[0])];
-                            }
-                            if($filterValuesArr[0] === "a.urgent") {
-                                $fieldType = 'smallint';
-                                $filterValuesArr[0] = 'urgent';
-                            }*/
-
-                            switch ($fieldType) {
-                                case 'integer':
-                                case 'bigint':
-                                    $filterQueryArr[] = $filterValuesArr[0] . " = ?";
-                                    $filterValues[$v] = intval($filterValues[$v]);
-                                    break;
-                                case 'time without time zone':
-                                case 'date':
-                                    break;
-                                    $filterQueryArr[] = $filterValuesArr[0] . " = ?";
-                                    break;
-                                case 'smallint':
-                                    $filterQueryArr[] = $filterValuesArr[0] . " = ?";
-                                    $filterValues[$v] = intval($filterValues[$v]);
-                                    break;
-                                default:
-                                    $filterQueryArr[] = 'LOWER(' . $filterValuesArr[0] . ') LIKE ?';
-                                    $filterValues[$v] = '%' . mb_strtolower($filterValues[$v]) . '%';
-                            }
-
-                            //$filterQueryArr[] = $filterValuesArr[0] . " = ?";
-                        }
-                        $filterSlots[] = $filterValues[$v];
-                        $this->filterFields[$filterValuesArr[0]][] = $filterValues[$v];
-                    //}
-                }
-                $filterSection[] = '(' . implode(' OR ', $filterQueryArr) . ')';
-            }
-            $filterQuery .= implode(' AND ', $filterSection);
-        } else {
-            if ($defaultDates != '') {
-                $datesArr = explode(' - ', $defaultDates);
-                $filterQuery = " date >= '" . $datesArr[0] . "' AND date <= '" . $datesArr[1] . "'";
-            }
-        }
-
-        $filterQuery = $defaultParams . (($filterQuery != '' && $defaultParams != '') ? ' AND ' . $filterQuery : $filterQuery);
-
-        if($_SESSION['user_id'] == 6 && isset($_GET['debug'])){
-            print_r($fields_main);
-            echo "SELECT 
-            COUNT(id) AS total_vdn
-            FROM ".TBL_PREFIX . "vdn
-            WHERE id > 0 AND " . $filterQuery . $sortQuery; //print_r($filterSlots);
-        }
-
-
-        $total = $this->rb->getAll("SELECT 
-        COUNT(id) total_vdn
-        FROM ".TBL_PREFIX . "vdn
-        WHERE id > 0 AND ".$filterQuery, $filterSlots); //print_r($total);
-        $this->set('totalRows', $total[0]['total_vdn']);
-
-        $sortQuery .= ' LIMIT ? OFFSET ? ';
-        $filterSlots[] = $this->rowsLimit;
-        $filterSlots[] = $this->currentPageNumber * $this->rowsLimit;
-
-
-        return $this->rb->getAll("SELECT * 
-        FROM ".TBL_PREFIX . "vdn
-        WHERE id > 0 AND " . $filterQuery . $sortQuery, $filterSlots);
-    }
-
-    public function getOperatorsTableData(string $defaultParams = ''): array
-    {
-        $sortQuery = ' ORDER BY date DESC, time DESC';
-        $filterQuery = '';
-        $filterSlots = [];
-        $defaultDates = $this->date->getDefaultRange($this->module_id);
-
-        $this->set('tableName', TBL_PREFIX . 'vdn_operators');
-
-        $fields_main = $this->rb::inspect( TBL_PREFIX . 'vdn' );
+        $fields_main = $this->rb::inspect(TBL_PREFIX . 'vdn');
 
         if (intval($this->_get['pn']) > 0) {
             $this->set('currentPageNumber', intval($this->_get['pn']));
@@ -787,9 +620,9 @@ class Gui
                     }else {*/
 
                     if (substr_count($filterValuesArr[0], '_from') > 0) {
-                        $filterQueryArr[] = str_replace('_from', '', $filterValuesArr[0]) . " >= ?";
+                        $filterQueryArr[] = str_replace('_from', '', $filterValuesArr[0]) . ' >= ?';
                     } elseif (substr_count($filterValuesArr[0], '_to') > 0) {
-                        $filterQueryArr[] = str_replace('_to', '', $filterValuesArr[0]) . " <= ?";
+                        $filterQueryArr[] = str_replace('_to', '', $filterValuesArr[0]) . ' <= ?';
                     } else {
 
                         /*if(substr_count($filterValuesArr[0], 'm.') > 0){
@@ -806,16 +639,16 @@ class Gui
                         switch ($fieldType) {
                             case 'integer':
                             case 'bigint':
-                                $filterQueryArr[] = $filterValuesArr[0] . " = ?";
+                                $filterQueryArr[] = $filterValuesArr[0] . ' = ?';
                                 $filterValues[$v] = intval($filterValues[$v]);
                                 break;
                             case 'time without time zone':
                             case 'date':
                                 break;
-                                $filterQueryArr[] = $filterValuesArr[0] . " = ?";
+                                $filterQueryArr[] = $filterValuesArr[0] . ' = ?';
                                 break;
                             case 'smallint':
-                                $filterQueryArr[] = $filterValuesArr[0] . " = ?";
+                                $filterQueryArr[] = $filterValuesArr[0] . ' = ?';
                                 $filterValues[$v] = intval($filterValues[$v]);
                                 break;
                             default:
@@ -841,19 +674,20 @@ class Gui
 
         $filterQuery = $defaultParams . (($filterQuery != '' && $defaultParams != '') ? ' AND ' . $filterQuery : $filterQuery);
 
-        if($_SESSION['user_id'] == 6 && isset($_GET['debug'])){
+        if ($_SESSION['user_id'] == 6 && isset($_GET['debug'])) {
             print_r($fields_main);
-            echo "SELECT 
+            echo 'SELECT 
             COUNT(id) AS total_vdn
-            FROM ".TBL_PREFIX . "vdn_operators
-            WHERE id > 0 AND " . $filterQuery . $sortQuery; //print_r($filterSlots);
+            FROM ' . TBL_PREFIX . 'vdn
+            WHERE id > 0 AND ' . $filterQuery . $sortQuery; //print_r($filterSlots);
         }
 
 
-        $total = $this->rb->getAll("SELECT 
+        $total = $this->rb->getAll('SELECT 
         COUNT(id) total_vdn
-        FROM ".TBL_PREFIX . "vdn_operators
-        WHERE id > 0 AND ".$filterQuery, $filterSlots); //print_r($total);
+        FROM ' . TBL_PREFIX . 'vdn
+        WHERE id > 0 AND ' . $filterQuery, $filterSlots
+        ); //print_r($total);
         $this->set('totalRows', $total[0]['total_vdn']);
 
         $sortQuery .= ' LIMIT ? OFFSET ? ';
@@ -861,14 +695,186 @@ class Gui
         $filterSlots[] = $this->currentPageNumber * $this->rowsLimit;
 
 
-        return $this->rb->getAll("SELECT * 
-        FROM ".TBL_PREFIX . "vdn_operators
-        WHERE id > 0 AND " . $filterQuery . $sortQuery, $filterSlots);
+        return $this->rb->getAll('SELECT * 
+        FROM ' . TBL_PREFIX . 'vdn
+        WHERE id > 0 AND ' . $filterQuery . $sortQuery, $filterSlots
+        );
+    }
+
+    public function getOperatorsTableData(string $defaultParams = ''): array
+    {
+        $sortQuery = ' ORDER BY date DESC, time DESC';
+        $filterQuery = '';
+        $filterSlots = [];
+        $defaultDates = $this->date->getDefaultRange($this->module_id);
+
+        $this->set('tableName', TBL_PREFIX . 'vdn_operators');
+
+        $fields_main = $this->rb::inspect(TBL_PREFIX . 'vdn');
+
+        if (intval($this->_get['pn']) > 0) {
+            $this->set('currentPageNumber', intval($this->_get['pn']));
+        }
+        if (isset($this->_post['params']) > 0) {
+            parse_str($this->_post['params'], $params);
+            $this->set('currentPageNumber', intval($params['pn']));
+        }
+
+        if (isset($this->_post['params'])) {
+            parse_str($this->_post['params'], $out);
+            $this->_get['sort'] = $out['sort'];
+            $this->_get['filter'] = $out['filter'];
+        }
+
+        if (isset($this->_get['sort'])) {
+            $sortArr = explode(':', $this->_get['sort']);
+            $sortQueryArr = [];
+
+            for ($i = 0; $i < count($sortArr); $i++) {
+                $direction = 'ASC';
+                if (substr_count($sortArr[$i], '_r') > 0) {
+                    $direction = 'DESC';
+                    $sortArr[$i] = str_replace('_r', '', $sortArr[$i]);
+                    $this->sortFields[$sortArr[$i]]['arrow'] = 'north';
+                    $this->sortFields[$sortArr[$i]]['value'] = $sortArr[$i];
+                } else {
+                    $this->sortFields[$sortArr[$i]]['arrow'] = 'south';
+                    $this->sortFields[$sortArr[$i]]['value'] = $sortArr[$i] . '_r';
+                }
+                $sortQueryArr[] = $sortArr[$i] . ' ' . $direction;
+            }
+            if (count($sortQueryArr) > 0) {
+                $sortQuery = ' ORDER BY ' . implode(', ', $sortQueryArr);
+            }
+        }
+
+        if (isset($this->_get['filter'])) {
+
+            $filterArr = explode(';', $this->_get['filter']);
+
+            $filterSection = [];
+            $this->filterFields = [];
+            $fieldType = '';
+
+            //Листаем фильтруемые поля
+            for ($f = 0; $f < count($filterArr); $f++) {
+                //Листаем фильтруемые значения
+                $filterValuesArr = explode(':', $filterArr[$f]);
+                $filterValues = explode('|', $filterValuesArr[1]);
+                $filterQueryArr = [];
+                for ($v = 0; $v < count($filterValues); $v++) {
+
+                    /*if($filterValuesArr[0] === "m.age"){
+                        switch(intval($filterValuesArr[1])){
+                            case 7318:
+                                $filterQueryArr[] = "m.age < ?";
+                                $filterSlots[] = 18;
+                                break;
+                            case 7319:
+                                $filterQueryArr[] = "m.age >= ? AND m.age <= ?";
+                                $filterSlots[] = 18;
+                                $filterSlots[] = 35;
+                                break;
+                            case 7320:
+                                $filterQueryArr[] = "m.age >= ? AND m.age <= ?";
+                                $filterSlots[] = 36;
+                                $filterSlots[] = 55;
+                                break;
+                            case 7321:
+                                $filterQueryArr[] = "m.age >= ?";
+                                $filterSlots[] = 56;
+                                break;
+                        }
+                    }else if($filterValuesArr[0] === "a.claim_category") {
+                        $filterQueryArr[] = "a.is_claim = '1' AND a.category = ?";
+                        $filterSlots[] = $filterValues[$v];
+                    }else {*/
+
+                    if (substr_count($filterValuesArr[0], '_from') > 0) {
+                        $filterQueryArr[] = str_replace('_from', '', $filterValuesArr[0]) . ' >= ?';
+                    } elseif (substr_count($filterValuesArr[0], '_to') > 0) {
+                        $filterQueryArr[] = str_replace('_to', '', $filterValuesArr[0]) . ' <= ?';
+                    } else {
+
+                        /*if(substr_count($filterValuesArr[0], 'm.') > 0){
+                            $fieldType = $fields_main[str_replace('m.', '', $filterValuesArr[0])];
+                        }
+                        if(substr_count($filterValuesArr[0], 'a.') > 0){
+                            $fieldType = $fields_appeals[str_replace('a.', '', $filterValuesArr[0])];
+                        }
+                        if($filterValuesArr[0] === "a.urgent") {
+                            $fieldType = 'smallint';
+                            $filterValuesArr[0] = 'urgent';
+                        }*/
+
+                        switch ($fieldType) {
+                            case 'integer':
+                            case 'bigint':
+                                $filterQueryArr[] = $filterValuesArr[0] . ' = ?';
+                                $filterValues[$v] = intval($filterValues[$v]);
+                                break;
+                            case 'time without time zone':
+                            case 'date':
+                                break;
+                                $filterQueryArr[] = $filterValuesArr[0] . ' = ?';
+                                break;
+                            case 'smallint':
+                                $filterQueryArr[] = $filterValuesArr[0] . ' = ?';
+                                $filterValues[$v] = intval($filterValues[$v]);
+                                break;
+                            default:
+                                $filterQueryArr[] = 'LOWER(' . $filterValuesArr[0] . ') LIKE ?';
+                                $filterValues[$v] = '%' . mb_strtolower($filterValues[$v]) . '%';
+                        }
+
+                        //$filterQueryArr[] = $filterValuesArr[0] . " = ?";
+                    }
+                    $filterSlots[] = $filterValues[$v];
+                    $this->filterFields[$filterValuesArr[0]][] = $filterValues[$v];
+                    //}
+                }
+                $filterSection[] = '(' . implode(' OR ', $filterQueryArr) . ')';
+            }
+            $filterQuery .= implode(' AND ', $filterSection);
+        } else {
+            if ($defaultDates != '') {
+                $datesArr = explode(' - ', $defaultDates);
+                $filterQuery = " date >= '" . $datesArr[0] . "' AND date <= '" . $datesArr[1] . "'";
+            }
+        }
+
+        $filterQuery = $defaultParams . (($filterQuery != '' && $defaultParams != '') ? ' AND ' . $filterQuery : $filterQuery);
+
+        if ($_SESSION['user_id'] == 6 && isset($_GET['debug'])) {
+            print_r($fields_main);
+            echo 'SELECT 
+            COUNT(id) AS total_vdn
+            FROM ' . TBL_PREFIX . 'vdn_operators
+            WHERE id > 0 AND ' . $filterQuery . $sortQuery; //print_r($filterSlots);
+        }
+
+
+        $total = $this->rb->getAll('SELECT 
+        COUNT(id) total_vdn
+        FROM ' . TBL_PREFIX . 'vdn_operators
+        WHERE id > 0 AND ' . $filterQuery, $filterSlots
+        ); //print_r($total);
+        $this->set('totalRows', $total[0]['total_vdn']);
+
+        $sortQuery .= ' LIMIT ? OFFSET ? ';
+        $filterSlots[] = $this->rowsLimit;
+        $filterSlots[] = $this->currentPageNumber * $this->rowsLimit;
+
+
+        return $this->rb->getAll('SELECT * 
+        FROM ' . TBL_PREFIX . 'vdn_operators
+        WHERE id > 0 AND ' . $filterQuery . $sortQuery, $filterSlots
+        );
     }
 
     public function getQueryString(): string
     {
-        $queryString = "";
+        $queryString = '';
         if ($this->_post['ajax'] == 1) {
             $ajaxParams = [];
             $ajaxQuery = explode('&', $_POST['params']);
@@ -879,17 +885,17 @@ class Gui
                 $val = $valu[1];
                 if (is_array($val)) {
                     for ($i = 0; $i < count($val); $i++) {
-                        if (stristr($key, "pn") == false &&
-                            stristr($key, "url") == false &&
-                            stristr($key, "path") == false)
+                        if (stristr($key, 'pn') == false &&
+                            stristr($key, 'url') == false &&
+                            stristr($key, 'path') == false)
                             $ajaxParams[] = $key . '[]=' . $val[$i];
                     }
                 } else {
                     if (is_string($val) &&
                         strlen($val) > 0 &&
-                        stristr($key, "pn") == false &&
-                        stristr($key, "url") == false &&
-                        stristr($key, "path") == false)
+                        stristr($key, 'pn') == false &&
+                        stristr($key, 'url') == false &&
+                        stristr($key, 'path') == false)
                         $ajaxParams[] = $key . '=' . $val;
                 }
             }
@@ -898,20 +904,20 @@ class Gui
             $queryString = (implode('&', $ajaxParams));
         }
         if (!empty($this->_server['QUERY_STRING'])) {
-            $params = explode("&", $this->_server['QUERY_STRING']);
+            $params = explode('&', $this->_server['QUERY_STRING']);
             $newParams = [];
             foreach ($params as $param) {
-                if (stristr($param, "pn") == false &&
-                    stristr($param, "tr") == false &&
-                    stristr($param, "url") == false &&
-                    stristr($param, "path") == false
+                if (stristr($param, 'pn') == false &&
+                    stristr($param, 'tr') == false &&
+                    stristr($param, 'url') == false &&
+                    stristr($param, 'path') == false
                 ) {
                     array_push($newParams, $param);
                 }
             }
             $newParams = array_unique($newParams);
             if (count($newParams) > 0) {
-                $queryString = htmlentities(implode("&", $newParams));
+                $queryString = htmlentities(implode('&', $newParams));
             }
         }
         return $queryString;
@@ -987,7 +993,7 @@ class Gui
                 $out .= '<div class="page dotted"><a href="' . $path . '?pn=' . ($maxcount + 1) . '&' . $queryString . '" tabindex="0">....</a></div>';
             }
         }
-        if ($pn < round($rows / $this->rowsLimit) ) {
+        if ($pn < round($rows / $this->rowsLimit)) {
             $out .= '<div class="paginate">
                 <a href="' . $path . '?pn=' . min($totalPages, $pn + 1) . '&' . $queryString . '"
                    title="Вперёд" tabindex="0"><span class="material-icons">navigate_next</span></a>
@@ -1049,7 +1055,7 @@ class Gui
                 <div class="el_suggest_list bottom">';
             if (is_array($filterItems) && count($filterItems) > 0) {
                 foreach ($filterItems as $value => $text) {
-                    if(is_array($text)){
+                    if (is_array($text)) {
                         $text = implode(' ', $text);
                     }
                     $columnHtml .= '<div class="el_option"><label class="container">' . $text . '
@@ -1065,9 +1071,9 @@ class Gui
                     $this->_cookie['role_show_filter_' . $filterName] == 'open') ? 'block' : 'none') . '">
                             <input type="' . $inputType . '" class="el_input el_suggest"
                             autocomplete="off"
-                                   data-src=\'{"action": "'.$action.'", "source": "' . $tableName . '", "value": "' . $columnName . '", 
+                                   data-src=\'{"action": "' . $action . '", "source": "' . $tableName . '", "value": "' . $columnName . '", 
                                    "column": "' . $columnName . '"' . (($idAsValue) ? ', "idAsValue": true' : '') .
-                                    (($ext_option != '') ? ', "ext_option": "'.$ext_option.'"' : '').'}\'
+                (($ext_option != '') ? ', "ext_option": "' . $ext_option . '"' : '') . '}\'
                                    multiple name="filter_' . $filterName . '[]" placeholder="Начните вводить...">';
 
             if (is_array($this->filterFields[$columnName]) && count($this->filterFields[$columnName]) > 0) {
@@ -1149,6 +1155,18 @@ class Gui
                                     <span class="material-icons">delete_forever</span><span>Удалить</span></button>';
                         }
                         break;
+                    case 'archive':
+                        if ($this->auth->isAdmin() || $perms['delete']) {
+                            $navHtml .= '<button tabindex="0" class="button icon text disabled group_action" id="button_nav_archive" title="' . $title . '">
+                                    <span class="material-icons">archive</span><span>В архив</span></button>';
+                        }
+                        break;
+                    case 'restore':
+                        if ($this->auth->isAdmin() || $perms['delete']) {
+                            $navHtml .= '<button tabindex="0" class="button icon text disabled group_action" id="button_nav_restore" title="' . $title . '">
+                                    <span class="material-icons">unarchive</span><span>Восстановить</span></button>';
+                        }
+                        break;
                     case 'setRole':
                         $navHtml .= '<button tabindex="0" class="button icon text disabled group_action" id="button_nav_setRole" title="' . $title . '">
                                     <span class="material-icons">admin_panel_settings</span><span>Роль</span></button>';
@@ -1195,15 +1213,15 @@ class Gui
                         $navHtml .= '<div class="toggle-switch">
                                         Вид: 
                                         <div class="toggle-switch-item one" title="Табличный вид">
-                                          <input type="radio" id="switch_table" name="toggle_view"'.($_COOKIE['calendar_view'] == 'table' ? ' checked="checked"' : '').'>
+                                          <input type="radio" id="switch_table" name="toggle_view"' . ($_COOKIE['calendar_view'] == 'table' ? ' checked="checked"' : '') . '>
                                           <label for="switch_table" class="switch"><span class="material-icons">view_list</span> <span>Таблица</span></label>
                                         </div>
                                         <div class="toggle-switch-item two" title="Классический календарь">
-                                          <input type="radio" id="switch_calendar" name="toggle_view"'.($_COOKIE['calendar_view'] == 'calendar' ? ' checked="checked"' : '').'>
+                                          <input type="radio" id="switch_calendar" name="toggle_view"' . ($_COOKIE['calendar_view'] == 'calendar' ? ' checked="checked"' : '') . '>
                                           <label for="switch_calendar" class="switch"><span class="material-icons">date_range</span> <span>Календарь</span></label>
                                         </div>
                                         <div class="toggle-switch-item three" title="График Ганта">
-                                          <input type="radio" id="switch_gantt" name="toggle_view" '.($_COOKIE['calendar_view'] == 'gantt' ? ' checked="checked"' : '').'>
+                                          <input type="radio" id="switch_gantt" name="toggle_view" ' . ($_COOKIE['calendar_view'] == 'gantt' ? ' checked="checked"' : '') . '>
                                           <label for="switch_gantt" class="switch"><span class="material-icons">view_timeline</span> <span>Гант</span></label>
                                         </div>
                                     </div>';
@@ -1259,7 +1277,8 @@ class Gui
                         $regId = (isset($_GET['id']) && intval($_GET['id']) > 0)
                             ? intval($_GET['id']) : intval(str_replace('id=', '', $_POST['params']));
                         $regs = $this->db->getRegistry('checksplans', ' WHERE active = 1 ORDER BY year DESC',
-                            [], ['short', 'year', 'id']);
+                            [], ['short', 'year', 'id']
+                        );
                         $registrys = $regs['array'];
                         $navHtml .= '<form id="plan_list">
                             <div class="nav_02">
@@ -1267,10 +1286,10 @@ class Gui
                                     <div class="nav_select">
                                         <select name="guide" data-label="" tabindex="0">
                                         <option value="">Выберите план</option>
-                                        <option value="0"'.($regId == 0 ? ' selected' : '').'>Задачи без плана</option>';
+                                        <option value="0"' . ($regId == 0 ? ' selected' : '') . '>Задачи без плана</option>';
                         foreach ($registrys as $value => $text) {
                             $sel = ($value == $regId || intval($_COOKIE['current_plan_id']) == $value) ? ' selected' : '';
-                            $navHtml .= '<option value="' . $value . '"' . $sel . '>' . $text[1].'г. '.$text[0] . '</option>';
+                            $navHtml .= '<option value="' . $value . '"' . $sel . '>' . $text[1] . 'г. ' . $text[0] . '</option>';
                         }
                         $navHtml .= '</select>
                                     </div>
@@ -1327,65 +1346,65 @@ class Gui
                                    </div>
                                         </div>
                                     </div>';
-                       /* $navHtml .= '<div class="group">
-                                        <div class="date_range">
-                                            <div class="search_field el_data" title="' . $title . '">
-                                                <input type="text" name="search" class="el_input " tabindex="3" value="' . $_GET['search'] . '">
-                                            </div>
-                                        </div>
-                                    </div>';*/
+                        /* $navHtml .= '<div class="group">
+                                         <div class="date_range">
+                                             <div class="search_field el_data" title="' . $title . '">
+                                                 <input type="text" name="search" class="el_input " tabindex="3" value="' . $_GET['search'] . '">
+                                             </div>
+                                         </div>
+                                     </div>';*/
                         break;
                     case 'filter_panel':
                         $navHtml .= '<button tabindex="0" class="button icon text" id="filter_panel" title="' . $title . '">
                                 <span class="material-icons">filter_alt</span><span>Фильтр</span></button>';
                         break;
                     case 'importEAIS':
-                        if($this->auth->isLogin()) {
+                        if ($this->auth->isLogin()) {
                             $navHtml .= '<button tabindex="0" class="button icon text" id="eais_import" title="' . $title . '">
                                     <span class="material-icons">file_download</span><span>ЕАИС</span></button>';
                         }
                         break;
                     case 'import':
-                        if($this->auth->isLogin()) {
+                        if ($this->auth->isLogin()) {
                             $navHtml .= '<button tabindex="0" class="button icon text" id="reg_import" title="' . $title . '">
                                     <span class="material-icons">file_download</span><span>Импорт</span></button>';
                         }
                         break;
                     case 'logout':
-                        $roles = $this->db->getRegistry("roles");
+                        $roles = $this->db->getRegistry('roles');
                         $roleString = '';
-                        if(substr_count($_SESSION['user_roles'], ',') > 0) {
+                        if (substr_count($_SESSION['user_roles'], ',') > 0) {
                             $userRolesArr = explode(',', $_SESSION['user_roles']);
                             $roleNamesArr = [];
                             foreach ($userRolesArr as $role) {
                                 $roleNamesArr[] = $roles['array'][intval($role)];
                             }
                             $roleString = implode(', ', $roleNamesArr);
-                        }else{
+                        } else {
                             $roleString = $roles['array'][intval($_SESSION['user_roles'])];
                         }
                         $notsHtml = '';
-                        if(intval($_SESSION['user_id']) > 0) {
+                        if (intval($_SESSION['user_id']) > 0) {
                             $nots = $this->notes->getRecordsToPanel($_SESSION['user_id']);
                             $notsTotal = intval($nots['countTotal']);
                             $notsUnseens = intval($nots['countUnseens']);
 
                             //if($notsTotal > 0){
-                                $countText = 'Всего '.$notsTotal.' уведомлени'.$this->postfix($notsTotal, 'е', 'я', 'й');
-                                $notsHtml = '<button tabindex="0" class="button icon right" title="'.$countText.'" id="notification_panel">' .
-                                    '<span id="messageCount">' . $notsTotal . '</span>
+                            $countText = 'Всего ' . $notsTotal . ' уведомлени' . $this->postfix($notsTotal, 'е', 'я', 'й');
+                            $notsHtml = '<button tabindex="0" class="button icon right" title="' . $countText . '" id="notification_panel">' .
+                                '<span id="messageCount">' . $notsTotal . '</span>
                                     <span class="material-icons">notifications</span></button>';
                             //}
-                            if($notsUnseens > 0){
-                                $countText = $notsUnseens.' нов'.$this->postfix($notsTotal, 'ое', 'ых', 'ых').' уведомлени'.
+                            if ($notsUnseens > 0) {
+                                $countText = $notsUnseens . ' нов' . $this->postfix($notsTotal, 'ое', 'ых', 'ых') . ' уведомлени' .
                                     $this->postfix($notsTotal, 'е', 'я', 'й');
-                                $notsHtml = '<button tabindex="0" class="button icon right shake" title="'.$countText.'" id="notification_panel">' .
+                                $notsHtml = '<button tabindex="0" class="button icon right shake" title="' . $countText . '" id="notification_panel">' .
                                     '<span id="messageCount">' . $notsUnseens . '</span>
                                     <span class="material-icons">notifications_active</span></button>';
                             }
 
                             $navHtml .= '<button tabindex="0" class="button icon" id="fullscreen" title="Перейти в полноэкранный режим">
-                                    <span class="material-icons">open_in_full</span></button>'.
+                                    <span class="material-icons">open_in_full</span></button>' .
                                 '<span class="user_fio right">Вы вошли как ' . $roleString . ' '
                                 . $_SESSION['user_surname'] . ' ' . $_SESSION['user_name'] . ' ' . $_SESSION['user_middle_name'] . '</span>' .
                                 $notsHtml .
@@ -1421,7 +1440,7 @@ class Gui
         bool $hideOptions = false
     ): string
     {
-        $list = ($firstEmpty) ? '<option value=""'.($hideOptions ? ' style="display: none"' : '').'>&nbsp;</option>' : '';
+        $list = ($firstEmpty) ? '<option value=""' . ($hideOptions ? ' style="display: none"' : '') . '>&nbsp;</option>' : '';
         foreach ($items as $item) {
             $iid = is_numeric($item->id) ? intval($item->id) : (string)$item->id;
             $sel = (in_array($iid, $selected)) ? ' selected="selected"' : '';
@@ -1435,14 +1454,14 @@ class Gui
                 }
                 $value = implode($separator, $fArr);
             }
-            if(count($dataFields) > 0){
-                foreach($dataFields as $df){
-                    if(strlen(trim($item->$df)) > 0)
-                        $dataOptions[] = 'data-'.$df.'="'.htmlspecialchars($item->$df).'"';
+            if (count($dataFields) > 0) {
+                foreach ($dataFields as $df) {
+                    if (strlen(trim($item->$df)) > 0)
+                        $dataOptions[] = 'data-' . $df . '="' . htmlspecialchars($item->$df) . '"';
                 }
-                $dataString = ' '.implode(' ', $dataOptions);
+                $dataString = ' ' . implode(' ', $dataOptions);
             }
-            $list .= '<option value="' . $item->id . '"' . $sel . $dataString. ($hideOptions ? ' style="display: none"' : '').'>' . stripslashes($value) . '</option>' . "\n";
+            $list .= '<option value="' . $item->id . '"' . $sel . $dataString . ($hideOptions ? ' style="display: none"' : '') . '>' . stripslashes($value) . '</option>' . "\n";
         }
         return $list;
     }
@@ -1459,7 +1478,7 @@ class Gui
 
     public function dateToString($date): string
     {
-        if(strlen(trim($date)) > 0) {
+        if (strlen(trim($date)) > 0) {
             $dateArr = [];
             $time = '';
             if (substr_count($date, ' ') > 0) {
@@ -1468,68 +1487,68 @@ class Gui
                 $timeArr = explode('.', $dateArr[1]);
                 $time = $timeArr[0];
             }
-            $year = strtok($date, "-");
-            $month = strtok("-");
-            $day = strtok("");
+            $year = strtok($date, '-');
+            $month = strtok('-');
+            $day = strtok('');
             switch ($month) {
                 case 1:
-                    $mont = "янв";
+                    $mont = 'янв';
                     break;
                 case 2:
-                    $mont = "фев";
+                    $mont = 'фев';
                     break;
                 case 3:
-                    $mont = "мар";
+                    $mont = 'мар';
                     break;
                 case 4:
-                    $mont = "апр";
+                    $mont = 'апр';
                     break;
                 case 5:
-                    $mont = "мая";
+                    $mont = 'мая';
                     break;
                 case 6:
-                    $mont = "июн";
+                    $mont = 'июн';
                     break;
                 case 7:
-                    $mont = "июл";
+                    $mont = 'июл';
                     break;
                 case 8:
-                    $mont = "авг";
+                    $mont = 'авг';
                     break;
                 case 9:
-                    $mont = "сен";
+                    $mont = 'сен';
                     break;
                 case 10:
-                    $mont = "окт";
+                    $mont = 'окт';
                     break;
                 case 11:
-                    $mont = "ноя";
+                    $mont = 'ноя';
                     break;
                 case 12:
-                    $mont = "дек";
+                    $mont = 'дек';
                     break;
             }
-            return $day . " " . $mont . " " . $year . "г. " . ((is_array($dateArr)) ? $time : '');
-        }else{
+            return $day . ' ' . $mont . ' ' . $year . 'г. ' . ((is_array($dateArr)) ? $time : '');
+        } else {
             return '';
         }
     }
 
     public function clearFio($fio): string
     {
-        if(strlen($fio) > 0 && !is_null($fio)) {
+        if (strlen($fio) > 0 && !is_null($fio)) {
             $fio = mb_strtolower($fio);
             $fio = str_replace('  ', ' ', $fio);
-            $fio = mb_convert_case(trim(preg_replace('/[^а-яА-ЯёЁ\s-]/imu', '', $fio)), MB_CASE_TITLE, "UTF-8");
-            return str_replace("\t", " ", $fio);
-        }else{
+            $fio = mb_convert_case(trim(preg_replace('/[^а-яА-ЯёЁ\s-]/imu', '', $fio)), MB_CASE_TITLE, 'UTF-8');
+            return str_replace("\t", ' ', $fio);
+        } else {
             return '';
         }
     }
 
     public function getUserFio(?int $user_id, $mode = 'full'): string
     {
-        if(intval($user_id) > 0) {
+        if (intval($user_id) > 0) {
             $users = $this->db->getRegistry('users');
             return $mode == 'full' ? $users['result'][$user_id]->surname . ' ' .
                 $users['result'][$user_id]->name . ' ' .
@@ -1537,7 +1556,7 @@ class Gui
                 $users['result'][$user_id]->surname . ' ' .
                 mb_substr($users['result'][$user_id]->name, 0, 1) . '. ' .
                 mb_substr($users['result'][$user_id]->middle_name, 0, 1) . '.';
-        }else{
+        } else {
             return '';
         }
     }
@@ -1545,15 +1564,16 @@ class Gui
     public function clearPhoneNumber($phone, $formatting = true): string
     {
         $phone = str_replace(['(', ')', '+', '-', ' '], '', trim($phone));
-        if(strlen($phone) == 11 && in_array(substr($phone, 0, 1), ['7', '8', '9'])){
+        if (strlen($phone) == 11 && in_array(substr($phone, 0, 1), ['7', '8', '9'])) {
             $phone = substr_replace($phone, '7', 0, 1);
             return $formatting ? sprintf('+%s (%s) %s-%s-%s',
                 substr($phone, 0, 1),
                 substr($phone, 1, 3),
                 substr($phone, 4, 3),
                 substr($phone, 7, 2),
-                substr($phone, 9)) : '+'.$phone;
-        }else{
+                substr($phone, 9)
+            ) : '+' . $phone;
+        } else {
             return '';
         }
     }
@@ -1562,9 +1582,9 @@ class Gui
     {
         $out = '';
         $length = 0;
-        foreach($array as $item){
+        foreach ($array as $item) {
             $lengthItem = strlen($item);
-            if($lengthItem > $length) {
+            if ($lengthItem > $length) {
                 $out = $item;
                 $length = $lengthItem;
             }
@@ -1572,7 +1592,7 @@ class Gui
         return $out;
     }
 
-    public function postfix ( $number, $one, $two, $five )
+    public function postfix($number, $one, $two, $five)
     {
         $number = intval($number);
         $out = $one;
@@ -1595,18 +1615,18 @@ class Gui
     {
         $string = ($type == 'file') ? preg_replace('/\\.(?![^.]*$)/', '_', $string) : $string;
         $r_trans = array(
-            "а", "б", "в", "г", "д", "е", "ё", "ж", "з", "и", "й", "к", "л", "м",
-            "н", "о", "п", "р", "с", "т", "у", "ф", "х", "ц", "ч", "ш", "щ", "э",
-            "ю", "я", "ъ", "ы", "ь", "А", "Б", "В", "Г", "Д", "Е", "Ё", "Ж", "З", "И", "Й", "К", "Л", "М",
-            "Н", "О", "П", "Р", "С", "Т", "У", "Ф", "Х", "Ц", "Ч", "Ш", "Щ", "Э",
-            "Ю", "Я", "Ъ", "Ы", "Ь", "", "'"
+            'а', 'б', 'в', 'г', 'д', 'е', 'ё', 'ж', 'з', 'и', 'й', 'к', 'л', 'м',
+            'н', 'о', 'п', 'р', 'с', 'т', 'у', 'ф', 'х', 'ц', 'ч', 'ш', 'щ', 'э',
+            'ю', 'я', 'ъ', 'ы', 'ь', 'А', 'Б', 'В', 'Г', 'Д', 'Е', 'Ё', 'Ж', 'З', 'И', 'Й', 'К', 'Л', 'М',
+            'Н', 'О', 'П', 'Р', 'С', 'Т', 'У', 'Ф', 'Х', 'Ц', 'Ч', 'Ш', 'Щ', 'Э',
+            'Ю', 'Я', 'Ъ', 'Ы', 'Ь', '', "'"
         );
         $e_trans = array(
-            "a", "b", "v", "g", "d", "e", "e", "j", "z", "i", "i", "k", "l", "m",
-            "n", "o", "p", "r", "s", "t", "u", "f", "h", "c", "ch", "sh", "sch",
-            "e", "yu", "ya", "", "i", "", "a", "b", "v", "g", "d", "e", "e", "j", "z", "i", "i", "k", "l", "m",
-            "n", "o", "p", "r", "s", "t", "u", "f", "h", "c", "ch", "sh", "sch",
-            "e", "yu", "ya", "", "i", "", "", ""
+            'a', 'b', 'v', 'g', 'd', 'e', 'e', 'j', 'z', 'i', 'i', 'k', 'l', 'm',
+            'n', 'o', 'p', 'r', 's', 't', 'u', 'f', 'h', 'c', 'ch', 'sh', 'sch',
+            'e', 'yu', 'ya', '', 'i', '', 'a', 'b', 'v', 'g', 'd', 'e', 'e', 'j', 'z', 'i', 'i', 'k', 'l', 'm',
+            'n', 'o', 'p', 'r', 's', 't', 'u', 'f', 'h', 'c', 'ch', 'sh', 'sch',
+            'e', 'yu', 'ya', '', 'i', '', '', ''
         );
         $string = str_replace($r_trans, $e_trans, $string);
         return $string;
@@ -1618,36 +1638,37 @@ class Gui
     {
         $string = ($type == 'file') ? preg_replace('/\\.(?![^.]*$)/', '_', $string) : $string;
         $r_trans = array(
-            "а", "б", "в", "г", "д", "е", "ё", "ж", "з", "и", "й", "к", "л", "м",
-            "н", "о", "п", "р", "с", "т", "у", "ф", "х", "ц", "ч", "ш", "щ", "э",
-            "ю", "я", "ъ", "ы", "ь", "А", "Б", "В", "Г", "Д", "Е", "Ё", "Ж", "З", "И", "Й", "К", "Л", "М",
-            "Н", "О", "П", "Р", "С", "Т", "У", "Ф", "Х", "Ц", "Ч", "Ш", "Щ", "Э",
-            "Ю", "Я", "Ъ", "Ы", "Ь", "(", ")", "'"
+            'а', 'б', 'в', 'г', 'д', 'е', 'ё', 'ж', 'з', 'и', 'й', 'к', 'л', 'м',
+            'н', 'о', 'п', 'р', 'с', 'т', 'у', 'ф', 'х', 'ц', 'ч', 'ш', 'щ', 'э',
+            'ю', 'я', 'ъ', 'ы', 'ь', 'А', 'Б', 'В', 'Г', 'Д', 'Е', 'Ё', 'Ж', 'З', 'И', 'Й', 'К', 'Л', 'М',
+            'Н', 'О', 'П', 'Р', 'С', 'Т', 'У', 'Ф', 'Х', 'Ц', 'Ч', 'Ш', 'Щ', 'Э',
+            'Ю', 'Я', 'Ъ', 'Ы', 'Ь', '(', ')', "'"
         );
         $e_trans = array(
-            "a", "b", "v", "g", "d", "e", "e", "j", "z", "i", "i", "k", "l", "m",
-            "n", "o", "p", "r", "s", "t", "u", "f", "h", "c", "ch", "sh", "sch",
-            "e", "yu", "ya", "", "i", "", "A", "B", "V", "G", "D", "E", "E", "J", "Z", "I", "I", "K", "L", "M",
-            "N", "O", "P", "R", "S", "T", "U", "F", "H", "C", "Ch", "Sh", "Sch",
-            "E", "Yu", "Ya", "", "I", "", "", ""
+            'a', 'b', 'v', 'g', 'd', 'e', 'e', 'j', 'z', 'i', 'i', 'k', 'l', 'm',
+            'n', 'o', 'p', 'r', 's', 't', 'u', 'f', 'h', 'c', 'ch', 'sh', 'sch',
+            'e', 'yu', 'ya', '', 'i', '', 'A', 'B', 'V', 'G', 'D', 'E', 'E', 'J', 'Z', 'I', 'I', 'K', 'L', 'M',
+            'N', 'O', 'P', 'R', 'S', 'T', 'U', 'F', 'H', 'C', 'Ch', 'Sh', 'Sch',
+            'E', 'Yu', 'Ya', '', 'I', '', '', ''
         );
-        if($mode == 'no_whitespace'){
-            $string = str_replace(" ", '-', $string);
+        if ($mode == 'no_whitespace') {
+            $string = str_replace(' ', '-', $string);
         }
         $string = str_replace($r_trans, $e_trans, $string);
         return $string;
     }
 
-    public function genpass($numchar = 8)
+    public function genpass(int $numchar = 8): string
     {
-        $str = "abcefghijklmnopqrstuvwxyz1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-        $start = mt_rand(1, (strlen($str) - $numchar));
-        $string = str_shuffle($str);
-        $password = substr($string, $start, $numchar);
-        if (strlen($password) < 8 || !preg_match('/[A-Z]/', $password) ||
-            !preg_match('/[a-z]/', $password) || !preg_match('/[0-9]/', $password)) {
-            return $this->genpass($numchar);
-        }
+        $str = 'abcefghijklmnopqrstuvwxyz1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        do {
+            $password = substr(str_shuffle($str), 0, $numchar);
+        } while (
+            strlen($password) < $numchar ||
+            !preg_match('/[A-Z]/', $password) ||
+            !preg_match('/[a-z]/', $password) ||
+            !preg_match('/[0-9]/', $password)
+        );
         return $password;
     }
 
@@ -1660,21 +1681,23 @@ class Gui
     public function unsetFromParams(string $params, string $paramName): string
     {
         $paramsArr = explode(';', $params);
-        for($i = 0; $i < count($paramsArr); $i++){
+        for ($i = 0; $i < count($paramsArr); $i++) {
             $item = $paramsArr[$i];
             $itemArr = explode(':', $item);
-            if($itemArr[0] == $paramName){
+            if ($itemArr[0] == $paramName) {
                 array_splice($paramsArr, $i);
             }
         }
         return implode(';', $paramsArr);
     }
 
-    public function buildOUSRSelect(){
-        $ousr = $this->db->select("users", "roles = 13");
+    public function buildOUSRSelect()
+    {
+        $ousr = $this->db->select('users', 'roles = 13');
     }
 
-    public function limitStrlen($input, $length, $ellipses = true, $strip_html = true) {
+    public function limitStrlen($input, $length, $ellipses = true, $strip_html = true)
+    {
         //strip tags, if desired
         if ($strip_html) {
             $input = strip_tags($input);
@@ -1687,7 +1710,7 @@ class Gui
 
         //find last space within length
         $last_space = strrpos(mb_substr($input, 0, $length), ' ');
-        if($last_space !== false) {
+        if ($last_space !== false) {
             $trimmed_text = mb_substr($input, 0, $last_space);
         } else {
             $trimmed_text = mb_substr($input, 0, $length);
@@ -1767,7 +1790,8 @@ class Gui
         return "rgb($r, $g, $b)";
     }
 
-    public function generateDarkHslHexColor(): string {
+    public function generateDarkHslHexColor(): string
+    {
         $hue = mt_rand(0, 360);
         $saturation = mt_rand(70, 100);
         $lightness = mt_rand(10, 30);
@@ -1775,7 +1799,8 @@ class Gui
         return $this->hslToHex($hue, $saturation, $lightness);
     }
 
-    public function hslToHex($h, $s, $l): string {
+    public function hslToHex($h, $s, $l): string
+    {
         $h /= 360;
         $s /= 100;
         $l /= 100;
@@ -1784,15 +1809,15 @@ class Gui
         $x = $c * (1 - abs(fmod(($h * 6), 2) - 1));
         $m = $l - ($c / 2);
 
-        if ($h < 1/6) {
+        if ($h < 1 / 6) {
             list($r, $g, $b) = [$c, $x, 0];
-        } elseif ($h < 2/6) {
+        } elseif ($h < 2 / 6) {
             list($r, $g, $b) = [$x, $c, 0];
-        } elseif ($h < 3/6) {
+        } elseif ($h < 3 / 6) {
             list($r, $g, $b) = [0, $c, $x];
-        } elseif ($h < 4/6) {
+        } elseif ($h < 4 / 6) {
             list($r, $g, $b) = [0, $x, $c];
-        } elseif ($h < 5/6) {
+        } elseif ($h < 5 / 6) {
             list($r, $g, $b) = [$x, 0, $c];
         } else {
             list($r, $g, $b) = [$c, 0, $x];

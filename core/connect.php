@@ -1,59 +1,70 @@
 <?php
 @session_start();
-ini_set('display_errors','On');
+ini_set('display_errors', 'On');
 error_reporting(E_ALL & ~E_NOTICE);
-header("X-XSS-Protection: 1; mode=block");
-
-require_once '/var/www/html/core/rb.php';
-
-
-//Определение общих для всех модулей констант
-define('ROOT', $_SERVER['DOCUMENT_ROOT']);
-define('TBL_PREFIX', 'cam_');
-
-define('ENCRYPTION_KEY', 'ab86d144e3f080b61c7c2e43');
-
-/*
-Статический ключ в Яндексе
-Идентификатор ключа
-YCAJEvwQxLD_Qs_nrrqZHy0HK
-Ваш секретный ключ
-YCMJKPR2RD2R6hmeRP4rM3CW4uHT7SVj_5FNqeDU
- */
+header('X-XSS-Protection: 1; mode=block');
 
 date_default_timezone_set('Europe/Moscow');
 
-/**
-* Подключаемся к базе данных
-* Последний (4-й) параметр по умолчанию выставлен в FALSE
-* Если нужно применить заморозку таблиц в БД (отменить создание на лету),
-* то нужно данный параметр выставить в TRUE
-* или так: R::freeze(true);
-*/
-R::setup( 'pgsql:host=127.0.0.1;dbname=checkappmobile','app_mobile', 'Ilmn_^%aq', false);
+define('ROOT', $_SERVER['DOCUMENT_ROOT']);
 
-// Проверка подключения к БД
-R::fancyDebug( TRUE );
-R::debug( TRUE, 1 );
-if(!R::testConnection()) die('Нет соединения с базой данных!');
-R::useJSONFeatures(TRUE);
-//R::exec('SET NAMES utf8');
-/*if($_POST['action'] != 'login' && $_GET['url'] != 'login' && !isset($_SESSION['login'])){
-    header('Location: /login');
-    echo '<script>document.location.href = "/"</script>';
-}*/
+// --- Загрузка .env ---
+require_once ROOT . '/core/vendor/autoload.php';
 
-/*
- *  minsoc.secure.mosreg.ru
- * Логин учетной записи ЕКП: BoyazitovEM
-d22N1YLB
+$dotenv = Dotenv\Dotenv::createImmutable(ROOT);
+$dotenv->load();
 
-ssh root@10.12.123.241
-elmanb Yufjh_12*71
- *
- */
+// --- Константы приложения ---
+define('TBL_PREFIX', getenv('TBL_PREFIX') ?: 'cam_');
+define('ENCRYPTION_KEY', getenv('ENCRYPTION_KEY') ?: '');
 
-require_once '/var/www/html/core/vendor/autoload.php';
+// --- Внешние API ---
+define('DADATA_TOKEN', getenv('DADATA_TOKEN') ?: '');
+define('YANDEX_MAPS_KEY', getenv('YANDEX_MAPS_KEY') ?: '');
+define('YANDEX_TTS_TOKEN', getenv('YANDEX_TTS_TOKEN') ?: '');
+define('TELEGRAM_BOT_TOKEN', getenv('TELEGRAM_BOT_TOKEN') ?: '');
+define('EAIS_API_URL', getenv('EAIS_API_URL') ?: '');
 
+// --- SMTP ---
+define('SMTP_HOST', getenv('SMTP_HOST') ?: 'smtp.mosreg.ru');
+define('SMTP_PORT', getenv('SMTP_PORT') ?: 587);
+define('SMTP_USER', getenv('SMTP_USER') ?: '');
+define('SMTP_PASSWORD', getenv('SMTP_PASSWORD') ?: '');
+define('SMTP_FROM', getenv('SMTP_FROM') ?: '');
+define('SMTP_BCC', getenv('SMTP_BCC') ?: '');
 
-?>
+// --- Прокси ---
+define('PROXY_URL', getenv('PROXY_URL') ?: '');
+
+// Версия приложения — используется для cache-busting CSS/JS в шаблонах
+define('APP_VERSION', getenv('APP_VERSION') ?: '1.0');
+
+// Окружение: 'production' или 'development'
+define('APP_ENV', getenv('APP_ENV') ?: 'production');
+
+// --- VAPID (Web Push) ---
+define('VAPID_PUBLIC_KEY', getenv('VAPID_PUBLIC_KEY') ?: '');
+define('VAPID_PRIVATE_KEY', getenv('VAPID_PRIVATE_KEY') ?: '');
+define('VAPID_SUBJECT', getenv('VAPID_SUBJECT') ?: '');
+
+// --- Подключение к PostgreSQL через RedBeanPHP ---
+require_once ROOT . '/core/rb.php';
+
+R::setup(
+    'pgsql:host=' . getenv('DB_HOST') . ';dbname=' . getenv('DB_NAME'),
+    getenv('DB_USER'),
+    getenv('DB_PASSWORD'),
+    false
+);
+
+// Debug только в режиме разработки
+if (getenv('APP_DEBUG') === 'true') {
+    R::fancyDebug(true);
+    R::debug(true, 1);
+}
+
+if (!R::testConnection()) {
+    die('Нет соединения с базой данных!');
+}
+
+R::useJSONFeatures(true);

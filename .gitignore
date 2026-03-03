@@ -1,1 +1,29 @@
 /IGNORE/
+# Секреты — никогда не в репозиторий
+.env
+core/connect.php
+
+# Кэш и логи
+/cache/
+/logs/
+*.log
+
+# Загруженные файлы пользователей
+/uploads/
+/files/
+
+# Зависимости
+/core/vendor/
+/node_modules/
+
+# macOS
+.DS_Store
+__MACOSX/
+
+# PhpStorm / IDE
+.idea/
+*.iml
+
+# Дампы БД (осторожно с реальными данными)
+*.dump
+*.sql

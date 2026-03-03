@@ -302,7 +302,7 @@ class Registry
 
         //Шаблоны листов согласования
         if ($f['field_name'] == 'agreementtemplate') {
-            $f['subQuery'] = " AND documentacial = 6";
+            $f['subQuery'] = ' AND documentacial = 6';
         } elseif ($f['field_name'] == 'document') {
             $f['subQuery'] = ' AND documentacial <> 6';
         }
@@ -929,7 +929,7 @@ class Registry
         $maxSignersCount = intval($editData['oneSignOnly']) == 1 ? 1 : 2;
         $default_value = strlen($editData[$f['field_name']]) > 0 ? json_decode($editData[$f['field_name']]) : $f['default_value'];
         $users = $this->db->getRegistry('users', '', [], ['surname', 'name', 'middle_name',
-            'institution', 'ministries', 'division', 'position']
+                'institution', 'ministries', 'division', 'position']
         );
         $ins = $this->db->getRegistry('institutions', '', [], ['short']);
         $mins = $this->db->getRegistry('ministries');
@@ -1031,9 +1031,9 @@ class Registry
                                 "<select name='vrio" . $li->id . "' title='Отсутствующий сотрудник' class='viewmode-select vrio'>" .
                                 $userList . '</select>' .
                                 ($is_signers ? "<select name='role" . $li->id . "' title='Роль' class='viewmode-select role'>" .
-                                    "<option" . (!isset($li->role) ? ' selected' : '') . "></option>" .
-                                    "<option value='0'" . (isset($li->role) && intval($li->role) == 0 ? ' selected' : '') . ">Утверждает</option>" .
-                                    "<option value='1'" . (intval($li->role) == 1 ? ' selected' : '') . ">Подписывает</option></select>" : '') .
+                                    '<option' . (!isset($li->role) ? ' selected' : '') . '></option>' .
+                                    "<option value='0'" . (isset($li->role) && intval($li->role) == 0 ? ' selected' : '') . '>Утверждает</option>' .
+                                    "<option value='1'" . (intval($li->role) == 1 ? ' selected' : '') . '>Подписывает</option></select>' : '') .
                                 '<span class="material-icons drag_handler" title="Переместить">drag_handle</span>' .
                                 '<span class="material-icons clear" title="Удалить">close</span></li>';
                             $html .= '<li data-id="' . $li->id . '" data-type="' . $li->type . '">' . $user_fio . '</li>';
@@ -1137,10 +1137,10 @@ class Registry
                 'width' => '66',
                 'default_value' => '2',
                 'radio_values' => json_encode([
-                    ['title' => 'Тип согласования'],
-                    ['label' => 'Последовательное', 'value' => '1'],
-                    ['label' => 'Параллельное', 'value' => '2']
-                ]
+                        ['title' => 'Тип согласования'],
+                        ['label' => 'Последовательное', 'value' => '1'],
+                        ['label' => 'Параллельное', 'value' => '2']
+                    ]
                 )
             ];
             $html .= $this->renderRadio($i, $editData, $mode);
@@ -1153,11 +1153,11 @@ class Registry
                 'class' => 'thin',
                 'default_value' => '1',
                 'radio_values' => json_encode([
-                    ['title' => 'Срок согласования:'],
-                    ['label' => 'Обычный', 'value' => '1'],
-                    ['label' => 'Срочный', 'value' => '2'],
-                    ['label' => 'Незамедлительно', 'value' => '3']
-                ]
+                        ['title' => 'Срок согласования:'],
+                        ['label' => 'Обычный', 'value' => '1'],
+                        ['label' => 'Срочный', 'value' => '2'],
+                        ['label' => 'Незамедлительно', 'value' => '3']
+                    ]
                 )
             ];
             $html .= $this->renderRadio($i, $editData, $mode);
@@ -1219,11 +1219,11 @@ class Registry
                 'class' => 'new_signer thin',
                 'width' => '50',
                 'radio_values' => json_encode([
-                    ['title' => 'Срок:'],
-                    ['label' => 'Обычный', 'value' => '1'],
-                    ['label' => 'Срочный', 'value' => '2'],
-                    ['label' => 'Незамедлительно', 'value' => '3']
-                ]
+                        ['title' => 'Срок:'],
+                        ['label' => 'Обычный', 'value' => '1'],
+                        ['label' => 'Срочный', 'value' => '2'],
+                        ['label' => 'Незамедлительно', 'value' => '3']
+                    ]
                 )
             ];
             $d['value_selected'] = $editData['approve_types'];
@@ -1249,10 +1249,10 @@ class Registry
                 'width' => '66',
                 'default_value' => '1',
                 'radio_values' => json_encode([
-                    ['title' => 'Тип согласования'],
-                    ['label' => 'Последовательное', 'value' => '1'],
-                    ['label' => 'Параллельное', 'value' => '2']
-                ]
+                        ['title' => 'Тип согласования'],
+                        ['label' => 'Последовательное', 'value' => '1'],
+                        ['label' => 'Параллельное', 'value' => '2']
+                    ]
                 )
             ];
             $html .= $this->renderRadio($i, $editData, $mode);
@@ -1265,11 +1265,11 @@ class Registry
                 'class' => 'thin',
                 'default_value' => '1',
                 'radio_values' => json_encode([
-                    ['title' => 'Срок согласования:'],
-                    ['label' => 'Обычный', 'value' => '1'],
-                    ['label' => 'Срочный', 'value' => '2'],
-                    ['label' => 'Незамедлительно', 'value' => '3']
-                ]
+                        ['title' => 'Срок согласования:'],
+                        ['label' => 'Обычный', 'value' => '1'],
+                        ['label' => 'Срочный', 'value' => '2'],
+                        ['label' => 'Незамедлительно', 'value' => '3']
+                    ]
                 )
             ];
             $html .= $this->renderRadio($i, $editData, $mode);
@@ -1331,11 +1331,11 @@ class Registry
                 'class' => 'new_signer thin',
                 'width' => '50',
                 'radio_values' => json_encode([
-                    ['title' => 'Срок:'],
-                    ['label' => 'Обычный', 'value' => '1'],
-                    ['label' => 'Срочный', 'value' => '2'],
-                    ['label' => 'Незамедлительно', 'value' => '3']
-                ]
+                        ['title' => 'Срок:'],
+                        ['label' => 'Обычный', 'value' => '1'],
+                        ['label' => 'Срочный', 'value' => '2'],
+                        ['label' => 'Незамедлительно', 'value' => '3']
+                    ]
                 )
             ];
             $d['value_selected'] = $editData['approve_types'];
@@ -1597,8 +1597,64 @@ class Registry
                     (!empty($vrioInfo[2]) ? ' ' . mb_substr($vrioInfo[2], 0, 1) . '.' : '') . '</small>';
             }
 
+            // ============ ПРАВИЛО 5: Определяем, активна ли очередь текущего пользователя ============
+            // Вычисляем заранее, чтобы использовать при формировании <tr> и иконки
+            $isMyTurn = false;
+            if ($isCurrentUser && $statusInfo['status'] === 'pending' && !$hasAnyRejection) {
+                if ($isSignersSection) {
+                    if ($allPreviousStagesCompleted) {
+                        if ($listType == 1) {
+                            $isMyTurn = true;
+                            for ($j = $startIndex; $j < $i; $j++) {
+                                if (!isset($itemArr[$j]['id'])) continue;
+                                if ($getApproverStatus($itemArr[$j])['status'] !== 'approved') {
+                                    $isMyTurn = false;
+                                    break;
+                                }
+                            }
+                        } else {
+                            $isMyTurn = true; // параллельное
+                        }
+                    }
+                } else {
+                    if ($listType == 2) {
+                        $isMyTurn = true; // параллельное согласование
+                    } else {
+                        $isMyTurn = true;
+                        for ($j = $startIndex; $j < $i; $j++) {
+                            if (!isset($itemArr[$j]['id'])) continue;
+                            if (isset($itemArr[$j]['_is_redirector_repeat'])) continue;
+                            $pst = $getApproverStatus($itemArr[$j])['status'];
+                            if ($pst !== 'approved' && $pst !== 'redirected') {
+                                $isMyTurn = false;
+                                break;
+                            }
+                        }
+                    }
+                    // Если это повторная запись после перенаправления — ждём завершения redirect-цепи
+                    $isAfterRedirectCheck = false;
+                    if ($level == 0 && isset($seenUsers[$userId]) && $seenUsers[$userId]['has_redirect']) {
+                        $prevIdx = $seenUsers[$userId]['index'];
+                        if ($prevIdx < $i && isset($itemArr[$prevIdx]['redirect'])) {
+                            $isAfterRedirectCheck = true;
+                            if (!$isRedirectCompleted($itemArr[$prevIdx]['redirect'])) {
+                                $isMyTurn = false;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Правило 5: строка текущего пользователя:
+            //   - очередь ещё не пришла: серый фон (ожидание)
+            //   - очередь пришла: нормальный фон + иконка голубая
+            $trClass = '';
+            if ($isCurrentUser && $statusInfo['status'] === 'pending') {
+                $trClass = $isMyTurn ? ' class="my-turn-active"' : ' class="my-turn-waiting"';
+            }
+
             // Формируем строку таблицы
-            $html .= '<tr>';
+            $html .= '<tr' . $trClass . '>';
             $html .= '<td>' . $displayNumber . '</td>';
             $padding = $level > 0 ? ' style="padding-left: ' . (20 * $level) . 'px"' : '';
 
@@ -1617,7 +1673,17 @@ class Registry
                     ) . '"';
             }
 
-            $html .= '<td' . $padding . $userTitle . ' data-user-id="' . $userId . '">' . $userFio . '</td>';
+            // ПРАВИЛО 5: иконка — голубая когда очередь пришла, чёрная когда ещё ждёт
+            $userIcon = '';
+            if ($isCurrentUser && $statusInfo['status'] === 'pending') {
+                if ($isMyTurn) {
+                    $userIcon = "<span class='material-icons' style='color:#086a9b;vertical-align:middle;font-size:16px;margin-right:3px'>account_circle</span>";
+                } else {
+                    $userIcon = "<span class='material-icons' style='color:#333;vertical-align:middle;font-size:16px;margin-right:3px'>account_circle</span>";
+                }
+            }
+
+            $html .= '<td' . $padding . $userTitle . ' data-user-id="' . $userId . '">' . $userIcon . $userFio . '</td>';
             $html .= '<td>' . ($urgent_types[$urgent] ?? 'Обычная') . '</td>';
             $html .= '<td>';
 
@@ -1901,8 +1967,8 @@ class Registry
             ' . TBL_PREFIX . 'regfields.reg_id = ? ORDER BY ' . TBL_PREFIX . 'regfields.sort', [$regId]
         );
 
-        $exist = $this->db->selectOne('agreement', " WHERE source_table = ? 
-        AND source_id = ? ORDER BY id DESC LIMIT 1", [$data['source_table'], $data['source_id']]
+        $exist = $this->db->selectOne('agreement', ' WHERE source_table = ? 
+        AND source_id = ? ORDER BY id DESC LIMIT 1', [$data['source_table'], $data['source_id']]
         );
         $documentId = $exist->id;
 
@@ -1989,7 +2055,7 @@ class Registry
 
         $html .= '<span class="material-icons arrow">expand_more</span></h1>
             <div class="upload-container" style="display: none">
-            <input type="hidden" name="document_id" id="document_id" value="'.$editData['document_id'].'">
+            <input type="hidden" name="document_id" id="document_id" value="' . $editData['document_id'] . '">
             <input type="hidden" name="max_file_uploads" value="' . ini_get('max_file_uploads') . '">
             <input type="hidden" name="upload_max_filesize" value="' . $gui->parse_size(ini_get('upload_max_filesize')) . '">
             <div class="file-drop-zone" id="fileDropZone">
@@ -2025,15 +2091,15 @@ class Registry
 
         if ($regId > 0) {
             //Построение формы существующего справочника
-            $regProps = $this->rb::getAll("SELECT
-            " . TBL_PREFIX . "regprops.*,
-            " . TBL_PREFIX . "regfields.prop_id AS fId,
-            " . TBL_PREFIX . "regfields.required AS required,
-            " . TBL_PREFIX . "regfields.unique AS unique, 
-            " . TBL_PREFIX . "regfields.label 
-            FROM " . TBL_PREFIX . "regfields, " . TBL_PREFIX . "regprops
-            WHERE " . TBL_PREFIX . "regfields.prop_id = " . TBL_PREFIX . "regprops.id AND 
-            " . TBL_PREFIX . "regfields.reg_id = ? ORDER BY " . TBL_PREFIX . "regfields.sort", [$regId]
+            $regProps = $this->rb::getAll('SELECT
+            ' . TBL_PREFIX . 'regprops.*,
+            ' . TBL_PREFIX . 'regfields.prop_id AS fId,
+            ' . TBL_PREFIX . 'regfields.required AS required,
+            ' . TBL_PREFIX . 'regfields.unique AS unique, 
+            ' . TBL_PREFIX . 'regfields.label 
+            FROM ' . TBL_PREFIX . 'regfields, ' . TBL_PREFIX . 'regprops
+            WHERE ' . TBL_PREFIX . 'regfields.prop_id = ' . TBL_PREFIX . 'regprops.id AND 
+            ' . TBL_PREFIX . 'regfields.reg_id = ? ORDER BY ' . TBL_PREFIX . 'regfields.sort', [$regId]
             );
         } else {
             //Построение формы нового справочника
@@ -2178,7 +2244,7 @@ class Registry
             $insp = $this->db->getRegistry('inspections');
             $units = $this->db->getRegistry('units');
             $users = $this->db->getRegistry('users', '', [], ['surname', 'name', 'middle_name',
-                'institution', 'ministries', 'division', 'position']
+                    'institution', 'ministries', 'division', 'position']
             );
             $temp = new Templates();
             $date = new \Core\Date();
@@ -2481,7 +2547,7 @@ class Registry
                 $value = json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
                 break;
             default:
-                $value = trim(str_replace("  ", " ", $value));
+                $value = trim(str_replace('  ', ' ', $value));
         }
         return strlen(trim($value)) > 0 ? $value : '';
     }
@@ -2504,14 +2570,14 @@ class Registry
         //Составляем массив id полей из regprops
         foreach ($fields as $f) {
             $field_Ids[] = $f->value;
-            $reg_props[] = "(" . $reg_id . ", " . intval($f->value) . ", " .
-                intval($f->sort) . ", '" . addslashes($f->label) . "', " . (int)$f->required . ", " . (int)$f->unique . ")";
+            $reg_props[] = '(' . $reg_id . ', ' . intval($f->value) . ', ' .
+                intval($f->sort) . ", '" . addslashes($f->label) . "', " . (int)$f->required . ', ' . (int)$f->unique . ')';
         }
 
         if (count($reg_props) > 0) {
-            $this->rb::exec("DELETE FROM " . TBL_PREFIX . "regfields WHERE reg_id = $reg_id");
-            $this->rb::exec("INSERT INTO " . TBL_PREFIX . 'regfields (reg_id, prop_id, sort, label, required, "unique") 
-            VALUES ' . implode(", ", $reg_props)
+            $this->rb::exec('DELETE FROM ' . TBL_PREFIX . "regfields WHERE reg_id = $reg_id");
+            $this->rb::exec('INSERT INTO ' . TBL_PREFIX . 'regfields (reg_id, prop_id, sort, label, required, "unique") 
+            VALUES ' . implode(', ', $reg_props)
             );
         }
 
@@ -2521,27 +2587,27 @@ class Registry
 
             foreach ($prop_fields as $field) {
                 $type = $this->getTypeColumn($field->type);
-                $field_props[] = $field->field_name . " " . $type;
+                $field_props[] = $field->field_name . ' ' . $type;
                 if (strlen(trim($field->cmment)) > 0) {
-                    $field_comments[] = "COMMENT ON COLUMN " . TBL_PREFIX . $tableName . "." . $field->field_name . " IS '" . $field->comment . "'";
+                    $field_comments[] = 'COMMENT ON COLUMN ' . TBL_PREFIX . $tableName . '.' . $field->field_name . " IS '" . $field->comment . "'";
                 }
             }
         }
         //составляем запрос для создания таблицы
-        $sql = "CREATE TABLE " . TBL_PREFIX . $tableName . " (
+        $sql = 'CREATE TABLE ' . TBL_PREFIX . $tableName . " (
                 id SERIAL PRIMARY KEY,
                 created_at TIMESTAMP DEFAULT CURRENT_DATE,
                 author INTEGER NOT NULL,
                 active INTEGER DEFAULT '1'";
         if (count($field_props) > 0) {
-            $sql .= ", " . implode(", ", $field_props);
+            $sql .= ', ' . implode(', ', $field_props);
         }
-        $sql .= ")";
+        $sql .= ')';
 
         try {
             $this->rb::exec($sql);
             if (strlen(trim($comment)) > 0) {
-                $this->rb::exec("COMMENT ON TABLE " . TBL_PREFIX . $tableName . " IS '" . addslashes($comment) . "'");
+                $this->rb::exec('COMMENT ON TABLE ' . TBL_PREFIX . $tableName . " IS '" . addslashes($comment) . "'");
             }
             //Добавляем комментарии к каждому полю
             if (count($field_comments) > 0) {
@@ -2941,7 +3007,7 @@ class Registry
             $reg_props[] = '(' . $reg_id . ', ' . intval($f->id) . ', ' .
                 intval($f->sort) . ", '" . addslashes($f->label) . "', " . (int)$f->required . ', 
                 ' . (int)$f->unique . ", '" . (strlen($f->rowBehaviour) == 0 ? 'null' : $f->rowBehaviour) .
-                "', " . intval($f->is_block) . ", " . intval($f->parent_id) . ")";
+                "', " . intval($f->is_block) . ', ' . intval($f->parent_id) . ')';
         }
 
         if (count($reg_props) > 0) {
@@ -3032,7 +3098,7 @@ class Registry
         ' . TBL_PREFIX . 'checkitems.field_name AS fName,
         ' . TBL_PREFIX . 'checkitems.type AS fType
         FROM ' . TBL_PREFIX . 'checkfields, ' . TBL_PREFIX . 'checkitems
-        WHERE ' . TBL_PREFIX . 'checkfields.prop_id = ' . TBL_PREFIX . 'checkitems.id AND ' . TBL_PREFIX . "checkfields.reg_id = ?", [$reg_id]
+        WHERE ' . TBL_PREFIX . 'checkfields.prop_id = ' . TBL_PREFIX . 'checkitems.id AND ' . TBL_PREFIX . 'checkfields.reg_id = ?', [$reg_id]
         );
 
         //И создаем массив существующих id полей
@@ -3055,7 +3121,7 @@ class Registry
             $rowBehaviour = strlen($f->rowBehaviour) > 0 ? $f->rowBehaviour : 'null';
             $reg_props[] = '(\'' . date('Y-m-d H:i:s') . '\', ' . $_SESSION['user_id'] . ', ' . $reg_id . ', ' . intval($f->id) . ', ' .
                 intval($f->sort) . ", '" . addslashes($regLabels['array'][$f->id][0]) . "', " .
-                (int)$f->required . ', ' . (int)$f->unique . ", '" . $rowBehaviour . "', " . intval($f->is_block) . ", " . intval($f->parent_id) . ")";
+                (int)$f->required . ', ' . (int)$f->unique . ", '" . $rowBehaviour . "', " . intval($f->is_block) . ', ' . intval($f->parent_id) . ')';
 
             //Определяем массив полей, которые надо добавить
             if (!in_array($f->id, $old_fields_ids)) {
@@ -3342,7 +3408,7 @@ class Registry
         ' . TBL_PREFIX . 'regfields.reg_id = ? ORDER BY ' . TBL_PREFIX . 'regfields.sort', [48]
         );
 
-        $task = $this->db->selectOne("tasks", ' WHERE id = ?', [$taskId]);
+        $task = $this->db->selectOne('tasks', ' WHERE id = ?', [$taskId]);
 
         $html = '<div class="item w_100"><strong>Задача:</strong></div>';
         $itemsHtml = '';
@@ -3600,8 +3666,9 @@ class Registry
     {
         $html = '';
         $gui = new \Core\Gui();
-        $logArr = $this->db->select('tasklog', " WHERE task_id = ? AND module = ? AND form_id = ? 
-        ORDER BY id DESC", [$taskId, $module, $form_id]);
+        $logArr = $this->db->select('tasklog', ' WHERE task_id = ? AND module = ? AND form_id = ? 
+        ORDER BY id DESC', [$taskId, $module, $form_id]
+        );
         if (count($logArr) > 0) {
             $html .= '<h1 class="expand_link"><span class="material-icons logIcon">web_stories</span> Журнал действий' .
                 '<span class="material-icons arrow">expand_more</span></h1>' .
@@ -3611,7 +3678,7 @@ class Registry
                     '<span class="log_fio">' . $gui->getUserFio($log->author, 'short') . '</span>' .
                     ' <span class="log_action">' . $log->action . '</span></li>';
             }
-            $html .= "</ul></div>";
+            $html .= '</ul></div>';
         }
         return $html;
     }
@@ -3622,12 +3689,12 @@ class Registry
     function insertTaskLog(?int $taskId, string $action, string $module = 'assigned', string $form_id = 'view_task')
     {
         $this->db->insert('tasklog', [
-            'author' => $_SESSION['user_id'],
-            'created_at' => date('Y-m-d H:i:s'),
-            'task_id' => $taskId,
-            'action' => $action,
-            'module' => $module,
-            'form_id' => $form_id]
+                'author' => $_SESSION['user_id'],
+                'created_at' => date('Y-m-d H:i:s'),
+                'task_id' => $taskId,
+                'action' => $action,
+                'module' => $module,
+                'form_id' => $form_id]
         );
     }
 
@@ -3719,7 +3786,7 @@ class Registry
         $slot = [];
         if ($plan_uid != '' || $plan_version != '' || $id != 0) {
             if ($plan_uid != '') {
-                $subQuery = " WHERE plan_uid = ? AND plan_version = ?";
+                $subQuery = ' WHERE plan_uid = ? AND plan_version = ?';
                 $slot = [$plan_uid, $plan_version];
             }
             if ($id != 0) {
@@ -3765,7 +3832,7 @@ class Registry
             foreach ($dataArr as $day => $item) {
                 $cache->saveToCache(implode("\n", $item), 'tasks', $userId, $day);
             }
-            $cache->saveToCache('[' . implode(", ", $dateList) . ']', 'tasks', $userId, 'dates', 'json');
+            $cache->saveToCache('[' . implode(', ', $dateList) . ']', 'tasks', $userId, 'dates', 'json');
         }
     }
 
@@ -3984,8 +4051,8 @@ class Registry
         $target_table = $table->table_name;
 
         //Получаем список полей таблицы со свойствами
-        $table_fields = $this->db->select("regprops",
-            " WHERE id IN (" . implode(', ', array_values($comparisonData)) . ")"
+        $table_fields = $this->db->select('regprops',
+            ' WHERE id IN (' . implode(', ', array_values($comparisonData)) . ')'
         );
 
         // Открываем CSV файл
@@ -4062,7 +4129,7 @@ class Registry
                                     }
                                     if ($existDataINN[$rowNumber] != '' && $existDataAddress[$rowNumber] != '') {
                                         $existINN = $this->db->selectOne($target_table,
-                                            " WHERE inn = ? AND target_address = ?",
+                                            ' WHERE inn = ? AND target_address = ?',
                                             [$existDataINN[$rowNumber], $existDataAddress[$rowNumber]]
                                         );
                                         if ($existINN != null) {

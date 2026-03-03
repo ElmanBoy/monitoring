@@ -36,11 +36,11 @@ create table if not exists cam_users
 	id serial not null
 		constraint ohs_users_pkey
 			primary key,
-	name char(100),
-	surname char(100),
-	middle_name char(100),
-	email char(100),
-	phone char(100),
+	name text,
+	surname text,
+	middle_name text,
+	email text,
+	phone text,
 	division integer,
 	roles jsonb,
 	position text,
@@ -1030,7 +1030,7 @@ create table if not exists cam_agreement
 	id serial not null
 		constraint cam_docs_pkey
 			primary key,
-	created_at timestamp default CURRENT_DATE,
+	created_at timestamp default CURRENT_TIMESTAMP,
 	author integer not null,
 	active integer default 1,
 	name text,
@@ -1062,7 +1062,7 @@ create table if not exists cam_agreement
 	action_period text,
 	action_period_text text,
 	files_ids jsonb,
-	edited_at timestamp with time zone default CURRENT_DATE
+	edited_at timestamp with time zone default CURRENT_TIMESTAMP
 );
 
 alter table cam_agreement owner to app_mobile;
@@ -1078,8 +1078,7 @@ create table if not exists cam_coordination
 	initiator integer,
 	initiation timestamp,
 	agreementlist jsonb,
-	agreementtemplate integer,
-	apply text
+	agreementtemplate integer
 );
 
 alter table cam_coordination owner to app_mobile;
@@ -1293,180 +1292,6 @@ alter table cam_institutions owner to app_mobile;
 
 create index if not exists index_foreignkey_cam_institutions_eais
 	on cam_institutions (eais_id);
-
-create table if not exists institutions
-(
-	id serial not null
-		constraint institutions_pkey
-			primary key,
-	name varchar(500) not null,
-	type varchar(100) not null,
-	region varchar(100) not null,
-	address text,
-	director varchar(200),
-	phone varchar(20),
-	email varchar(100),
-	created_at timestamp default CURRENT_TIMESTAMP
-);
-
-alter table institutions owner to app_mobile;
-
-create table if not exists inspection_types
-(
-	id serial not null
-		constraint inspection_types_pkey
-			primary key,
-	name varchar(200) not null,
-	description text,
-	frequency_months integer
-);
-
-alter table inspection_types owner to app_mobile;
-
-create table if not exists inspections
-(
-	id serial not null
-		constraint inspections_pkey
-			primary key,
-	institution_id integer
-		constraint inspections_institution_id_fkey
-			references institutions
-				on delete cascade,
-	type_id integer
-		constraint inspections_type_id_fkey
-			references inspection_types
-				on delete set null,
-	start_date date not null,
-	end_date date not null,
-	status varchar(50) not null
-		constraint inspections_status_check
-			check ((status)::text = ANY ((ARRAY['planned'::character varying, 'in_progress'::character varying, 'completed'::character varying, 'cancelled'::character varying])::text[])),
-	inspector_name varchar(200) not null,
-	result varchar(50)
-		constraint inspections_result_check
-			check ((result)::text = ANY ((ARRAY['no_violations'::character varying, 'violations_found'::character varying, 'critical_violations'::character varying])::text[])),
-	notes text,
-	created_at timestamp default CURRENT_TIMESTAMP
-);
-
-alter table inspections owner to app_mobile;
-
-create table if not exists violations
-(
-	id serial not null
-		constraint violations_pkey
-			primary key,
-	inspection_id integer
-		constraint violations_inspection_id_fkey
-			references inspections
-				on delete cascade,
-	type varchar(100) not null,
-	description text not null,
-	severity varchar(20) not null
-		constraint violations_severity_check
-			check ((severity)::text = ANY ((ARRAY['low'::character varying, 'medium'::character varying, 'high'::character varying])::text[])),
-	deadline date,
-	is_fixed boolean default false,
-	fix_description text,
-	fix_date date,
-	created_at timestamp default CURRENT_TIMESTAMP
-);
-
-alter table violations owner to app_mobile;
-
-create table if not exists report_templates
-(
-	id serial not null
-		constraint report_templates_pkey
-			primary key,
-	name varchar(200) not null,
-	description text,
-	base_query text not null,
-	created_at timestamp default CURRENT_TIMESTAMP
-);
-
-alter table report_templates owner to app_mobile;
-
-create table if not exists report_fields
-(
-	id serial not null
-		constraint report_fields_pkey
-			primary key,
-	template_id integer
-		constraint report_fields_template_id_fkey
-			references report_templates
-				on delete cascade,
-	field_name varchar(100) not null,
-	display_name varchar(100) not null,
-	is_visible boolean default true,
-	display_order integer not null,
-	data_type varchar(50) not null,
-	aggregation_type varchar(50),
-	created_at timestamp default CURRENT_TIMESTAMP
-);
-
-alter table report_fields owner to app_mobile;
-
-create table if not exists reports
-(
-	id serial not null
-		constraint reports_pkey
-			primary key,
-	template_id integer
-		constraint reports_template_id_fkey
-			references report_templates
-				on delete set null,
-	name varchar(200) not null,
-	format varchar(20) not null
-		constraint reports_format_check
-			check ((format)::text = ANY ((ARRAY['full'::character varying, 'short'::character varying])::text[])),
-	parameters jsonb,
-	created_by varchar(100) not null,
-	created_at timestamp default CURRENT_TIMESTAMP,
-	file_path varchar(500),
-	is_dashboard_visible boolean default false,
-	schedule varchar(100)
-);
-
-alter table reports owner to app_mobile;
-
-create table if not exists report_nested_rows
-(
-	id serial not null
-		constraint report_nested_rows_pkey
-			primary key,
-	report_id integer
-		constraint report_nested_rows_report_id_fkey
-			references reports
-				on delete cascade,
-	parent_id integer
-		constraint report_nested_rows_parent_id_fkey
-			references report_nested_rows
-				on delete cascade,
-	level integer not null,
-	row_data jsonb not null,
-	sort_order integer not null,
-	created_at timestamp default CURRENT_TIMESTAMP
-);
-
-alter table report_nested_rows owner to app_mobile;
-
-create table if not exists institution
-(
-	id serial not null
-		constraint institution_pkey
-			primary key,
-	name varchar(500) not null,
-	type varchar(100) not null,
-	region varchar(100) not null,
-	address text,
-	director varchar(200),
-	phone varchar(20),
-	email varchar(100),
-	created_at timestamp default CURRENT_TIMESTAMP
-);
-
-alter table institution owner to app_mobile;
 
 create table if not exists cam_api
 (

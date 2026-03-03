@@ -1,15 +1,17 @@
 <?php
+
 use Core\Db;
 use \Core\Registry;
 use Core\Gui;
 
-require_once $_SERVER['DOCUMENT_ROOT'].'/core/connect.php';
+require_once $_SERVER['DOCUMENT_ROOT'] . '/core/connect.php';
 
 $err = 0;
 $errStr = array();
 $result = false;
 $errorFields = array();
 $regId = intval($_POST['parent']);
+$separator = trim($_POST['separator']);
 $db = new Db();
 $reg = new Registry();
 $gui = new Gui();
@@ -17,70 +19,70 @@ $resultHtml = '';
 //print_r($_FILES);
 //print_r($_POST);
 
+$encodeCheck = $reg->checkEncoding($_FILES['excelFile']['tmp_name']);
 
-if(isset($_FILES['excelFile']['type'])){
+if (!$encodeCheck['result']) {
+    $err++;
+    $errStr[] = $encodeCheck['message'];
+}
 
-    // 1. Проверка расширения
-    $ext = pathinfo($_FILES['excelFile']['name'], PATHINFO_EXTENSION);
-    if (strtolower($ext) !== 'xlsx') {
-        $err++;
-        $errStr[] = 'Неверный формат файла.';
-    }
+if (isset($_FILES['excelFile']['tmp_name']) && is_uploaded_file($_FILES['excelFile']['tmp_name'])) {
 
-    if($reg->isXLSX( $_FILES['excelFile']['tmp_name']) && $err == 0){
+    // Проверяем MIME через содержимое файла, не доверяем браузеру
+    $finfo = finfo_open(FILEINFO_MIME_TYPE);
+    $file_type = finfo_file($finfo, $_FILES['excelFile']['tmp_name']);
+    finfo_close($finfo);
+
+    if ($file_type == 'text/csv') {
         try {
-            $result = $reg->importPlan($_FILES['excelFile']['tmp_name'], $_POST['table_begin'], $_POST['plan_name']);
-            //$reg->comparisonImportCsv($_FILES['excelFile']['tmp_name'], $regId);
+            $result = $reg->comparisonImportCsv($_FILES['excelFile']['tmp_name'], $regId, $separator);
             $errStr = $result;
+            $resultHtml = '<input type="hidden" name="fileName" value="' . $result['fileName'] . '">';
             //Нераспознанные
-            if(is_array($result['unmatched']) && count($result['unmatched']) > 0){
-                $resultHtml = '<div class="item w_100"><strong>Сопоставьте нераспознанные учреждения:</strong></div>';
+            if (count($result['unmatchedFields']) > 0) {
+                $resultHtml .= '<div class="item w_100"><strong>Сопоставьте нераспознанные поля:</strong></div>';
 
-                $fields = $db->getRegistry("institutions", '', [], ['name', 'id']);
+                $fields = $db->getRegistry('regfields', ' WHERE reg_id = ? ', [$regId], ['label', 'prop_id']);
 
                 $fieldsSelect = '<option value="">&nbsp;</option>';
-                foreach($fields['result'] as $f){
+                foreach ($fields['result'] as $f) {
                     //В селектах не должно быть уже распознанных полей
-                    if(!array_search(trim($f->label), array_column($result['unmatched'], 'name'))) {
-                        $fieldsSelect .= '<option value="' . $f->id . '">' . $f->name . '</option>';
+                    if (!array_search(trim($f->label), array_column($result['matchedFields'], 'label'))) {
+                        $fieldsSelect .= '<option value="' . $f->prop_id . '">' . $f->label . '</option>';
                     }
                 }
 
-                foreach($result['unmatched'] as $i => $h){
-                    $resultHtml .= '<div class="item w_50"><div class="el_data"> №'.$h['number'].'. '.trim($h['name']).'</div>'.
-                        '<input type="hidden" name="institution['.$h['number'].']" value="'.$h['name'].'"> </div>'.
-                        '<div class="item w_50"><div class="el_data">'.
-                        '<select data-label="Учреждение в реестре" name="institution['.$h['number'].']">'.$fieldsSelect.'</select>'.
+                foreach ($result['unmatchedFields'] as $i => $h) {
+                    $resultHtml .= '<div class="item w_50"><div class="el_data"> ' . trim($h) . '</div>' .
+                        '<input type="hidden" name="file_fields[' . $i . ']" value="' . $h . '"> </div>' .
+                        '<div class="item w_50"><div class="el_data">' .
+                        '<select data-label="Поле в справочнике" name="table_fields[' . $i . ']">' . $fieldsSelect . '</select>' .
                         '</div></div>';
                 }
-                $resultHtml .= '<div class="item w_100"><i>Несопоставленные учреждения не будут импортированы.</i></div>';
-            }else{
-                $resultHtml = '<div class="item w_50"><div class="el_data">Все учреждения распознаны. Можно импортировать.</div></div>';
+                $resultHtml .= '<div class="item w_100"><i>Несопоставленные поля не будут импортированы.</i></div>';
+            } else {
+                $resultHtml .= '<div class="item w_50"><div class="el_data">Все поля распознаны. Можно импортировать.</div></div>';
             }
             //Распознанные
-            if(is_array($result['matched']) && count($result['matched']) > 0){
-                foreach($result['matched'] as $i => $h){
-                    $resultHtml .= '<input type="hidden" name="institution['.$h['number'].']" value="'.$h['id'].'">'.
-                        '<input type="hidden" name="check_periods['.$h['number'].']" value="'.$h['check_periods'].'">'.
-                        '<input type="hidden" name="periods_hidden['.$h['number'].']" value=\''.json_encode($h['periods_hidden']).'\'>'.
-                        '<input type="hidden" name="periods['.$h['number'].']" value="'.$h['periods'].'">';
+            if (count($result['matchedFields']) > 0) {
+                foreach ($result['matchedFields'] as $i => $h) {
+                    $resultHtml .= '<input type="hidden" name="file_fields[' . $i . ']" value="' . trim($h['label']) . '">' .
+                        '<input type="hidden" name="table_fields[' . $i . ']" value="' . $h['prop_id'] . '">';
                 }
             }
-            $resultHtml .= '<input type="hidden" name="full_name" value="'.htmlspecialchars($result['plan_name']).'">'.
-                '<input type="hidden" name="plan_year" value="'.intval($result['year']).'">';
         } catch (\RedBeanPHP\RedException\SQL $e) {
             $err++;
             $errStr[] = $e->getMessage();
         }
-    }else{
+    } else {
         $err++;
-        $errStr[] = 'Неподдерживаемый формат файла'.$_FILES['excelFile']['tmp_name'];
+        $errStr[] = 'Неподдерживаемый формат файла';
     }
 }
 
 echo json_encode(array(
-    'data' => $result,
     'result' => $err == 0,
     'resultHtml' => $resultHtml,
     'resultText' => $errStr,
-    'errorFields' => ['file']));
+    'errorFields' => ['file'])
+);

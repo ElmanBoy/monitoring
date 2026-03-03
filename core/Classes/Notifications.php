@@ -88,11 +88,11 @@ class Notifications
         $countUnseen = 0;
         $countTitle = '';
 
-        $records = $this->db->select("notifications", " WHERE user_id = $user_id ORDER BY created_at DESC");
+        $records = $this->db->select('notifications', " WHERE user_id = $user_id ORDER BY created_at DESC");
 
         foreach ($records as $record) {
             $out[] = '<div class="notificationItem' . ($record->viewed == '1' ? ' viewed' : '') . '" data-id="' .
-                $record->task_id . '" data-path="'.$record->path.'">' .
+                $record->task_id . '" data-path="' . $record->path . '">' .
                 '<div class="deleteNotification" data-id="' . $record->id . '"><span class="material-icons">close</span></div>' .
                 '<span class="notificationDate">' . $this->date->dateToString($record->created_at) . '</span><br> ' .
                 $record->message . '</div>';
@@ -130,7 +130,7 @@ class Notifications
             'viewed' => 0
         ];
         try {
-            $this->db->insert("notifications", $record);
+            $this->db->insert('notifications', $record);
             $this->deleteOldRecords($user_id);
         } catch (RedException $e) {
             echo $e->getMessage();
@@ -139,12 +139,12 @@ class Notifications
 
     public function setRecordViewed(int $id)
     {
-        $this->db->update("notifications", $id, ['viewed' => 1]);
+        $this->db->update('notifications', $id, ['viewed' => 1]);
     }
 
     public function deleteOldRecords(int $user_id)
     {
-        $this->rb::exec("DELETE FROM " . TBL_PREFIX . "notifications WHERE user_id = '$user_id' AND created_at < NOW() - INTERVAL '1 month'");
+        $this->rb::exec('DELETE FROM ' . TBL_PREFIX . "notifications WHERE user_id = '$user_id' AND created_at < NOW() - INTERVAL '1 month'");
     }
 
     public function deleteRecordById(int $user_id, int $record_id)
@@ -159,7 +159,7 @@ class Notifications
 
     public function removeRemind(int $remind_id)
     {
-        $task = $this->db->selectOne('reminders', " WHERE id = ?", [$remind_id]);
+        $task = $this->db->selectOne('reminders', ' WHERE id = ?', [$remind_id]);
         $task_id = $task->task_id;
         $this->db->update('checkstaff', $task_id, ['allowremind' => 0]);
         $this->db->delete('reminders', [$remind_id]);
@@ -196,7 +196,7 @@ class Notifications
             'url' => $url,
             'caption' => $caption
         ];
-        $exist = $this->db->selectOne('reminders', " WHERE task_id = ? AND employee = ?", [$taskId, $executorId]);
+        $exist = $this->db->selectOne('reminders', ' WHERE task_id = ? AND employee = ?', [$taskId, $executorId]);
         if ($exist->id) {
             $this->db->update('reminders', $exist->id, $rem);
         } else {
@@ -210,19 +210,19 @@ class Notifications
     public function sendingRemind(int $remindId): bool
     {
         $result = false;
-        $remind = $this->db->selectOne('reminders', " WHERE id = ?", [$remindId]);
+        $remind = $this->db->selectOne('reminders', ' WHERE id = ?', [$remindId]);
         $user = $this->db->selectOne('users', ' WHERE id = ?', [$remind->employee]);
         $executorEmail = $remind->email;
         $letterText = $remind->letter;
         $taskId = $remind->task_id;
         $clickUrl = $remind->url;//'https://monitoring.msr.mosreg.ru/assigned/?task_id=' . $taskId;
         $remindComment = stripslashes(htmlspecialchars($remind->comment));
-        $caption = '⏰ '.$remind->caption;
+        $caption = '⏰ ' . $remind->caption;
         $executorId = $user->id;
         $executorFIO = trim($user->surname) . ' ' . trim($user->name) . ' ' . trim($user->middle_name);
         $executorMessage = $letterText .
             (strlen($remindComment) > 0 ? '<p><strong>Комментарий: </strong>' . $remindComment . '</p>' : '') .
-            '<p>&nbsp;</p><p><a href="'.$clickUrl.'">Просмотреть задачу</a></p>';
+            '<p>&nbsp;</p><p><a href="' . $clickUrl . '">Просмотреть задачу</a></p>';
 
         $caption = strip_tags(str_replace(['<br>', '</br>'], "\n", $caption));
         $pushMessage = $remind->message;
@@ -239,14 +239,14 @@ class Notifications
                     'task_id' => $taskId,
                     'text' => $letterText .
                         (strlen($remindComment) > 0 ? '<p><strong>Комментарий: </strong>' . $remindComment . '</p>' : '') .
-                        '<p>&nbsp;</p><p><a href="'.$clickUrl.'">Просмотреть задачу</a></p>'
+                        '<p>&nbsp;</p><p><a href="' . $clickUrl . '">Просмотреть задачу</a></p>'
                 ]
             );
             $result = $this->mail->send($executorEmail, $caption,
                 $letter_body, 'noreply@mosreg.ru', 'html', 'smtp', '', 'noreply@mosreg.ru'
             );
             //if ($result) {
-               $this->removeRemind($remindId);
+            $this->removeRemind($remindId);
             //}
 
         }
@@ -283,14 +283,14 @@ class Notifications
             $ins = $this->db->getRegistry('institutions', ' WHERE id = ' . $insId);
 
 
-            if($task->object_type == 0){
+            if ($task->object_type == 0) {
                 $ins = $this->db->getRegistry('persons', '', [], ['surname', 'first_name', 'middle_name', 'birth']);
-                $object = stripslashes(htmlspecialchars($ins['array'][$insId][0])).' '.
-                    stripslashes(htmlspecialchars($ins['array'][$insId][1])).' '.
-                    stripslashes(htmlspecialchars($ins['array'][$insId][2])).' '.
+                $object = stripslashes(htmlspecialchars($ins['array'][$insId][0])) . ' ' .
+                    stripslashes(htmlspecialchars($ins['array'][$insId][1])) . ' ' .
+                    stripslashes(htmlspecialchars($ins['array'][$insId][2])) . ' ' .
                     (strlen(trim($ins['array'][$insId][3])) > 0 ?
                         $this->date->correctDateFormatFromMysql($ins['array'][$insId][3]) : '');
-            }else{
+            } else {
                 $object = stripslashes(htmlspecialchars($ins['array'][$insId][0]));
             }
 
@@ -299,7 +299,7 @@ class Notifications
             $dateEnd = $this->date->correctDateFormatFromMysql($dateArr[1]);
             $dates = 'с ' . $this->date->dateToString($dateStart) . ' по ' . $this->date->dateToString($dateEnd);
 
-            $taskInfo = $this->db->selectOne('tasks', "WHERE id = ?", [$task->task_id]);
+            $taskInfo = $this->db->selectOne('tasks', 'WHERE id = ?', [$task->task_id]);
             //$sheet = $sheets['array'][$taskInfo->sheet];
             $inspectArr = [];
             $subjectArr = json_decode($taskInfo->subject);
@@ -394,7 +394,7 @@ class Notifications
 
             $caption = 'Вы включены в список согласования';
             $letterText =
-                '<p>Ожидается '.$agreementAction.' для документа «' . $documentName . '»</p>' ;
+                '<p>Ожидается ' . $agreementAction . ' для документа «' . $documentName . '»</p>';
 
 
             if ($allowRemind) {
@@ -457,7 +457,7 @@ class Notifications
 
             $caption = 'Подписан приказ о проведении проверки';
             $letterText =
-                '<p>Вы назначены руководителем проверки в приказе «' . $documentName . '»</p>' ;
+                '<p>Вы назначены руководителем проверки в приказе «' . $documentName . '»</p>';
 
 
             if ($allowRemind) {
@@ -467,7 +467,7 @@ class Notifications
                     $signerId,
                     date('Y-m-d H:i:s'),
                     strip_tags($letterText),
-                    'https://monitoring.msr.mosreg.ru/documents?module=documents&mode=planPdf&open_dialog={"docId":'.$documentId.'}',
+                    'https://monitoring.msr.mosreg.ru/documents?module=documents&mode=planPdf&open_dialog={"docId":' . $documentId . '}',
                     $caption,
                     $remindComment,
                     $executorEmail,
@@ -488,7 +488,7 @@ class Notifications
                     'greeting' => 'Здравствуйте, ' . $executorFIO . '!',
                     'caption' => $caption,
                     'task_id' => $documentId,
-                    'text' => $letterText . '<p>&nbsp;</p><p><a href=\'https://monitoring.msr.mosreg.ru/documents?module=documents&mode=planPdf&open_dialog={"docId":'.$documentId.'}\'>Посмотреть приказ</a></p>'
+                    'text' => $letterText . '<p>&nbsp;</p><p><a href=\'https://monitoring.msr.mosreg.ru/documents?module=documents&mode=planPdf&open_dialog={"docId":' . $documentId . '}\'>Посмотреть приказ</a></p>'
                 ]
             );
             return $this->mail->send($executorEmail, $caption,
@@ -521,7 +521,7 @@ class Notifications
 
             $caption = 'Вам поступил акт проверки';
             $letterText =
-                '<p>Ожидается ваше согласие или возражения по документу «' . $documentName . '»</p>' ;
+                '<p>Ожидается ваше согласие или возражения по документу «' . $documentName . '»</p>';
 
 
             if ($allowRemind) {
@@ -595,30 +595,30 @@ class Notifications
     {
         require_once $_SERVER['DOCUMENT_ROOT'] . '/web-push/config.php';
 
-        $subscriptions = $this->db->select('subscriptions', " WHERE user_id = ?", [$userId]);
+        $subscriptions = $this->db->select('subscriptions', ' WHERE user_id = ?', [$userId]);
 
         if (empty($subscriptions)) return false;
 
         $webPush = new WebPush([
-                'VAPID' => [
-                    'subject' => VAPID_SUBJECT,
-                    'publicKey' => VAPID_PUBLIC_KEY,
-                    'privateKey' => VAPID_PRIVATE_KEY
-                ]
-            ], [
-                //'TTL' => 2419200,
-                //'batchSize' => 200,
-                //'urgency' => 'high',
-                'timeout' => 60, // Увеличиваем таймаут до 60 секунд
-                'proxy' => 'http://10.12.127.11:3128',
-                'https_proxy' => 'http://10.12.127.11:3128',
-                'curlOptions' => [
-                    CURLOPT_TIMEOUT => 60,
-                    CURLOPT_CONNECTTIMEOUT => 60,
-                    CURLOPT_PROXY => '10.12.127.11:3128',
-                    //'https_proxy' => 'http://10.12.127.11:3128',
-                ]
-        ]);
+            'VAPID' => [
+                'subject' => VAPID_SUBJECT,
+                'publicKey' => VAPID_PUBLIC_KEY,
+                'privateKey' => VAPID_PRIVATE_KEY
+            ]
+        ], [
+            //'TTL' => 2419200,
+            //'batchSize' => 200,
+            //'urgency' => 'high',
+            'timeout' => 60,
+            'proxy' => PROXY_URL,
+            'https_proxy' => PROXY_URL,
+            'curlOptions' => [
+                CURLOPT_TIMEOUT => 60,
+                CURLOPT_CONNECTTIMEOUT => 60,
+                CURLOPT_PROXY => PROXY_URL,
+            ]
+        ]
+        );
 
         $payload = json_encode([
                 'title' => $title,
@@ -644,7 +644,8 @@ class Notifications
                 $webPush->flush();*/
 
                 $result = $webPush->sendOneNotification($subscription, $payload/*,
-                    ['TTL' => 2419200, 'urgency' => 'normal', 'topic' => 'notifications']*/);
+                    ['TTL' => 2419200, 'urgency' => 'normal', 'topic' => 'notifications']*/
+                );
 //echo '<pre>';print_r($result);
                 if (!$result->isSuccess()) {
                     // Удаляем просроченные подписки
@@ -692,7 +693,7 @@ class Notifications
                     $signerId,
                     $remindDateTime ?? date('Y-m-d H:i:s', strtotime('+1 day')),
                     strip_tags($letterText),
-                    'https://monitoring.msr.mosreg.ru/documents?module=documents&mode=planPdf&open_dialog={"docId":'.$documentId.'}',
+                    'https://monitoring.msr.mosreg.ru/documents?module=documents&mode=planPdf&open_dialog={"docId":' . $documentId . '}',
                     $caption,
                     $remindCommentText,
                     $executorEmail,
@@ -716,7 +717,7 @@ class Notifications
                     'task_id' => $documentId,
                     'text' => $letterText .
                         '<p>&nbsp;</p>' .
-                        '<p><a href="https://monitoring.msr.mosreg.ru/documents?module=documents&mode=planPdf&open_dialog={\'docId\':'.$documentId.'}">' .
+                        '<p><a href="https://monitoring.msr.mosreg.ru/documents?module=documents&mode=planPdf&open_dialog={\'docId\':' . $documentId . '}">' .
                         'Открыть лист согласования</a></p>'
                 ]
             );

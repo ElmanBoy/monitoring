@@ -32,7 +32,7 @@ require_once $_SERVER['DOCUMENT_ROOT'] . '/core/connect.php';
 
         // Если некорректные данные
         if (!is_array($data)) {
-            print_r($data);
+            error_log('buildAgreementStatus: некорректный JSON для документа, agreementlist: ' . substr($agreementListJson, 0, 200));
             return [
                 'icon_class' => 'fa-question-circle',
                 'color' => 'var(--color_02)', // серый
@@ -673,16 +673,13 @@ $regs = $gui->getTableData($table->table_name);
     <div class="nav_01">
         <?
         echo $gui->buildTopNav([
-            'title' => 'Документы',
-            //'registryList' => '',
-            'renew' => 'Сбросить все фильтры',
-            'create' => 'Создать приказ',
-            //'clone' => 'Копия записи',
-            //'delete' => 'Удалить выделенные',
+            'title'        => 'Документы',
+            'renew'        => 'Сбросить все фильтры',
+            'create'       => 'Создать приказ',
+            'archive'      => 'Переместить в архив',
             'filter_panel' => 'Открыть панель фильтров',
-            'logout' => 'Выйти'
-        ]
-        );
+            'logout'       => 'Выйти'
+        ]);
         ?>
 
         <? /*div class="button icon text" title="Журнал работ">
@@ -694,6 +691,15 @@ $regs = $gui->getTableData($table->table_name);
 <div class="scroll_wrap">
     <form method="post" id="registry_items_delete" class="ajaxFrm">
         <input type="hidden" name="registry_id" id="registry_id" value="<?= $regId ?>">
+    </form>
+    <form method="post" id="registry_items_archive" class="ajaxFrm">
+        <input type="hidden" name="registry_id" value="<?= $regId ?>">
+    </form>
+    <form method="post" id="registry_items_restore" class="ajaxFrm">
+        <input type="hidden" name="registry_id" value="<?= $regId ?>">
+    </form>
+    <form method="post" id="registry_items_delete_real" class="ajaxFrm">
+        <input type="hidden" name="registry_id" value="<?= $regId ?>">
         <ul class='tab-pane'>
             <?php
             foreach ($documentacial['array'] as $index => $name){
@@ -864,7 +870,7 @@ $regs = $gui->getTableData($table->table_name);
             ?>
             </tbody>
         </table>
-    </form>
+    </form><!-- /registry_items_delete_real -->
     <?
     echo $gui->paging();
     ?>
