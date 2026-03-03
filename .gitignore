@@ -1,7 +1,6 @@
 /IGNORE/
 # Секреты — никогда не в репозиторий
 .env
-core/connect.php
 
 # Кэш и логи
 /cache/
