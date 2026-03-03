@@ -37,11 +37,9 @@ if($err == 0) {
         'comment' => $_POST['comment']
     );
     $result = $db->update('roles', intval($_POST['role_id']), $role);
-    if($result) {
+    if($result['result']) {
         $message = 'Роль успешно изменена.<script>el_app.reloadMainContent();el_app.dialog_close("role_edit");</script>';
-    }else{
-        $message = '<strong>Ошибка:</strong>&nbsp; Не удалось изменить роль.';
-    }
+    } else { $message = '<strong>Ошибка:</strong>&nbsp; ' . $result['resultText']; }
 }else{
     $message = '<strong>Ошибка:</strong><br> '.implode('<br>', $errStr);
 }

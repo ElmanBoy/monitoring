@@ -45,7 +45,7 @@ if ($auth->isLogin()) {
                 }
                 $data['author'] = $_SESSION['user_id'];
                 $data['edited_at'] = date('Y-m-d H:i:s');
-                if($db->update('agreement', $doc_id, $data)){
+                if($db->update('agreement', $doc_id, $data)['result']){
                     $errMsg[] = 'Файлы успешно сохранены!';
                     $reg->insertTaskLog($doc_id, 'Приложение файлов &laquo;'.
                         implode('&raquo;, &laquo;', $_POST['custom_names']).'&raquo;',

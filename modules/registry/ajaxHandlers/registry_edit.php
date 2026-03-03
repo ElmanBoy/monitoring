@@ -76,11 +76,9 @@ if ($err == 0) {
         ];
         $result = $db->update('registry', $regId, $registry);
 
-        if ($result) {
+        if ($result['result']) {
             $message = 'Справочник успешно изменён.<script>el_app.reloadMainContent();el_app.dialog_close("registry_edit");</script>';
-        } else {
-            $message = '<strong>Ошибка:</strong>&nbsp; Не удалось изменить справочник.';
-        }
+        } else { $message = '<strong>Ошибка:</strong>&nbsp; ' . $result['resultText']; }
     } catch (\RedBeanPHP\RedException $e) {
         $result = false;
         $message = $e->getMessage();

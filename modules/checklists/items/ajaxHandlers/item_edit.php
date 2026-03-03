@@ -101,11 +101,9 @@ if($err == 0) {
         'block_id' => intval($_POST['block_id'])
     );
     $result = $db->update('checkitems', intval($_POST['reg_id']), $registry);
-    if($result) {
+    if($result['result']) {
         $message = 'Поле успешно изменено.<script>el_app.reloadMainContent();el_app.dialog_close("items_edit");</script>';
-    }else{
-        $message = '<strong>Ошибка:</strong>&nbsp; Не удалось изменить поле.';
-    }
+    } else { $message = '<strong>Ошибка:</strong>&nbsp; ' . $result['resultText']; }
     $db->transactionClose(intval($_POST['trans_id']));
 }else{
     $message = '<strong>Ошибка:</strong><br> '.implode('<br>', $errStr);

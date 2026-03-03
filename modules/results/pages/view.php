@@ -5,9 +5,9 @@ require_once $_SERVER['DOCUMENT_ROOT'] . '/core/connect.php';
 $reportId = $_GET['id'] ?? 0;
 
 // Загружаем отчет и связанные данные через RedBean
-$report = R::load('reports', $reportId);
+$report = R::load('reports', 2);
 if (!$report->id) {
-    die('Отчет не найден');
+    echo('Отчет не найден');
 }
 
 // Загружаем шаблон отчета
@@ -38,7 +38,7 @@ switch ($report->template_id) {
                 (SELECT COUNT(*) FROM violation v WHERE v.inspection_id = ins.id) AS violations_count
             FROM inspections ins
             JOIN institutions i ON ins.institution_id = i.id
-            LEFT JOIN inspection_type it ON ins.type_id = it.id
+            LEFT JOIN inspection_types it ON ins.type_id = it.id
             ORDER BY ins.start_date DESC
         ");
         break;

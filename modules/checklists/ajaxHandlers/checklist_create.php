@@ -76,7 +76,7 @@ if($err == 0) {
     }
 
 }else{
-    $message = '<strong>Ошибка:</strong><br> '.implode('<br>', $errStr);
+    $message = '<strong>Ошибка:</strong>&nbsp; '.implode('<br>', $errStr);
 }
 echo json_encode(array(
     'result' => $result,

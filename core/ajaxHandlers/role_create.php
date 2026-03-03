@@ -43,7 +43,7 @@ if($err == 0) {
     $result = true;
     $message = 'Роль успешно создана.<script>el_app.setMainContent("/roles");el_app.dialog_close("role_create");</script>';
 }else{
-    $message = '<strong>Ошибка:</strong><br> '.implode('<br>', $errStr);
+    $message = '<strong>Ошибка:</strong>&nbsp; '.implode('<br>', $errStr);
 }
 echo json_encode(array(
     'result' => $result,

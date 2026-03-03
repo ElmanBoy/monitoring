@@ -12,9 +12,12 @@ if(!is_array($_POST['role_id']) || count($_POST['role_id']) == 0){
 
 if($err == 0){
     $ids = $_POST['role_id'];
-    R::trashBatch('ohs_roles', $ids);
-    $result = true;
-    $message = 'Роли успешно удалены.<script>el_app.setMainContent(\'/roles\');</script>';
+    $db = new \Core\Db();
+    $response = $db->delete('roles', $ids);
+    $result  = $response['result'];
+    $message = $result
+        ? 'Роли успешно удалены.<script>el_app.setMainContent(\'/roles\');</script>'
+        : '<strong>Ошибка:</strong><br> ' . $response['resultText'];
 }else{
     $message = '<strong>Ошибка:</strong><br> '.implode('<br>', $errStr);
 }

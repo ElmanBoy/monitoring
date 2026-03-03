@@ -118,11 +118,9 @@ if ($err == 0) {
     ];
 
     $result = $db->update('regprops', $regId, $registry);
-    if ($result) {
+    if ($result['result']) {
         $message = 'Поле успешно изменено.<script>el_app.reloadMainContent();el_app.dialog_close("registry_edit");</script>';
-    } else {
-        $message = '<strong>Ошибка:</strong>&nbsp; Не удалось изменить поле.';
-    }
+    } else { $message = '<strong>Ошибка:</strong>&nbsp; ' . $result['resultText']; }
     $db->transactionClose(intval($_POST['trans_id']));
 } else {
     $message = '<strong>Ошибка:</strong><br> ' . implode('<br>', $errStr);

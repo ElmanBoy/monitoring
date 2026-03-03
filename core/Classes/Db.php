@@ -93,10 +93,52 @@ class Db
      *
      * @param string $tableName Имя таблицы базы данных
      * @param array $ids Массив ID удаляемых строк
+     * @return array ['result' => bool, 'resultText' => string]
      */
-    public function delete(string $tableName, array $ids)
+    public function delete(string $tableName, array $ids): array
     {
-        $this->db::trashBatch(TBL_PREFIX . $tableName, $ids);
+        try {
+            $this->db::trashBatch(TBL_PREFIX . $tableName, $ids);
+            return ['result' => true, 'resultText' => ''];
+        } catch (\Exception $e) {
+            return $this->handleDbException($e);
+        }
+    }
+
+    /**
+     * Разбирает исключение БД и возвращает понятное сообщение об ошибке.
+     *
+     * @param \Exception $e
+     * @return array ['result' => false, 'resultText' => string]
+     */
+    public function handleDbException(\Exception $e): array
+    {
+        $sqlState = $e->getCode();
+
+        switch ($sqlState) {
+            case '23503':
+                $message = 'Невозможно удалить запись: на неё ссылаются другие данные в системе.';
+                break;
+            case '23505':
+                $message = 'Запись с такими данными уже существует.';
+                break;
+            case '23514':
+                $message = 'Данные не прошли проверку ограничений.';
+                break;
+            case '23000':
+                $message = 'Нарушение целостности данных.';
+                break;
+            default:
+                $message = APP_ENV === 'development'
+                    ? 'Ошибка базы данных (' . $sqlState . '): ' . $e->getMessage()
+                    : 'Ошибка при работе с базой данных.';
+        }
+
+        if (APP_ENV === 'development') {
+            error_log('[DB ERROR] SQLSTATE=' . $sqlState . ' | ' . $e->getMessage());
+        }
+
+        return ['result' => false, 'resultText' => $message];
     }
 
     /**
@@ -146,11 +188,10 @@ class Db
      *
      * @param string $tableName Имя таблицы базы данных
      * @param array $values Ассоциативный массив вставляемых данных. Формат массива: "имя поля" => "значение"
-     * @return bool TRUE в случае успешной записи, иначе FALSE.
-     *              В случае успешной вставки записи в поле last_insert_id класса Db вносится ID новой записи
-     * @throws \RedBeanPHP\RedException
+     * @return array ['result' => bool, 'resultText' => string, 'id' => int]
+     *               В случае успешной вставки last_insert_id содержит ID новой записи
      */
-    public function insert(string $tableName, array $values): bool
+    public function insert(string $tableName, array $values): array
     {
         $this->db::debug(1, 3);
 
@@ -160,8 +201,8 @@ class Db
 
         $this->db::ext('xdispense', function ($type) {
             return $this->db::getRedBean()->dispense($type);
-        }
-        );
+        });
+
         $result = $this->db::xdispense(TBL_PREFIX . $tableName);
 
         foreach ($values as $field => $value) {
@@ -171,19 +212,15 @@ class Db
         }
 
         try {
-            //if(isset())
-            //$this->db->transaction( function() use ($result) {
             $this->db->store($result);
-            // } );
             if (isset($_SESSION['registry'][$tableName])) {
                 unset($_SESSION['registry'][$tableName]);
             }
             file_put_contents(ROOT . '/logs/pg_log.txt', $logs->grep('INSERT'));
-            $this->last_insert_id = $result->id;//$this->db->getInsertID();
-            return true;
-        } catch (SQL $e) {
-            echo 'Ошибка: ' . $e->getMessage();
-            return false;
+            $this->last_insert_id = $result->id;
+            return ['result' => true, 'resultText' => '', 'id' => $result->id];
+        } catch (\Exception $e) {
+            return $this->handleDbException($e);
         }
     }
 
@@ -233,16 +270,19 @@ class Db
     }
 
     /**
-     * @throws \RedBeanPHP\RedException
-     * @throws \Exception
+     * Метод обновления записи в базе данных.
+     *
+     * @param string $tableName Имя таблицы базы данных
+     * @param int $update_id ID обновляемой записи
+     * @param array $values Ассоциативный массив обновляемых данных
+     * @return array ['result' => bool, 'resultText' => string]
      */
-    public function update(string $tableName, int $update_id, array $values): bool
+    public function update(string $tableName, int $update_id, array $values): array
     {
         $this->db::begin();
         $this->db::ext('xdispense', function ($type) {
             return $this->db::getRedBean()->dispense($type);
-        }
-        );
+        });
 
         $result = $this->db::load(TBL_PREFIX . $tableName, intval($update_id));
 
@@ -253,17 +293,15 @@ class Db
         }
 
         try {
-
             $this->db::store($result);
             $this->db::commit();
             if (isset($_SESSION['registry'][$tableName])) {
                 unset($_SESSION['registry'][$tableName]);
             }
-            return true;
-        } catch (SQL $e) {
+            return ['result' => true, 'resultText' => ''];
+        } catch (\Exception $e) {
             $this->db::rollback();
-            echo $e->getMessage();
-            return false;
+            return $this->handleDbException($e);
         }
     }
 

@@ -23,12 +23,14 @@ $updateArr = [
     'act_agree' => $userId
 ];
 $result = $db->update('agreement', $docId, $updateArr);
-if($result){
+if($result['result']){
     $message = 'С актом ознакомлены.';
+} else {
+    $message = '<strong>Ошибка:</strong>&nbsp; ' . $result['resultText'];
 }
 
 echo json_encode(array(
-    'result' => $result,
+    'result' => $result['result'],
     'resultText' => $message.'<script>el_app.reloadMainContent();</script>',
     'errorFields' => []));
 

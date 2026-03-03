@@ -73,12 +73,10 @@ if ($err == 0) {
         $result = $db->update('registry', intval($_POST['reg_id']), $registry);
 
 
-        $result = true;
-        if ($result) {
+        // result already set by $db->update()
+        if ($result['result']) {
             $message = 'Справочник успешно изменён.<script>el_app.reloadMainContent();el_app.dialog_close("registry_edit");</script>';
-        } else {
-            $message = '<strong>Ошибка:</strong>&nbsp; Не удалось изменить справочник.';
-        }
+        } else { $message = '<strong>Ошибка:</strong>&nbsp; ' . $result['resultText']; }
     } catch (\RedBeanPHP\RedException $e) {
         $result = false;
         $message = $e->getMessage();
@@ -88,7 +86,7 @@ if ($err == 0) {
     $message = '<strong>Ошибка:</strong>&nbsp; ' . implode('<br>', $errStr);
 }
 echo json_encode(array(
-    'result' => $result,
+    'result' => (is_array($result) ? $result['result'] : $result),
     'resultText' => $message,
     'errorFields' => $errorFields)
 );

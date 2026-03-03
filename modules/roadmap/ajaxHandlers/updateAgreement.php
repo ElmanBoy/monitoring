@@ -24,8 +24,10 @@ $updateArr = [
     'agreementlist' => json_encode($_POST['agreementList'])
 ];
 $result = $db->update('agreement', $docId, $updateArr);
-if($result){
-    $message = 'Изменеия в документе сохранены.';
+if($result['result']){
+    $message = 'Изменения в документе сохранены.';
+} else {
+    $message = '<strong>Ошибка:</strong>&nbsp; ' . $result['resultText'];
 }
 
 $check = $db->selectOne('agreement', ' WHERE id = ?', [$docId]);
@@ -61,7 +63,7 @@ if($results == $signers){
 }
 
 echo json_encode(array(
-    'result' => $result,
+    'result' => $result['result'],
     'resultText' => $message.'<script>el_app.reloadMainContent();</script>',
     'errorFields' => []));
 

@@ -44,8 +44,12 @@ if (isset($_POST['ajax']) && intval($_POST['ajax']) == 1) {
     if (!$isPublicAction) {
         // Проверяем авторизацию, X-Requested-With и CSRF-токен одним методом
         if (!$auth->checkAjax()) {
-            http_response_code(403);
-            echo json_encode(['result' => false, 'resultText' => 'Сессия устарела или неверный токен запроса.']);
+            /*http_response_code(403);
+           cho json_encode([
+               'result' => false,
+               'resultText' => 'Сессия устарела или неверный токен запроса.'.
+                   '<script>alert("Ваша сессия устарела.");document.location.href = "/"</script>']);*/
+            echo '<script>alert("Ваша сессия устарела.");document.location.href = "/"</script>';
             die();
         }
     }
