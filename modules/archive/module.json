@@ -1,0 +1,13 @@
+{
+  "id": 25,
+  "name": "Архив",
+  "description": "Просмотр и восстановление архивных документов",
+  "minimumCoreVersion": "0.1",
+  "title": "Архив документов",
+  "version": "0.1",
+  "author": "Боязитов Э.М.",
+  "path": "archive",
+  "icon": "inventory_2",
+  "number": 2,
+  "parentItem": "settings"
+}
