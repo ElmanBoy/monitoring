@@ -71,8 +71,8 @@ if ($auth->isLogin()) {
                     foreach ($orders as $order) {
 
                         $tasks = $db->select('checkstaff', ' WHERE order_id = ?', [$order->id]);
+                        $tasks_info = [];
                         if (count($tasks) > 0) {
-                            $tasks_info = [];
                             foreach ($tasks as $task) {
                                 $tasks_info[$task->user] = [
                                         'is_head' => $task->is_head,

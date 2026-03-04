@@ -26,6 +26,7 @@ if (isset($_POST['params']['taskId'])) {
 if (isset($_POST['params']['insId'])) {
     $insStr = $_POST['params']['insId'];
 }
+$orderId = 0;
 if (isset($_POST['params']['orderId'])) {
     $orderId = intval($_POST['params']['orderId']);
 }
@@ -54,14 +55,13 @@ if ($auth->isLogin()) {
     } else {
         //Есть номер задачи - Редактирование существующей задачи
         $taskArr = explode('_', $taskStr);
-        //$plan_uid = $taskArr[0];
+        $plan_uid = $taskArr[0];
         $taskId = intval($taskArr[1]);
-        $current_task = $db->select('checkstaff', " WHERE id = ?", [$taskId]);
-        $insId = intval($current_task[$taskId]->institution);
-        $unitId = intval($current_task[$taskId]->unit);
-        //$plan_uid = $current_task[$taskId]->check_uid;
+        $current_task = $db->selectOne('checkstaff', " WHERE id = ?", [$taskId]);
+        $insId = intval($current_task->institution);
+        $unitId = intval($current_task->unit);
+        $plan_uid = $current_task->check_uid;
         $exist_task = $db->select('checkstaff', " WHERE check_uid = '$plan_uid' AND institution = " . $insId);
-        //echo '<pre>';print_r($exist_task);echo '</pre>';
     }
     //echo $plan_uid;
     // Получаем приказ по учреждению (всегда, не только при наличии назначения)
@@ -69,6 +69,17 @@ if ($auth->isLogin()) {
      source_table = 'checkinstitutions' AND source_id = " . $insId
     );
     $order_approved = (intval($agreement_data->status) == 1 || intval($agreement_data->approved) == 1);
+
+    // Если orderId передан напрямую (из ins_info) — берём даты из приказа
+    if ($orderId > 0 && empty($minDate)) {
+        $order_data = $db->selectOne('agreement', ' WHERE id = ?', [$orderId]);
+        if ($order_data) {
+            $actionPeriodDecoded = json_decode($order_data->action_period);
+            $orderDates = $date->getDatesFromMonths($actionPeriodDecoded);
+            $minDate = $orderDates['start'];
+            $maxDate = $orderDates['end'];
+        }
+    }
 
     if (count($exist_task) > 0) {
         //Если такой приказ уже есть
@@ -239,201 +250,74 @@ if ($auth->isLogin()) {
                             <h3 class='item w_100'>
                                 <strong>ПРОВЕРЯЮЩИЕ</strong>
                             </h3>
-                            <? /*
+                            <?php
                             if (count($exist_task) > 0) {
                                 $staff_number = 1;
                                 foreach ($exist_task as $chStaff) {
-                                    $dates = $chStaff->dates;
-                                    $insId = $chStaff->institution;
-                                    $task = $chStaff->task_id;
+                                    $staffDates = $chStaff->dates;
+                                    $staffTask  = $chStaff->task_id;
+                                    $staffFio   = trim($users['array'][$chStaff->user][0]) . ' '
+                                                . trim($users['array'][$chStaff->user][1]) . ' '
+                                                . trim($users['array'][$chStaff->user][2]);
+                                    $reminder   = $db->selectOne('reminders', ' WHERE task_id = ? AND employee = ?', [$chStaff->id, $chStaff->user]);
                                     ?>
                                     <div class='group staff'>
                                         <h5 class='item w_100 question_number'>Сотрудник №<?= $staff_number ?></h5>
                                         <input type="hidden" name="user_task[]" value="<?= $chStaff->id ?>">
+                                        <input type="hidden" name="executors[]" value="<?= $chStaff->user ?>">
+                                        <input type="hidden" name="ousr[]" value="<?= $chStaff->ousr ?>">
+                                        <div class='item w_100'>
+                                            <div class='el_data'>
+                                                <label>Сотрудник:</label>
+                                                <strong><?= $staffFio ?></strong>
+                                                <?php if (intval($chStaff->is_head) == 1): ?>
+                                                    <span class='greenText'> руководитель проверки</span>
+                                                <?php endif; ?>
+                                            </div>
+                                        </div>
+                                        <input type="hidden" name="is_head[]" value="<?= intval($chStaff->is_head) ?>">
                                         <div class='item w_50'>
                                             <div class='el_data datesInputWrapper'>
                                                 <label>Период проверки</label>
                                                 <input class='el_input range_date' type='text' name='dates[]'
-                                                       value="<?= $dates ?>">
+                                                       value="<?= $staffDates ?>">
                                             </div>
-                                        </div>
-
-                                        <div class='item w_50'>
-                                            <input type='hidden' name='executors_hidden[]'
-                                                   value="<?= $chStaff->user ?>">
-                                            <select data-label='Сотрудник' name='executors[]'>
-                                                <?
-                                                echo $gui->buildSelectFromRegistry($users['result'], [$chStaff->user], true,
-                                                    ['surname', 'name', 'middle_name'], ' '
-                                                );
-                                                ?>
-                                            </select>
-                                        </div>
-
-                                        <div class='item w_50'>
-                                            <div class='custom_checkbox'>
-                                                <label class='container' style="top: 12px;">
-                                                    <span class='label-text'>Является руководителем проверки</span>
-                                                    <input type='radio' name='is_head[<?= ($staff_number - 1) ?>]'
-                                                           class='is_claim'
-                                                           tabindex='-1'
-                                                           value='1'<?= (intval($chStaff->is_head) == 1 ? ' checked="checked"' : '') ?>>
-                                                    <span class='checkmark radio'></span>
-                                                </label>
-                                            </div>
-                                        </div>
-
-                                        <div class='item w_50' style="display: none">
-                                            <select data-label='Структурное подразделение' name='ousr[]'>
-                                                <?
-                                                echo $gui->buildSelectFromRegistry($ousr['result'], [$chStaff->ousr], true);
-                                                ?>
-                                                ?>
-                                            </select>
                                         </div>
                                         <div class='item w_50'>
                                             <select data-label='Шаблон задачи' name='tasks[]'>
-                                                <?
-                                                echo $gui->buildSelectFromRegistry($tasks['result'], [$task], true);
-                                                ?>
+                                                <?= $gui->buildSelectFromRegistry($tasks['result'], [$staffTask], true) ?>
                                             </select>
                                         </div>
-                                    </div>
-                                    <div class='item w_100'>
-                                        <div class='el_data'>
-                                            <div class='custom_checkbox'>
-                                                <label class='container' style='left: 4px;'>
-                                                    <span class='label-text'>Включить напоминание</span>
-                                                    <input type='checkbox' name='allowremind[]'
-                                                           class='is_claim' tabindex='-1'
-                                                           value='1'<?= $chStaff->allowremind == 1 ? ' checked="checked"' : '' ?>>
-                                                    <span class='checkmark'></span>
-                                                </label>
+                                        <div class='item w_50'>
+                                            <div class='el_data'>
+                                                <div class='custom_checkbox'>
+                                                    <label class='container' style='left: 4px;'>
+                                                        <span class='label-text'>Включить напоминание</span>
+                                                        <input type='checkbox' name='allowremind[]'
+                                                               class='is_claim' tabindex='-1'
+                                                               value='1'<?= $chStaff->allowremind == 1 ? ' checked="checked"' : '' ?>>
+                                                        <span class='checkmark'></span>
+                                                    </label>
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
-                                    <?
-                                    $reminder = $db->selectOne('reminders', ' WHERE task_id = ? AND employee = ?', [$task, $chStaff->user]);
-                                    if ($reminder != null) {
-                                        echo '<input type="hidden" name="remind_id" value="' . $reminder->id . '">';
-                                    }
-                                    ?>
-                                    <div class='group reminder' style='margin-top: -10px;'><h5
-                                                class='item w_100 remind_number'>Напоминание</h5>
-                                        <?
-                                        echo $reg->buildForm(71, [], [
+                                        <?php if ($reminder): ?>
+                                            <input type="hidden" name="remind_id" value="<?= $reminder->id ?>">
+                                        <?php endif; ?>
+                                        <div class='group reminder' style='margin-top: -10px;<?= $chStaff->allowremind != 1 ? " display:none;" : "" ?>'>
+                                            <h5 class='item w_100 remind_number'>Напоминание</h5>
+                                            <?= $reg->buildForm(71, [], [
                                                 'datetime' => strlen($reminder->datetime) > 0 ? $reminder->datetime : $prevDate . ' 10:00',
                                                 'employee' => intval($reminder->employee) > 0 ? $reminder->employee : $chStaff->user,
-                                                'comment' => $reminder->comment
-                                            ]
-                                        );
-                                        ?>
+                                                'comment'  => $reminder->comment
+                                            ]) ?>
+                                        </div>
                                     </div>
-                                    <?
+                                    <?php
                                     $staff_number++;
                                 }
-                            } else {
-                                ?>
-                                <div class='group staff'>
-                                    <h5 class='item w_100 question_number'>Сотрудник №1</h5>
-
-                                    <div class='item w_50'>
-                                        <div class='el_data datesInputWrapper'>
-                                            <label>Период проверки</label>
-                                            <input class='el_input range_date' type='text' name='dates[]'
-                                                   value="<?= $dates ?>">
-                                        </div>
-                                    </div>
-
-                                    <div class='item w_50'>
-                                        <input type='hidden' name='executors_hidden[]' value="<?= $chStaff->user ?>">
-                                        <select data-label='Сотрудник' name='executors[]'>
-                                            <?
-                                            echo $gui->buildSelectFromRegistry($users['result'], [$chStaff->user], true,
-                                                ['surname', 'name', 'middle_name'], ' '
-                                            );
-                                            ?>
-                                        </select>
-                                    </div>
-
-                                    <div class='item w_50'>
-                                        <div class='custom_checkbox'>
-                                            <label class='container' style="top: 12px;">
-                                                <span class='label-text'>Является руководителем проверки</span>
-                                                <input type='radio' name='is_head[0]' class='is_claim'
-                                                       tabindex='-1'
-                                                       value='1'<?= (intval($chStaff->is_head) == 1 ? ' checked="checked"' : '') ?>>
-                                                <span class='checkmark radio'></span>
-                                            </label>
-                                        </div>
-                                    </div>
-
-                                    <div class='item w_50' style="display: none">
-                                        <select data-label='Структурное подразделение' name='ousr[]'>
-                                            <?
-                                            echo $gui->buildSelectFromRegistry($ousr['result'], [$chStaff->ousr], true);
-                                            ?>
-                                        </select>
-                                    </div>
-                                    <div class='item w_50'>
-                                        <select data-label='Шаблон задачи' name='tasks[]'>
-                                            <?
-                                            echo $gui->buildSelectFromRegistry($tasks['result'], [$task], true);
-                                            ?>
-                                        </select>
-                                    </div>
-                                    <div class='item w_50'>
-                                        <div class='el_data'>
-                                            <div class='custom_checkbox'>
-                                                <label class='container' style='left: 4px;'>
-                                                    <span class='label-text'>Включить напоминание</span>
-                                                    <input type='checkbox' name='allowremind[]'
-                                                           class='is_claim' tabindex='-1'
-                                                           value='1'<?= $chStaff->allowremind == 1 ? ' checked="checked"' : '' ?>>
-                                                    <span class='checkmark'></span>
-                                                </label>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <?
-                                    $reminder = $db->selectOne('reminders', ' WHERE task_id = ? AND employee = ?', [$taskId, $chStaff->user]);
-                                    if ($reminder != null) {
-                                        echo '<input type="hidden" name="remind_id" value="' . $reminder->id . '">';
-                                    }
-                                    ?>
-                                    <div class='group reminder' style='margin-top: -10px;'><h5
-                                                class='item w_100 remind_number'>Напоминание</h5>
-                                        <?
-                                        echo $reg->buildForm(71, [], [
-                                                'datetime' => strlen($reminder->datetime) > 0 ? $reminder->datetime : $prevDate . ' 10:00',
-                                                'employee' => intval($reminder->employee) > 0 ? $reminder->employee : $chStaff->user,
-                                                'comment' => $reminder->comment
-                                            ]
-                                        );
-                                        ?>
-                                    </div>
-                                </div>
-                                <?
                             }
                             ?>
-                            <script>
-                                <?php
-                                if($chStaff->allowremind == 1){
-                                ?>
-                                $('.reminder, .reminder ~ div:first()').show();
-                                <?php
-                                }else{
-                                ?>
-                                $('.reminder, .reminder ~ div:first()').hide();
-                                <?php
-                                }
-                                ?>
-                            </script>
-                            <button class='button icon text new_staff'>
-                                <span class='material-icons'>add</span>Еще сотрудник
-                            </button>
-
- */?>
                         </div>
                     </div>
                     <?
@@ -475,28 +359,28 @@ if ($auth->isLogin()) {
             $(document).ready(function () {
                 el_app.initTabs();
                 //el_registry.bindCalendar("<?=$minDate?>", "<?=$maxDate?>");
-                let $cal = $("#check_staff [name='dates[]']").flatpickr({
+                // Инициализируем flatpickr на каждом поле дат (в т.ч. предзаполненных при редактировании)
+                $("#check_staff [name='dates[]']").each(function () {
+                    let inputEl = this;
+                    let rawVal = inputEl.value;
+                    let defaultDates = rawVal.length > 0 ? rawVal.split(' - ') : [];
+                    flatpickr(inputEl, {
                         locale: 'ru',
                         mode: 'range',
                         time_24hr: true,
                         dateFormat: 'Y-m-d',
                         altFormat: 'd.m.Y',
-                        conjunction: '-',
+                        conjunction: ' - ',
                         altInput: true,
                         allowInput: true,
-                        <?php
-                        if($dates != ''){
-                        ?>
-                        defaultDate: ["<?= implode('", "', explode(' - ', $dates)) ?>"],
-                        <?php
-                        }
-                        ?>
+                        defaultDate: defaultDates,
                         minDate: "<?=$minDate?>",
                         maxDate: "<?=$maxDate?>",
                         altInputClass: 'el_input',
                         firstDayOfWeek: 1
-                    }),
-                    $staffs = $('.staff');
+                    });
+                });
+                let $staffs = $('.staff');
 
                 $("select[name='institutions[]']").trigger('change');
 
@@ -530,7 +414,12 @@ if ($auth->isLogin()) {
                         }
                     });
 
+                // Автозапуск только для новых назначений (без существующих записей в checkstaff)
+                <?php if (count($exist_task) == 0): ?>
                 }).trigger("change");
+                <?php else: ?>
+                });
+                <?php endif; ?>
 
                 $("[name=order]").on("change", function () {
                     let $self = $(this),
@@ -579,7 +468,38 @@ if ($auth->isLogin()) {
                                 $orderInfoWrapper.show();
                                 $staff_list.show();
                                 el_app.mainInit();
-                                $("input[name='dates[]'] ~ input").mask('99.99.9999 - 99.99.9999');
+                                // Инициализируем flatpickr на новых полях дат
+                                $("#check_staff [name='dates[]']").each(function () {
+                                    if (!this._flatpickr) {
+                                        flatpickr(this, {
+                                            locale: 'ru',
+                                            mode: 'range',
+                                            time_24hr: true,
+                                            dateFormat: 'Y-m-d',
+                                            altFormat: 'd.m.Y',
+                                            conjunction: ' - ',
+                                            altInput: true,
+                                            allowInput: true,
+                                            minDate: answer.minDate,
+                                            maxDate: answer.maxDate,
+                                            altInputClass: 'el_input',
+                                            firstDayOfWeek: 1
+                                        });
+                                    } else {
+                                        this._flatpickr.set('minDate', answer.minDate);
+                                        this._flatpickr.set('maxDate', answer.maxDate);
+                                    }
+                                });
+                                $("[name='allowremind[]']").off('change').on('change', function () {
+                                    let $reminder = $(this).closest('.group').find('.reminder');
+                                    if ($(this).prop('checked')) {
+                                        $reminder.show();
+                                        $reminder.find('input, select, textarea').attr('disabled', false);
+                                    } else {
+                                        $reminder.hide();
+                                        $reminder.find('input, select, textarea').attr('disabled', true);
+                                    }
+                                });
                             }
                         });
 
@@ -588,7 +508,11 @@ if ($auth->isLogin()) {
                         $cal.set('minDate', '');
                         $cal.set('maxDate', '');
                     }*/
+                <?php if (count($exist_task) == 0): ?>
                 }).trigger('change');
+                <?php else: ?>
+                });
+                <?php endif; ?>
 
                 $("[name='allowremind[]']").off('change').on('change', function () {
                     let $reminder = $(this).closest('.group').find('.reminder');

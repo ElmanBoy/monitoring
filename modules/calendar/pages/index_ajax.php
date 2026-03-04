@@ -27,6 +27,8 @@ $date = new Date();
 $checks = [];
 $planYear = [];
 $planUid = [];
+$planIdArr = [];
+$planShort = [];
 
 $perms = $auth->getCurrentModulePermission();
 
@@ -34,7 +36,8 @@ if ($planId > 0) { //Если выбран конкретный план
     $plan = $db->selectOne('checksplans', ' where id = ?', [$planId]);
     $planUid[0] = $plan->uid;
     $planYear[0] = $plan->year;
-    //$planId[0] = $plan->id;
+    $planIdArr[0] = $plan->id;
+    $planShort[0] = $plan->short;
     $checks[0] = json_decode($plan->addinstitution, true);
 } else { //Выбран пункт "Задачи без плана". То есть все планы (???)
     $plans = $db->select('checksplans');
@@ -42,7 +45,8 @@ if ($planId > 0) { //Если выбран конкретный план
     foreach ($plans as $plan) {
         $planUid[$i] = $plan->uid;
         $planYear[$i] = $plan->year;
-        //$planId[$i] = $plan->id;
+        $planIdArr[$i] = $plan->id;
+        $planShort[$i] = $plan->short;
         $checks[$i] = json_decode($plan->addinstitution, true);
         $i++;
     }
@@ -332,15 +336,25 @@ $gui->set('module_id', 14);
 
                             if ($agr === null) {
                                 // Приказ не создан
-                                $actionCell = '<small><a href="" class="new_order">' .
-                                    '<span class="material-icons">control_point</span> Создать приказ на проверку</a></small>';
+                                $actionCell = '<small><a href="" class="new_order"' .
+                                    ' data-plan-id="' . $planIdArr[$p] . '"' .
+                                    ' data-plan-name="' . htmlspecialchars($planShort[$p]) . '"' .
+                                    ' data-ins="' . $insIdInt . '">' .
+                                    '<span class="material-icons">control_point</span> Создать приказ' .
+                                    ($planId == 0 ? ' <span class="greyText">(' . htmlspecialchars($planShort[$p]) . ')</span>' : '') .
+                                    '</a></small>';
                             } elseif (!$agrApproved) {
-                                // Приказ создан, но не утверждён
-                                $actionCell = '<small><span class="material-icons" style="vertical-align:middle;color:var(--color_warning,#e6a817)">hourglass_empty</span> ' .
-                                    'Приказ на согласовании</small>';
+                                // Приказ создан, но не утверждён — открываем согласование
+                                $actionCell = '<small><a href="" class="open_agreement_btn" style="color:var(--color_warning,#e6a817)"' .
+                                    ' data-agr-id="' . $agr->id . '">' .
+                                    '<span class="material-icons" style="vertical-align:middle">hourglass_empty</span> ' .
+                                    'Приказ на согласовании</a></small>';
                             } else {
                                 // Приказ утверждён — можно назначать
-                                $actionCell = '<small><a href="" class="assign_staff_btn" data-uid="' . $planUid[$p] . '" data-ins="' . $insIdInt . '">' .
+                                $actionCell = '<small><a href="" class="assign_staff_btn"' .
+                                    ' data-uid="' . $planUid[$p] . '"' .
+                                    ' data-ins="' . $insIdInt . '"' .
+                                    ' data-order-id="' . $agr->id . '">' .
                                     '<span class="material-icons">assignment_ind</span> Назначить проверяющих</a></small>';
                             }
 
@@ -746,17 +760,26 @@ $gui->set('module_id', 14);
 
         $(".new_order").off("click").on("click", function (e) {
             e.preventDefault();
-            let plan_id = el_tools.getUrlVar(document.location.href),
-                ins_id = $(this).closest("tr").data("ins");
-            el_app.dialog_open('order_staff', {plan_id: plan_id.id, ins_id: ins_id}, 'calendar');
+            let $btn = $(this),
+                plan_id = $btn.data("plan-id") || el_tools.getUrlVar(document.location.href).id,
+                ins_id = $btn.data("ins") || $btn.closest("tr").data("ins");
+            el_app.dialog_open('order_staff', {plan_id: plan_id, ins_id: ins_id}, 'calendar');
+        });
+
+        $(".open_agreement_btn").off("click").on("click", function (e) {
+            e.preventDefault();
+            let agr_id = $(this).data("agr-id");
+            el_app.dialog_open('agreement', {docId: agr_id}, 'documents');
         });
 
         $(".assign_staff_btn").off("click").on("click", function (e) {
             e.preventDefault();
-            let $row = $(this).closest("tr"),
+            let $btn = $(this),
+                $row = $btn.closest("tr"),
                 ins_id = $row.data("ins"),
-                uid = $(this).data("uid");
-            el_app.dialog_open('assign_staff', {insId: uid + '_' + ins_id}, 'calendar');
+                uid = $btn.data("uid"),
+                order_id = $btn.data("order-id");
+            el_app.dialog_open('assign_staff', {insId: uid + '_' + ins_id, orderId: order_id}, 'calendar');
         });
 
         $(".fc-datagrid-cell").off("click").on("click", function () {
