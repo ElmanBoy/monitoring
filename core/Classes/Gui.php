@@ -318,7 +318,11 @@ class Gui
                 }
             }
 
-            $filterQueryMain = ' WHERE id > 0 AND (active IS NULL OR active != -1) ' . $defaultParams;
+            if($defaultParams == 'AND active = -1'){
+                $filterQueryMain = ' WHERE id > 0 AND active = -1 ' . $defaultParams;
+            }else {
+                $filterQueryMain = ' WHERE id > 0 AND (active IS NULL OR active != -1) ' . $defaultParams;
+            }
             $filterQueryTotal = '';
             if ($filterQuery != ''/* && $defaultParams != ''*/) {
                 $filterQueryMain = ' WHERE id > 0 ' . $defaultParams . ' AND ' . $filterQuery;
