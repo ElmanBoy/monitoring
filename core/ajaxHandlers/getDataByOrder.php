@@ -68,7 +68,7 @@ if($orderId > 0) {
             <div class='item w_50'>
                 <div class='el_data datesInputWrapper'>
                     <label>Период проверки</label>
-                    <input class='el_input range_date' type='date' name='dates[]'
+                    <input class='el_input range_date' type='text' name='dates[]'
                            value='" . $dates . "'>
                 </div>
             </div>
@@ -91,10 +91,11 @@ if($orderId > 0) {
                 </div>
             </div>";
             $reminder = $db->selectOne('reminders', ' WHERE task_id = ? AND employee = ?', [$taskId, $user_id]);
-            if ($reminder != null) {
-                $html .= '<input type="hidden" name="remind_id" value="' . $reminder->id . '">';
-            }
-            $html .= "<div class='group reminder' style='margin-top: -10px; display: none'><h5
+            // Баг 3: remind_id как массив, всегда присутствует (0 если нет записи)
+            $html .= '<input type="hidden" name="remind_id[]" value="' . ($reminder->id ?? 0) . '">';
+            // Баг 4: показываем блок если allowremind уже включён у сотрудника
+            $reminderDisplay = ($chStaff->allowremind == 1) ? '' : ' display: none;';
+            $html .= "<div class='group reminder' style='margin-top: -10px;{$reminderDisplay}'><h5
                         class='item w_100 remind_number'>Напоминание</h5>";
             $prevDate = date('Y-m-d', strtotime(date('y-m-d') . ' -1 day'));
                 $html .= $reg->buildForm(71, [], [

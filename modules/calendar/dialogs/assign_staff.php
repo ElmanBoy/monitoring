@@ -302,7 +302,9 @@ if ($auth->isLogin()) {
                                             </div>
                                         </div>
                                         <?php if ($reminder): ?>
-                                            <input type="hidden" name="remind_id" value="<?= $reminder->id ?>">
+                                            <input type="hidden" name="remind_id[]" value="<?= $reminder->id ?>">
+                                        <?php else: ?>
+                                            <input type="hidden" name="remind_id[]" value="0">
                                         <?php endif; ?>
                                         <div class='group reminder' style='margin-top: -10px;<?= $chStaff->allowremind != 1 ? " display:none;" : "" ?>'>
                                             <h5 class='item w_100 remind_number'>Напоминание</h5>

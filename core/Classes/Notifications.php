@@ -331,11 +331,15 @@ class Notifications
             }
 
             if ($allowRemind) {
+                // Баг 1: используем дату из формы, а не текущее время
+                $finalRemindDateTime = (strlen(trim($remindDateTime)) > 0)
+                    ? $remindDateTime
+                    : date('Y-m-d H:i:s', strtotime('+1 day'));
                 $this->setRemind(
                     $appointedId,
                     $taskId,
                     $executorId,
-                    date('Y-m-d H:i:s'),
+                    $finalRemindDateTime,
                     'Кликните по уведомлению для просмотра задачи',
                     'https://monitoring.msr.mosreg.ru/assigned?open_dialog=' . $taskId,
                     'Напоминание о задаче № ' . $taskId,
@@ -345,7 +349,8 @@ class Notifications
                     $letterText
                 );
             }
-
+            // Баг 3: удаление remind_id теперь делается в вызывающем коде (check_staff.php),
+            // здесь оставляем только как fallback для других точек вызова
             if (isset($_POST['remind_id']) && intval($_POST['remind_id']) > 0 && !$allowRemind) {
                 $this->removeRemind(intval($_POST['remind_id']));
             }
