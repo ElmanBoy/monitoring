@@ -13,7 +13,7 @@
 
 # Зависимости
 /core/vendor/
-/node_modules/
+/core/node_modules/
 
 # macOS
 .DS_Store
