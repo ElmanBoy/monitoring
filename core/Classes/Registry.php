@@ -147,8 +147,10 @@ class Registry
                 $class = ' single_date';
                 break;
             case 'date_time':
-                $field_type = 'date';
+                $field_type = 'datetime-local';
                 $class = ' single_date_time';
+                // datetime-local требует формат "yyyy-MM-ddTHH:mm", конвертируем пробел в T
+                $default_value = str_replace(' ', 'T', $default_value);
                 break;
             default:
                 $field_type = $f['type'];

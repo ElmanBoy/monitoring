@@ -23,6 +23,9 @@ if (isset($_POST['params'])) {
         $docId = intval($_POST['params']);
     }
 }
+if(isset($_POST['docId'])){
+    $docId = intval($_POST['docId']);
+}
 
 // БАГ #3 ИСПРАВЛЕН: intval гарантирует корректное число для вставки в JS
 $currentUserId = intval($_SESSION['user_id']);
@@ -362,6 +365,7 @@ $initialAgreementList = json_decode($tmpl->agreementlist, true) ?? [];
                 $.post('/', {
                     ajax: 1,
                     action: 'updateAgreement',
+                    path: 'documents',
                     agreementList: agList,
                     docId: DOC_ID
                 }, function (data) {
@@ -391,10 +395,11 @@ $initialAgreementList = json_decode($tmpl->agreementlist, true) ?? [];
                     console.error('agreementList не является массивом', agreementList);
                     return;
                 }
-
+                $('.preloader').fadeIn('fast');
                 $.post('/', {
                     ajax: 1,
                     action: 'renderAgreementTable',
+                    path: 'documents',
                     agreementList: agreementList,
                     docId: DOC_ID
                 }, function (data) {
@@ -415,6 +420,7 @@ $initialAgreementList = json_decode($tmpl->agreementlist, true) ?? [];
                         });
                         reinitEvents();
                     }
+                    $('.preloader').fadeOut('fast');
                 }).fail(function (xhr, status, error) {
                     console.error('Ошибка AJAX renderAgreementTable:', error, xhr.responseText);
                 });
@@ -482,12 +488,35 @@ $initialAgreementList = json_decode($tmpl->agreementlist, true) ?? [];
             }
 
             $(document).ready(function () {
-                // Загружаем таблицу при старте с актуальными данными из БД
-                const initialAgreementList = <?= json_encode($initialAgreementList, JSON_UNESCAPED_UNICODE) ?>;
-                refreshAgreementTable(initialAgreementList);
-
+                // Загружаем таблицу при старте напрямую с сервера по docId
+                $('.preloader').fadeIn('fast');
+                $.post('/', {
+                    ajax: 1,
+                    action: 'renderAgreementTable',
+                    path: 'documents',
+                    agreementList: <?= json_encode(
+                        array_map('json_encode', $initialAgreementList),
+                        JSON_UNESCAPED_UNICODE
+                    ) ?>,
+                    docId: DOC_ID
+                }, function (data) {
+                    let answer;
+                    try { answer = JSON.parse(data); } catch (e) { return; }
+                    if (answer.result) {
+                        $('#agreement_list_container').html(answer.html);
+                        $('select[name="redirect[]"]').chosen({
+                            search_contains: true,
+                            no_results_text: 'Ничего не найдено.',
+                            group_search: false,
+                            allowInput: true
+                        });
+                        reinitEvents();
+                    }
+                    $('.preloader').fadeOut('fast');
+                });
+                el_app.initTabs();
                 // Предпросмотр PDF
-                $('#tab_preview').on('click', function () {
+                $('#agreement #tab_preview').on('click', function () {
                     $('.preloader').fadeIn('fast');
                     $.post('/', {
                         ajax: 1, mode: 'popup', module: 'documents', url: 'planPdf', outputType: 0,
@@ -500,7 +529,7 @@ $initialAgreementList = json_decode($tmpl->agreementlist, true) ?? [];
                     });
                 });
 
-                el_app.initTabs();
+
 
                 // Обработчик события подписи ЭП
                 $(document).off('doc_signed').on('doc_signed', function (e, param) {
