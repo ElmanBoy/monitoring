@@ -40,10 +40,23 @@ $users = $db->getRegistry("users", '', [], ['surname', 'name', 'middle_name', 'p
 //$db->db::exec("DELETE FROM ".TBL_PREFIX."checkstaff WHERE check_uid = '$plan_uid' AND institution = ".$insId);
 $exist_task = $db->select('checkstaff', " WHERE check_uid = '$plan_uid' AND institution = ".$insId);
 $inspections = $db->getRegistry('inspections');
-//echo '$exist_task ';print_r($exist_task);echo "<hr>\n";
+
+// Проверяем что приказ утверждён
+$agreement_data = $db->selectOne('agreement', " WHERE source_table = 'checkinstitutions' AND source_id = " . $insId);
+$order_approved = (intval($agreement_data->status) == 1 || intval($agreement_data->approved) == 1);
+
 if($auth->isLogin()) {
 
     if ($auth->checkAjax()) {
+        // Блокируем назначение если приказ не утверждён
+        if (!$order_approved) {
+            echo json_encode([
+                'result' => false,
+                'resultText' => 'Назначение проверяющих невозможно: приказ о проведении проверки ещё не утверждён.',
+                'errorFields' => []
+            ]);
+            exit;
+        }
         if(!isset($_POST['executors'])){
             $err++;
             $errStr[] = 'Укажите сотрудника или структурное подразделение';

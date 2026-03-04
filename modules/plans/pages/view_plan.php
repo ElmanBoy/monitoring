@@ -13,7 +13,7 @@ if (isset($_GET['plan']) && intval($_GET['plan']) > 0 && !isset($_POST['params']
 } else {
     parse_str($_POST['params'], $paramArr);
     foreach ($paramArr as $name => $value) {
-         $_GET[$name] = $value;
+        $_GET[$name] = $value;
     }
     $planId = intval($_GET['plan']);
     $_GET['url'] = $_POST['url'];
@@ -31,11 +31,11 @@ $units = $db->getRegistry('units');
 $insp = $db->getRegistry('inspections');
 $users = $db->getRegistry('users', '', [], ['surname', 'name', 'middle_name']);
 
-$checks = $gui->getTableData('checkinstitutions', " AND plan_uid = '".$plan->uid."' AND plan_version = '".$plan->version."'");
+$checks = $gui->getTableData('checkinstitutions', " AND plan_uid = '" . $plan->uid . "' AND plan_version = '" . $plan->version . "'");
 
 $check_number = 1 + $gui->currentPageNumber * $gui->rowsLimit;
 $row_numbers = [];
-if(count($checks) > 0) {
+if (count($checks) > 0) {
     foreach ($checks as $ch) {
         $row_numbers[$ch->id] = $check_number;
         $check_number++;
@@ -51,16 +51,16 @@ $gui->set('module_id', 1);
     <div class="nav_01">
         <?
         echo $gui->buildTopNav([
-            'title' => 'План на '.$plan->year.' год',
-            'renew' => 'Сбросить все фильтры',
-            //'create' => 'Новая запись',
-            'plans' => 'Планы проверок',
-            'filter_panel' => 'Открыть панель фильтров',
-            //'switch_plan' => 'Показать',
-            //'clone' => 'Копия записи',
-            //'delete' => 'Удалить выделенные',
-            'logout' => 'Выйти'
-        ]
+                'title' => 'План на ' . $plan->year . ' год',
+                'renew' => 'Сбросить все фильтры',
+                //'create' => 'Новая запись',
+                'plans' => 'Планы проверок',
+                'filter_panel' => 'Открыть панель фильтров',
+                //'switch_plan' => 'Показать',
+                //'clone' => 'Копия записи',
+                //'delete' => 'Удалить выделенные',
+                'logout' => 'Выйти'
+            ]
         );
         ?>
 
@@ -73,7 +73,7 @@ $gui->set('module_id', 1);
 <div class="scroll_wrap">
     <ul class='breadcrumb'>
         <li><a href='/plans'>Все планы</a></li>
-        <li><a href='/plans?id=<?=$planId?>'><?=$plan->short?></a></li>
+        <li><a href='/plans?id=<?= $planId ?>'><?= $plan->short ?></a></li>
     </ul>
     <form method="post" id="registry_items_delete" class="ajaxFrm">
         <input type="hidden" name="registry_id" id="registry_id" value="<?= $planId ?>">
@@ -94,11 +94,17 @@ $gui->set('module_id', 1);
                 <th class="sort">
                     <?
                     echo $gui->buildSortFilter(
-                        'checkinstitutions',
+                        'institutions',
                         'Объект проверки',
                         'institution',
-                        'constant',
-                        $ins['array']
+                        'el_data',
+                        $ins['array'],
+                        'suggest',
+                        'text',
+                        true,
+                        'institution',
+                        ' AND active = 1',
+                        'short'
                     );
                     ?>
                 </th>
@@ -146,22 +152,23 @@ $gui->set('module_id', 1);
             <?
 
             $check_number = 1 + $gui->currentPageNumber * $gui->rowsLimit;
-            if(count($checks) > 0) {
+            if (count($checks) > 0) {
                 foreach ($checks as $ch) {
 
                     echo '<tr data-id="' . $ch->id . '" tabindex="0" class="noclick">
-                    <td>' . /*$ch->id*/$row_numbers[$ch->id] . '</td>
+                    <td>' . /*$ch->id*/
+                        $row_numbers[$ch->id] . '</td>
                     <td>' . stripslashes(htmlspecialchars($ins['result'][$ch->institution]->short)) .
                         '</td>
                     <td class="group">' . stripslashes($insp['array'][$ch->inspections]) . '</td>
                     <td>' . $ch->periods . '</td>
                     <td>' . $date->correctDateFormatFromMysql($ch->check_periods_start) . ' - ' .
                         $date->correctDateFormatFromMysql($ch->check_periods_end) . '</td>';
-                    if($plan->active == 1) {
+                    if ($plan->active == 1) {
                         echo '<td class="link"><span class="material-icons assign" title="Назначить исполнителей и сроки"
                     data-id="' . $plan->uid . '_' . $ch->institution . '">assignment_ind</span></td>';
                     }
-                echo '</tr>';
+                    echo '</tr>';
                     $check_number++;
                 }
             }
@@ -174,7 +181,7 @@ $gui->set('module_id', 1);
     ?>
     <div id='gantt' style="width:100%; display: none; min-height: 500px;"></div>
 </div>
-<?/*script>
+<? /*script>
 
     tasks = [
         <?
@@ -202,5 +209,5 @@ $gui->set('module_id', 1);
         container_height: 500,
         auto_move_label: true
     });
-</script*/?>
+</script*/ ?>
 <script src="/modules/plans/js/registry_items.js?v=<?= $gui->genpass() ?>"></script>

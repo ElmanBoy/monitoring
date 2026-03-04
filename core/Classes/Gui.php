@@ -217,7 +217,7 @@ class Gui
         return $out;
     }
 
-    public function getTableData(string $tableName, string $defaultParams = ''): array
+    public function getTableData(string $tableName, string $defaultParams = '', bool $showArchived = false): array
     {
         if ($this->auth->isLogin()) {
             if ($defaultParams == '') {
@@ -295,7 +295,7 @@ class Gui
                             } elseif (substr_count($filterValuesArr[0], '_to') > 0) {
                                 $filterQueryArr[] = str_replace('_to', '', $filterValuesArr[0]) . ' <= ?';
                             } else {
-                                $filterQueryArr[] = $filterValuesArr[0] . ((is_numeric($filterValues[$v])) ? ' = ?' : ' LIKE ?');
+                                $filterQueryArr[] = $filterValuesArr[0] . ((is_numeric($filterValues[$v])) ? ' = ?' : ' ILIKE ?');
                             }
                         }
                         if ($filterValuesArr[0] == 'user_fio') {
@@ -318,11 +318,9 @@ class Gui
                 }
             }
 
-            if($defaultParams == 'AND active = -1'){
-                $filterQueryMain = ' WHERE id > 0 AND active = -1 ' . $defaultParams;
-            }else {
-                $filterQueryMain = ' WHERE id > 0 AND (active IS NULL OR active != -1) ' . $defaultParams;
-            }
+            $filterQueryMain = $showArchived
+                ? ' WHERE id > 0 AND active = -1 ' . $defaultParams
+                : ' WHERE id > 0 AND (active IS NULL OR active != -1) ' . $defaultParams;
             $filterQueryTotal = '';
             if ($filterQuery != ''/* && $defaultParams != ''*/) {
                 $filterQueryMain = ' WHERE id > 0 ' . $defaultParams . ' AND ' . $filterQuery;
@@ -330,6 +328,7 @@ class Gui
             } else {
                 $filterSlots = [];
             }
+            //echo $filterQueryMain . $sortQuery; print_r($filterSlots);
             /*$filterQueryMain = $defaultParams . (($filterQuery != '' && $defaultParams != '') ? ' AND ' . $filterQuery : '');
             $filterQueryTotal = ' WHERE id > 0 '.(($filterQuery != '' && $defaultParams != '') ? ' AND ' . $filterQuery : '');*/
             //echo $filterQuery.' / '.$defaultParams.' / '.$filterQueryTotal; print_r($filterSlots);
@@ -352,7 +351,7 @@ class Gui
         }else{
 
         }*/
-            //echo $filterQueryMain . $sortQuery; print_r($filterSlots);
+
             return $this->db->select($tableName, $filterQueryMain . $sortQuery, $filterSlots);
         } else {
             echo '<script>alert("Ваша сессия устарела.");document.location.href = "/"</script>';
@@ -1018,10 +1017,12 @@ class Gui
         string $inputType = 'text',
         bool $idAsValue = false,
         string $filterName = '',
-        string $ext_option = ''): string
+        string $ext_option = '',
+        string $searchColumn = ''): string
     {
         $filter_selected = (is_array($this->filterFields[$columnName]) && count($this->filterFields[$columnName]) > 0);
         $filterName = ($filterName == '') ? $columnName : $filterName;
+        $searchColumn = ($searchColumn == '') ? $columnName : $searchColumn;
         $sorterName = $filterName;
         $icon = 'north';
 
@@ -1075,8 +1076,8 @@ class Gui
                     $this->_cookie['role_show_filter_' . $filterName] == 'open') ? 'block' : 'none') . '">
                             <input type="' . $inputType . '" class="el_input el_suggest"
                             autocomplete="off"
-                                   data-src=\'{"action": "' . $action . '", "source": "' . $tableName . '", "value": "' . $columnName . '", 
-                                   "column": "' . $columnName . '"' . (($idAsValue) ? ', "idAsValue": true' : '') .
+                                   data-src=\'{"action": "' . $action . '", "source": "' . $tableName . '", "value": "' . $searchColumn . '", 
+                                   "column": "' . $searchColumn . '"' . (($idAsValue) ? ', "idAsValue": true' : '') .
                 (($ext_option != '') ? ', "ext_option": "' . $ext_option . '"' : '') . '}\'
                                    multiple name="filter_' . $filterName . '[]" placeholder="Начните вводить...">';
 
@@ -1160,13 +1161,13 @@ class Gui
                         }
                         break;
                     case 'archive':
-                        if ($this->auth->isAdmin() || $perms['delete']) {
+                        if ($this->auth->isAdmin()) {
                             $navHtml .= '<button tabindex="0" class="button icon text disabled group_action" id="button_nav_archive" title="' . $title . '">
                                     <span class="material-icons">archive</span><span>В архив</span></button>';
                         }
                         break;
                     case 'restore':
-                        if ($this->auth->isAdmin() || $perms['delete']) {
+                        if ($this->auth->isAdmin()) {
                             $navHtml .= '<button tabindex="0" class="button icon text disabled group_action" id="button_nav_restore" title="' . $title . '">
                                     <span class="material-icons">unarchive</span><span>Восстановить</span></button>';
                         }

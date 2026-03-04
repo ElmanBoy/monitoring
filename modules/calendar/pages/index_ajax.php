@@ -31,7 +31,7 @@ $planUid = [];
 $perms = $auth->getCurrentModulePermission();
 
 if ($planId > 0) { //Если выбран конкретный план
-    $plan = $db->selectOne('checksplans', " where id = ?", [$planId]);
+    $plan = $db->selectOne('checksplans', ' where id = ?', [$planId]);
     $planUid[0] = $plan->uid;
     $planYear[0] = $plan->year;
     //$planId[0] = $plan->id;
@@ -47,7 +47,7 @@ if ($planId > 0) { //Если выбран конкретный план
         $i++;
     }
     //echo '<pre>';print_r($checks); print_r($planUid);echo '</pre>';
-    $null_checks = $db->select("checkstaff", " 
+    $null_checks = $db->select('checkstaff', " 
     WHERE active = 1 AND (check_uid = '0' OR check_uid IS NULL)"
     ); // print_r($null_checks);
     $n = $i;
@@ -76,7 +76,7 @@ $tasks_templates = $db->getRegistry('tasks');
 $gui->set('module_id', 14);
 ?>
 <style>
-    .insName{
+    .insName {
 
     }
 </style>
@@ -196,6 +196,14 @@ $gui->set('module_id', 14);
             $allDatesEnd = [];
             $allIns = [];
             $taskIds = [];
+
+            // Загружаем все приказы по учреждениям одним запросом
+            $agreementsByIns = [];
+            $allAgreements = $db->select('agreement', " WHERE source_table = 'checkinstitutions'");
+            foreach ($allAgreements as $agr) {
+                $agreementsByIns[intval($agr->source_id)] = $agr;
+            }
+
             if (is_array($checks) && count($checks) > 0) {
                 for ($p = 0; $p < count($checks); $p++) {
                     foreach ($checks[$p] as $ch) {
@@ -243,12 +251,20 @@ $gui->set('module_id', 14);
                                             '<td class="insName">' . $object . '</td><td colspan="5"></td></tr>';
 
 
-                                        $taskArr[$ch['institutions']] = '{
-                                            id: "' . $planUid[$p] . '_' . $ch['institutions'] . '",
-                                            name: \'' . $object . '\',
-                                            start: "' . ($dates == [] ? min($allDatesStart[$ch['institutions']]) : $dates['start']) . '",
-                                            end: "' . ($dates == [] ? max($allDatesEnd[$ch['institutions']]) : $dates['end']) . '"
-                                        }';
+                                        $ganttStart = $dates != [] ? $dates['start'] : (
+                                        !empty($allDatesStart[$ch['institutions']]) ? min($allDatesStart[$ch['institutions']]) : ''
+                                        );
+                                        $ganttEnd = $dates != [] ? $dates['end'] : (
+                                        !empty($allDatesEnd[$ch['institutions']]) ? max($allDatesEnd[$ch['institutions']]) : ''
+                                        );
+                                        if (!empty($ganttStart) && !empty($ganttEnd)) {
+                                            $taskArr[$ch['institutions']] = '{
+                                                id: "' . $planUid[$p] . '_' . $ch['institutions'] . '",
+                                                name: \'' . $object . '\',
+                                                start: "' . $ganttStart . '",
+                                                end: "' . $ganttEnd . '"
+                                            }';
+                                        }
                                         $cal_resource[] = "{
                                             id: '" . $ch['institutions'] . "',
                                             title: '" . $object . "'
@@ -309,28 +325,54 @@ $gui->set('module_id', 14);
                             }
 
                         } else {
-                            //TODO: Добавить индикацию состояния приказа: "Создать приказ", "Согласование приказа", "Назначить проверяющих"
                             $object = str_replace("\n", ' ', stripslashes($ins['result'][$ch['institutions']]->short));
+                            $insIdInt = intval($ch['institutions']);
+                            $agr = isset($agreementsByIns[$insIdInt]) ? $agreementsByIns[$insIdInt] : null;
+                            $agrApproved = $agr && (intval($agr->status) == 1 || intval($agr->approved) == 1);
+
+                            if ($agr === null) {
+                                // Приказ не создан
+                                $actionCell = '<small><a href="" class="new_order">' .
+                                    '<span class="material-icons">control_point</span> Создать приказ на проверку</a></small>';
+                            } elseif (!$agrApproved) {
+                                // Приказ создан, но не утверждён
+                                $actionCell = '<small><span class="material-icons" style="vertical-align:middle;color:var(--color_warning,#e6a817)">hourglass_empty</span> ' .
+                                    'Приказ на согласовании</small>';
+                            } else {
+                                // Приказ утверждён — можно назначать
+                                $actionCell = '<small><a href="" class="assign_staff_btn" data-uid="' . $planUid[$p] . '" data-ins="' . $insIdInt . '">' .
+                                    '<span class="material-icons">assignment_ind</span> Назначить проверяющих</a></small>';
+                            }
+
                             echo '<tr data-ins="' . $ch['institutions'] . '" tabindex="0" class="noclick notask">' .
                                 '<td>' . $check_number . '</td>' .
-                                '<td class="insName">' . stripslashes(htmlspecialchars($ins['result'][$ch['institutions']]->short)) . '</td>'.
-                                '<td colspan="5"><small><a href="" class="new_order">'.
-                                '<span class="material-icons">control_point</span> Создать приказ на проверку</a></small></td></tr>';
+                                '<td class="insName">' . stripslashes(htmlspecialchars($ins['result'][$ch['institutions']]->short)) . '</td>' .
+                                '<td colspan="5">' . $actionCell . '</td></tr>';
 //print_r($ch);
                             $null_ins[] = $ch['institutions'];
                             $cal_resource[] = "{
                                             id: '" . $ch['institutions'] . "',
                                             title: '" . $object . "'
                                         }";
-                            $taskArr[$ch['institutions']] = '{
+                            $dateArr = explode(' - ', $ch['check_periods']);
+                            if (!empty($dateArr[0]) && !empty($dateArr[1])) {
+                                $allDatesStart[$ch['institutions']][] = $dateArr[0];
+                                $allDatesEnd[$ch['institutions']][] = $dateArr[1];
+                            }
+                            $ganttStart = $dates != [] ? $dates['start'] : (
+                            !empty($allDatesStart[$ch['institutions']]) ? min($allDatesStart[$ch['institutions']]) : ''
+                            );
+                            $ganttEnd = $dates != [] ? $dates['end'] : (
+                            !empty($allDatesEnd[$ch['institutions']]) ? max($allDatesEnd[$ch['institutions']]) : ''
+                            );
+                            if (!empty($ganttStart) && !empty($ganttEnd)) {
+                                $taskArr[$ch['institutions']] = '{
                                             id: "' . $planUid[$p] . '_' . $ch['institutions'] . '",
                                             name: \'' . $object . '\',
-                                            start: "' . ($dates == [] ? min($allDatesStart[$ch['institutions']]) : $dates['start']) . '",
-                                            end: "' . ($dates == [] ? max($allDatesEnd[$ch['institutions']]) : $dates['end']) . '"
+                                            start: "' . $ganttStart . '",
+                                            end: "' . $ganttEnd . '"
                                         }';
-                            $dateArr = explode(' - ', $ch['check_periods']);
-                            $allDatesStart[$ch['institutions']][] = $dateArr[0];
-                            $allDatesEnd[$ch['institutions']][] = $dateArr[1];
+                            }
                         }
                         $check_number++;
                         //}
@@ -342,12 +384,13 @@ $gui->set('module_id', 14);
 
             if (count($null_ins) > 0) {
                 foreach ($null_ins as $id => $nis) {
-                    $taskArr[$nis] = preg_replace('/start: "(.*)",/', 'start: "' . min($allDatesStart[$nis]) . '",', $taskArr[$nis]);
-                    $taskArr[$nis] = preg_replace('/end: "(.*)"/', 'end: "' . max($allDatesEnd[$nis]) . '"', $taskArr[$nis]);
-
+                    if (!empty($allDatesStart[$nis]) && !empty($allDatesEnd[$nis]) && isset($taskArr[$nis])) {
+                        $taskArr[$nis] = preg_replace('/start: "(.*)",/', 'start: "' . min($allDatesStart[$nis]) . '",', $taskArr[$nis]);
+                        $taskArr[$nis] = preg_replace('/end: "(.*)"/', 'end: "' . max($allDatesEnd[$nis]) . '"', $taskArr[$nis]);
+                    }
                 }
             }
-//print_r($taskArr);
+            //print_r($taskArr);
 
             /*$taskArr = [];
             $subTasks = [];
@@ -408,7 +451,7 @@ $gui->set('module_id', 14);
                                 end: '" . $dateArr[1] . "',
                                 group: '$insName',
                                 resourceId: '" . $insId . "',
-                                color: '$insColor[$insId]' 
+                                color: '$insColor[$insId]'
                             }";
                         }
                     }
@@ -460,11 +503,13 @@ $gui->set('module_id', 14);
         .fc-timeline-event {
             padding: 2px 10px;
         }
-        .fc-datagrid-cell{
-             cursor: pointer;
+
+        .fc-datagrid-cell {
+            cursor: pointer;
             color: var(--color_03);
-         }
-        .fc-datagrid-cell:hover{
+        }
+
+        .fc-datagrid-cell:hover {
             text-decoration: underline;
         }
     </style>
@@ -666,7 +711,7 @@ $gui->set('module_id', 14);
             let selfClass = $(e.target).attr('class'),
                 $bar = $(e.target).closest('.bar-wrapper'),
                 plan_id = el_tools.getUrlVar(document.location.href)
-                taskId = 0,
+            taskId = 0,
                 insId = 0;
             if (selfClass === "bar" || selfClass === 'bar-label' || selfClass === "bar-label big") {
                 if ($bar.hasClass("child_task")) {
@@ -699,14 +744,22 @@ $gui->set('module_id', 14);
             el_tools.setcookie('openTask' + parent, $self.hasClass('opened'));
         });
 
-        $(".new_order").off("click").on("click", function(e){
+        $(".new_order").off("click").on("click", function (e) {
             e.preventDefault();
             let plan_id = el_tools.getUrlVar(document.location.href),
-            ins_id = $(this).closest("tr").data("ins");
+                ins_id = $(this).closest("tr").data("ins");
             el_app.dialog_open('order_staff', {plan_id: plan_id.id, ins_id: ins_id}, 'calendar');
         });
 
-        $(".fc-datagrid-cell").off("click").on("click", function(){
+        $(".assign_staff_btn").off("click").on("click", function (e) {
+            e.preventDefault();
+            let $row = $(this).closest("tr"),
+                ins_id = $row.data("ins"),
+                uid = $(this).data("uid");
+            el_app.dialog_open('assign_staff', {insId: uid + '_' + ins_id}, 'calendar');
+        });
+
+        $(".fc-datagrid-cell").off("click").on("click", function () {
             let plan_id = el_tools.getUrlVar(document.location.href),
                 ins_id = $(this).data("resource-id");
             el_app.dialog_open('ins_info', {plan_id: plan_id.id, ins_id: ins_id}, 'calendar');

@@ -292,8 +292,6 @@
 
         if (q.length > 0) {
             rq.push("filter=" + encodeURIComponent(q.join(";")));
-        } else {
-            rq.splice(rq.indexOf("filter="), 1);
         }
 
         el_app.setMainContent(document.location.pathname, rq.join("&"));

@@ -64,11 +64,14 @@ if ($auth->isLogin()) {
         //echo '<pre>';print_r($exist_task);echo '</pre>';
     }
     //echo $plan_uid;
+    // Получаем приказ по учреждению (всегда, не только при наличии назначения)
+    $agreement_data = $db->selectOne('agreement', " WHERE 
+     source_table = 'checkinstitutions' AND source_id = " . $insId
+    );
+    $order_approved = (intval($agreement_data->status) == 1 || intval($agreement_data->approved) == 1);
+
     if (count($exist_task) > 0) {
         //Если такой приказ уже есть
-        $agreement_data = $db->selectOne('agreement', " WHERE 
-     source_table = 'checkinstitutions' AND source_id = " . $insId
-        );
     } /*else {
         //Если новый приказ, то генерим новый номер приказа
         $doc = $db->selectOne('agreement', " WHERE source_table = 'checkinstitutions' 
@@ -176,6 +179,14 @@ if ($auth->isLogin()) {
 
                     <div class='group plan_block tab-panel' id='tab_executors-panel'>
                         <?
+                        if (!$order_approved) {
+                            echo '<div class="item w_100">
+                                <div class="el_data" style="background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; padding: 12px; color: #856404;">
+                                    <span class="material-icons" style="vertical-align: middle; margin-right: 6px;">warning</span>
+                                    <strong>Назначение проверяющих недоступно.</strong> Приказ о проведении проверки ещё не утверждён.
+                                </div>
+                            </div>';
+                        }
                         if ($plan_uid == '0') { //Если задача создается не из плана
                             ?>
                             <div class='item w_50'>
@@ -443,7 +454,8 @@ if ($auth->isLogin()) {
                         }
                         if (intval($perms['edit']) == 1) {
                             ?>
-                            <button class='button icon text' id="save_doc"><span class='material-icons'>save</span>Сохранить
+                            <button class='button icon text' id="save_doc" <?= !$order_approved ? 'disabled title="Приказ не утверждён"' : '' ?>>
+                                <span class='material-icons'>save</span>Сохранить
                             </button>
                             <?
                         } else {
