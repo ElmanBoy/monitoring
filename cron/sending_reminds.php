@@ -6,11 +6,11 @@ use Core\Notifications;
 include_once $_SERVER['DOCUMENT_ROOT'].'/core/connect.php';
 
 // Проверяем что классы доступны
-if (class_exists('Minishlink\\WebPush\\WebPush')) {
+/*if (class_exists('Minishlink\\WebPush\\WebPush')) {
     echo "✅ WebPush установлен успешно!\n";
 } else {
     echo "❌ WebPush не найден\n";
-}
+}*/
 
 $alert = new Notifications();
 $db = new Db();
@@ -21,9 +21,9 @@ if(count($reminds) > 0){
     foreach ($reminds as $r){
         try {
             if (!$alert->sendingRemind($r->id)) {
-                echo $r->id.' Не отправлено!<br>';
+                //echo $r->id.' Не отправлено!<br>';
             } else {
-                echo $r->id.' Отправлено!<br>';
+                //echo $r->id.' Отправлено!<br>';
             }
         } catch (ErrorException $e) {
         }

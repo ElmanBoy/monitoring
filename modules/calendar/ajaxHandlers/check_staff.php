@@ -8,6 +8,15 @@ use Core\Cache;
 use Core\Registry;
 
 require_once $_SERVER['DOCUMENT_ROOT'] . '/core/connect.php';
+
+// Временное логирование для отладки напоминаний
+function remind_log(string $msg): void {
+    $logDir = $_SERVER['DOCUMENT_ROOT'] . '/logs';
+    if (!is_dir($logDir)) {
+        mkdir($logDir, 0775, true);
+    }
+    file_put_contents($logDir . '/reminders.log', '[' . date('Y-m-d H:i:s') . '] ' . $msg . PHP_EOL, FILE_APPEND);
+}
 //print_r($_POST);
 $db = new Db();
 $auth = new Auth();
@@ -136,6 +145,16 @@ if($auth->isLogin()) {
                 }
             }
 
+            // Логируем полный POST перед основным циклом
+            remind_log('POST: ' . json_encode([
+                'executors'        => $_POST['executors'] ?? 'NOT SET',
+                'allowremind_flag' => $_POST['allowremind_flag'] ?? 'NOT SET',
+                'remind_id'        => $_POST['remind_id'] ?? 'NOT SET',
+                'datetime'         => $_POST['datetime'] ?? 'NOT SET',
+                'comment'          => $_POST['comment'] ?? 'NOT SET',
+                'user_task'        => $_POST['user_task'] ?? 'NOT SET',
+            ], JSON_UNESCAPED_UNICODE));
+
             for ($i = 0; $i < count($_POST['executors']); $i++) {
 
                 $userFio = trim($users['array'][$_POST['executors'][$i]][0]).' '.
@@ -147,8 +166,10 @@ if($auth->isLogin()) {
                     $executors[] = $userFio . ', ' . $users['array'][$_POST['executors'][$i]][3];
                 }
 
-                // Поля напоминания для текущего сотрудника
-                $allowRemind   = isset($_POST['allowremind'][$i]) && intval($_POST['allowremind'][$i]) == 1;
+                // allowremind_actual[] — скрытое поле, JS синхронизирует его с чекбоксом.
+                // Один элемент на сотрудника, читается напрямую по $i.
+                $flagValues  = isset($_POST['allowremind_actual']) ? array_values($_POST['allowremind_actual']) : [];
+                $allowRemind = isset($flagValues[$i]) && intval($flagValues[$i]) === 1;
                 $remindId      = intval($_POST['remind_id'][$i] ?? 0);
                 $remindDateRaw = trim($_POST['datetime'][$i] ?? '');
                 // datetime-local передаёт "yyyy-MM-ddTHH:mm" — нормализуем в "yyyy-MM-dd HH:mm"
@@ -190,22 +211,76 @@ if($auth->isLogin()) {
                     }
 
                     if ($userTaskId > 0) { //Редактирование существующего
+                        $oldRecord = $db->selectOne('checkstaff', ' WHERE id = ?', [$userTaskId]);
                         $db->update('checkstaff', $userTaskId, $ans);
-                        // Баг 3: удаляем напоминание по remind_id[] конкретного сотрудника, не глобальный POST
+
                         if ($remindId > 0 && !$allowRemind) {
                             $alert->removeRemind($remindId);
                         }
-                        if ($alert->notificationTask($_SESSION['user_id'], intval($_POST['executors'][$i]), $userTaskId, 'update', $allowRemind, $remindDateTime, $remindComment)) {
-                            $alertMessage = 'Уведомление отправлено исполнителю ' . $userFio . '.';
-                        } else {
-                            $alertMessage = '<script>alert("Задание изменено, но уведомление не было отправлено.<br>" +
-                            " У исполнителя ' . $userFio . ' не указан или неверный Email.")</script>';
+
+                        // Напоминание сохраняем всегда при $allowRemind, независимо от изменений задания
+                        remind_log('CHECK_STAFF DEBUG: allowRemind=' . ($allowRemind ? '1' : '0') . ' userTaskId=' . $userTaskId . ' flagValues=' . json_encode($flagValues) . ' i=' . $i);
+                        if ($allowRemind) {
+                            $finalRemindDateTime = strlen(trim($remindDateTime)) > 0
+                                ? $remindDateTime
+                                : date('Y-m-d H:i:s', strtotime('+1 day'));
+                            $executor = $db->selectOne('users', ' WHERE id = ?', [intval($_POST['executors'][$i])]);
+                            remind_log('CHECK_STAFF DEBUG: calling setRemind, taskId=' . $userTaskId . ' executorId=' . intval($_POST['executors'][$i]) . ' datetime=' . $finalRemindDateTime);
+                            $alert->setRemind(
+                                intval($_SESSION['user_id']),
+                                $userTaskId,
+                                intval($_POST['executors'][$i]),
+                                $finalRemindDateTime,
+                                'Кликните по уведомлению для просмотра задачи',
+                                'https://monitoring.msr.mosreg.ru/assigned?open_dialog=' . $userTaskId,
+                                'Напоминание о задаче № ' . $userTaskId,
+                                $remindComment,
+                                $executor->email ?? '',
+                                trim($executor->surname . ' ' . $executor->name . ' ' . $executor->middle_name),
+                                ''
+                            );
+                        }
+
+                        // Уведомление по email — только если изменились значимые поля задания
+                        $hasChanges = (
+                            trim($oldRecord->dates ?? '') !== trim($ans['dates']) ||
+                            intval($oldRecord->task_id ?? 0) !== intval($ans['task_id'])
+                        );
+                        if ($hasChanges) {
+                            if ($alert->notificationTask($_SESSION['user_id'], intval($_POST['executors'][$i]), $userTaskId, 'update', false, '', '')) {
+                                $alertMessage = 'Уведомление отправлено исполнителю ' . $userFio . '.';
+                            } else {
+                                $alertMessage = '<script>alert("Задание изменено, но уведомление не было отправлено.<br>" +
+                                " У исполнителя ' . $userFio . ' не указан или неверный Email.")</script>';
+                            }
                         }
                     } else { //Создание нового
                         $db->insert('checkstaff', $ans);
                         $newTaskId = $db->last_insert_id;
                         $userTaskId = $newTaskId;
-                        if ($alert->notificationTask($_SESSION['user_id'], intval($_POST['executors'][$i]), $newTaskId, 'new', $allowRemind, $remindDateTime, $remindComment)) {
+
+                        // Напоминание сохраняем сразу, независимо от наличия email
+                        if ($allowRemind) {
+                            $finalRemindDateTime = strlen(trim($remindDateTime)) > 0
+                                ? $remindDateTime
+                                : date('Y-m-d H:i:s', strtotime('+1 day'));
+                            $executor = $db->selectOne('users', ' WHERE id = ?', [intval($_POST['executors'][$i])]);
+                            $alert->setRemind(
+                                intval($_SESSION['user_id']),
+                                $newTaskId,
+                                intval($_POST['executors'][$i]),
+                                $finalRemindDateTime,
+                                'Кликните по уведомлению для просмотра задачи',
+                                'https://monitoring.msr.mosreg.ru/assigned?open_dialog=' . $newTaskId,
+                                'Напоминание о задаче № ' . $newTaskId,
+                                $remindComment,
+                                $executor->email ?? '',
+                                trim($executor->surname . ' ' . $executor->name . ' ' . $executor->middle_name),
+                                ''
+                            );
+                        }
+
+                        if ($alert->notificationTask($_SESSION['user_id'], intval($_POST['executors'][$i]), $newTaskId, 'new', false, '', '')) {
                             $alertMessage = 'Уведомление отправлено исполнителю ' . $userFio . '.';
                         } else {
                             $alertMessage = '<script>alert("Задание создано, но уведомление не было отправлено.<br>" +

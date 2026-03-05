@@ -20,6 +20,14 @@ use Minishlink\WebPush\Subscription;
 
 class Notifications
 {
+    private function remindLog(string $msg): void
+    {
+        $logDir = $_SERVER['DOCUMENT_ROOT'] . '/logs';
+        if (!is_dir($logDir)) {
+            mkdir($logDir, 0775, true);
+        }
+        file_put_contents($logDir . '/reminders.log', '[' . date('Y-m-d H:i:s') . '] ' . $msg . PHP_EOL, FILE_APPEND);
+    }
     /**
      * @var array
      */
@@ -197,10 +205,17 @@ class Notifications
             'caption' => $caption
         ];
         $exist = $this->db->selectOne('reminders', ' WHERE task_id = ? AND employee = ?', [$taskId, $executorId]);
-        if ($exist->id) {
-            $this->db->update('reminders', $exist->id, $rem);
-        } else {
-            $this->db->insert('reminders', $rem);
+        try {
+            if ($exist !== null && $exist->id) {
+                $this->db->update('reminders', $exist->id, $rem);
+                $this->remindLog('setRemind: UPDATE id=' . $exist->id . ' task_id=' . $taskId . ' employee=' . $executorId);
+            } else {
+                $this->remindLog('setRemind: before INSERT rem=' . json_encode($rem, JSON_UNESCAPED_UNICODE));
+                $insertResult = $this->db->insert('reminders', $rem);
+                $this->remindLog('setRemind: INSERT result=' . json_encode($insertResult) . ' last_id=' . $this->db->last_insert_id);
+            }
+        } catch (\Exception $e) {
+            $this->remindLog('setRemind ERROR: ' . $e->getMessage() . ' | rem=' . json_encode($rem, JSON_UNESCAPED_UNICODE));
         }
     }
 
@@ -277,6 +292,26 @@ class Notifications
         $inspection = '';
 
 
+        // Напоминание сохраняется независимо от наличия email
+        if ($allowRemind) {
+            $finalRemindDateTime = (strlen(trim($remindDateTime)) > 0)
+                ? $remindDateTime
+                : date('Y-m-d H:i:s', strtotime('+1 day'));
+            $this->setRemind(
+                $appointedId,
+                $taskId,
+                $executorId,
+                $finalRemindDateTime,
+                'Кликните по уведомлению для просмотра задачи',
+                'https://monitoring.msr.mosreg.ru/assigned?open_dialog=' . $taskId,
+                'Напоминание о задаче № ' . $taskId,
+                $remindComment,
+                $executor->email ?? '',
+                $executorFIO,
+                ''  // letterText будет заполнен ниже если есть email
+            );
+        }
+
         if (strlen(trim($executorEmail)) > 0) {
             $task = $this->db->selectOne('checkstaff', ' WHERE id = ' . $taskId);
             $insId = intval($task->institution);
@@ -300,7 +335,6 @@ class Notifications
             $dates = 'с ' . $this->date->dateToString($dateStart) . ' по ' . $this->date->dateToString($dateEnd);
 
             $taskInfo = $this->db->selectOne('tasks', 'WHERE id = ?', [$task->task_id]);
-            //$sheet = $sheets['array'][$taskInfo->sheet];
             $inspectArr = [];
             $subjectArr = json_decode($taskInfo->subject);
             if (is_array($subjectArr) && count($subjectArr) > 0) {
@@ -330,30 +364,15 @@ class Notifications
                     (strlen($inspection) > 0 ? '<p><strong>Предмет проверки: </strong>' . $inspection . '</p>' : '');
             }
 
+            // Обновляем letter в записи напоминания теперь когда letterText готов
             if ($allowRemind) {
-                // Баг 1: используем дату из формы, а не текущее время
-                $finalRemindDateTime = (strlen(trim($remindDateTime)) > 0)
-                    ? $remindDateTime
-                    : date('Y-m-d H:i:s', strtotime('+1 day'));
-                $this->setRemind(
-                    $appointedId,
-                    $taskId,
-                    $executorId,
-                    $finalRemindDateTime,
-                    'Кликните по уведомлению для просмотра задачи',
-                    'https://monitoring.msr.mosreg.ru/assigned?open_dialog=' . $taskId,
-                    'Напоминание о задаче № ' . $taskId,
-                    $remindComment,
-                    $executorEmail,
-                    $executorFIO,
-                    $letterText
-                );
+                $exist = $this->db->selectOne('reminders', ' WHERE task_id = ? AND employee = ?', [$taskId, $executorId]);
+                if ($exist !== null && $exist->id) {
+                    $this->db->update('reminders', $exist->id, ['letter' => $letterText]);
+                }
             }
-            // Баг 3: удаление remind_id теперь делается в вызывающем коде (check_staff.php),
-            // здесь оставляем только как fallback для других точек вызова
-            if (isset($_POST['remind_id']) && intval($_POST['remind_id']) > 0 && !$allowRemind) {
-                $this->removeRemind(intval($_POST['remind_id']));
-            }
+
+            // Удаление remind_id выполняется в вызывающем коде (check_staff.php) до вызова notificationTask
 
             $this->addRecordToPanel($executorId, $letterText, $taskId, '/assigned');
 
@@ -418,9 +437,7 @@ class Notifications
                 );
             }
 
-            if (isset($_POST['remind_id']) && intval($_POST['remind_id']) > 0 && !$allowRemind) {
-                $this->removeRemind(intval($_POST['remind_id']));
-            }
+            // Удаление remind выполняется в вызывающем коде до вызова этого метода
 
             $this->addRecordToPanel($signerId, $letterText, $documentId, '/documents');
 
@@ -481,9 +498,7 @@ class Notifications
                 );
             }
 
-            if (isset($_POST['remind_id']) && intval($_POST['remind_id']) > 0 && !$allowRemind) {
-                $this->removeRemind(intval($_POST['remind_id']));
-            }
+            // Удаление remind выполняется в вызывающем коде до вызова этого метода
 
             $this->addRecordToPanel($signerId, $letterText, $documentId, '/documents');
 
@@ -545,9 +560,7 @@ class Notifications
                 );
             }
 
-            if (isset($_POST['remind_id']) && intval($_POST['remind_id']) > 0 && !$allowRemind) {
-                $this->removeRemind(intval($_POST['remind_id']));
-            }
+            // Удаление remind выполняется в вызывающем коде до вызова этого метода
 
             $this->addRecordToPanel($signerId, $letterText, $documentId, '/documents');
 

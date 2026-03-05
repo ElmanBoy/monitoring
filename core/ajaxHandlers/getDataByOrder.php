@@ -82,8 +82,9 @@ if($orderId > 0) {
                     <div class='custom_checkbox'>
                         <label class='container' style='left: 4px;'>
                             <span class='label-text'>Включить напоминание</span>
-                            <input type='checkbox' name='allowremind[]'
-                                   class='is_claim' tabindex='-1'
+                            <input type='hidden' name='allowremind_actual[]' class='allowremind_actual' value='". ($chStaff->allowremind == 1 ? '1' : '0') ."'>
+                            <input type='checkbox' name='allowremind_flag[]'
+                                   class='is_claim allowremind_cb' tabindex='-1'
                                    value='1'". ($chStaff->allowremind == 1 ? ' checked=\"checked\"' : '' ).">
                             <span class='checkmark'></span>
                         </label>
@@ -98,12 +99,22 @@ if($orderId > 0) {
             $html .= "<div class='group reminder' style='margin-top: -10px;{$reminderDisplay}'><h5
                         class='item w_100 remind_number'>Напоминание</h5>";
             $prevDate = date('Y-m-d', strtotime(date('y-m-d') . ' -1 day'));
-                $html .= $reg->buildForm(71, [], [
-                        'datetime' => strlen($reminder->datetime) > 0 ? $reminder->datetime : $prevDate . ' 10:00',
-                        'employee' => intval($reminder->employee) > 0 ? $reminder->employee : $user_id,
-                        'comment' => $reminder->comment
-                    ]
-                );
+            $rDatetime = strlen($reminder->datetime) > 0 ? str_replace(' ', 'T', $reminder->datetime) : $prevDate . 'T10:00';
+            $rComment  = htmlspecialchars($reminder->comment ?? '');
+            $html .= "<input type='hidden' name='remind_employee[]' value='" . intval($user_id) . "'>
+            <div class='item w_50'>
+                <div class='el_data'>
+                    <label>Дата и время напоминания</label>
+                    <input class='el_input single_date_time' type='datetime-local'
+                           name='datetime[]' value='" . htmlspecialchars($rDatetime) . "'>
+                </div>
+            </div>
+            <div class='item w_100'>
+                <div class='el_data'>
+                    <label>Комментарий</label>
+                    <textarea class='el_textarea' name='comment[]' rows='2'>" . $rComment . "</textarea>
+                </div>
+            </div>";
             $html .= "</div>
             </div>";
             $staffListArr[] = $html;

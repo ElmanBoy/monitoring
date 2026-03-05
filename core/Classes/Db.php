@@ -216,8 +216,11 @@ class Db
             if (isset($_SESSION['registry'][$tableName])) {
                 unset($_SESSION['registry'][$tableName]);
             }
-            file_put_contents(ROOT . '/logs/pg_log.txt', $logs->grep('INSERT'));
             $this->last_insert_id = $result->id;
+            if (!is_dir(ROOT . '/logs')) {
+                mkdir(ROOT . '/logs', 0775, true);
+            }
+            file_put_contents(ROOT . '/logs/pg_log.txt', $logs->grep('INSERT'));
             return ['result' => true, 'resultText' => '', 'id' => $result->id];
         } catch (\Exception $e) {
             return $this->handleDbException($e);
