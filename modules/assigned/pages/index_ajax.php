@@ -180,27 +180,38 @@ $gui->set('module_id', 15);
             $permissionQuery = '';
             $taskIds = [];
 
-            if (intval($_SESSION['user_ousr']) > 0 && intval($_SESSION['user_roles']) == 7) {
-                //Руководитель ОУСР
-                $permissionQueryArr[] = ' ousr = ' . intval($_SESSION['user_ousr']);
-            }
-            if (intval($_SESSION['user_division']) > 0 && intval($_SESSION['user_roles']) == 3) {
-                //Руководитель подразделения министерства - выбираем всех сотрудников подразделения
-                $staff = $db->select('users', ' WHERE division = ' . intval($_SESSION['user_division']));
-                if (count($staff) > 0) {
-                    $div_users = [];
-                    foreach ($staff as $id => $s) {
-                        $div_users[] = $s->id;
-                    }
-                    $permissionQueryArr[] = ' user IN (' . implode(', ', $div_users) . ')';
-                }
-            }
-            if(in_array(intval($_SESSION['user_roles']), [4, 8])){
-                //Оператор министерства или ОУСР
-                $permissionQueryArr[] = ' user = ' . intval($_SESSION['user_id']);
-            }
+            $userRole = intval($_SESSION['user_roles']);
+            $userId   = intval($_SESSION['user_id']);
 
-            $permissionQuery = count($permissionQueryArr) > 0 ? ' AND ' . implode(' AND ', $permissionQueryArr) : '';
+            if (in_array($userRole, [1, 2])) {
+                // Администратор и руководитель министерства — видят все
+                $permissionQuery = '';
+            } elseif ($userRole == 3) {
+                // Руководитель подразделения — видит своё подразделение
+                if (intval($_SESSION['user_division']) > 0) {
+                    $staff = $db->select('users', ' WHERE division = ' . intval($_SESSION['user_division']));
+                    $div_users = array_map(fn($s) => $s->id, $staff);
+                    if (count($div_users) > 0) {
+                        $permissionQuery = ' AND user IN (' . implode(', ', $div_users) . ')';
+                    } else {
+                        $permissionQuery = ' AND user = 0'; // нет сотрудников — ничего не показываем
+                    }
+                }
+            } elseif ($userRole == 7) {
+                // Руководитель ОУСР — видит свой ОУСР
+                if (intval($_SESSION['user_ousr']) > 0) {
+                    $permissionQuery = ' AND ousr = ' . intval($_SESSION['user_ousr']);
+                }
+            } elseif (in_array($userRole, [4, 8])) {
+                // Оператор министерства или сотрудник ОУСР — только себя
+                $permissionQuery = ' AND user = ' . $userId;
+            } elseif (in_array($userRole, [5, 6])) {
+                // Руководитель/оператор объекта контроля — только себя
+                $permissionQuery = ' AND user = ' . $userId;
+            } else {
+                // Неизвестная роль — только себя
+                $permissionQuery = ' AND user = ' . $userId;
+            }
             //echo $permissionQuery;
 
 
@@ -290,6 +301,6 @@ $gui->set('module_id', 15);
     if($open_dialog > 0){
         echo 'el_app.dialog_open("view_task", {"taskId": '.$open_dialog.', view_result: 0}, "calendar");';
     }
-        ?>
+    ?>
 </script>
 <script src="/modules/assigned/js/registry_items.js?v=<?= $gui->genpass() ?>"></script>
