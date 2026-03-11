@@ -360,6 +360,7 @@ if ($auth->isLogin()) {
             $existingActId = ($existingAct && intval($existingAct->id) > 0) ? intval($existingAct->id) : 0;
 
             $_POST['plan_id'] = $plan->id;
+            $_POST['plan'] = $plan->id;  // createDocument читает $_POST['plan'] для поля plan_id
             $docCreateResult = $reg->createDocument($_POST, $existingActId);
 
             if (is_array($_POST['agreementlist']) && count($_POST['agreementlist']) > 0) {

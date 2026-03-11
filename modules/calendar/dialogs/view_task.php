@@ -17,7 +17,7 @@ $editData = [];
 $act_number = '';
 
 $taskId = intval($_POST['params']['taskId']);
-$view_result = intval($_POST['params']['view_result']) == 1;
+$view_result = intval($_POST['params']['view_result']) == 1 || intval($chStaff->done) == 1;
 
 $chStaff = $db->selectOne('checkstaff', ' WHERE id = ?', [$taskId]);
 
