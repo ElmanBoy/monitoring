@@ -361,7 +361,22 @@ if ($auth->isLogin()) {
 
             $_POST['plan_id'] = $plan->id;
             $_POST['plan'] = $plan->id;  // createDocument читает $_POST['plan'] для поля plan_id
+
+            // DEBUG: логируем входные данные и результат
+            $debugData = [
+                'source_id' => $_POST['source_id'] ?? null,
+                'source_table' => $_POST['source_table'] ?? null,
+                'plan' => $_POST['plan'] ?? null,
+                'documentacial' => $_POST['documentacial'] ?? null,
+                'doc_number' => $_POST['doc_number'] ?? null,
+                'name' => $_POST['name'] ?? null,
+                'existingActId' => $existingActId,
+            ];
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/act_debug.log', date('Y-m-d H:i:s') . ' POST_DATA: ' . json_encode($debugData, JSON_UNESCAPED_UNICODE) . "\n", FILE_APPEND);
+
             $docCreateResult = $reg->createDocument($_POST, $existingActId);
+
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/act_debug.log', date('Y-m-d H:i:s') . ' RESULT: ' . json_encode($docCreateResult, JSON_UNESCAPED_UNICODE) . "\n", FILE_APPEND);
 
             if (is_array($_POST['agreementlist']) && count($_POST['agreementlist']) > 0) {
                 for ($s = 0; $s < count($_POST['agreementlist']); $s++) {
@@ -376,10 +391,10 @@ if ($auth->isLogin()) {
                                 $signers[] = $sec['id'];
                             }
                         }
-                        $signer_1 = $signers[0];
-                        $signer_1_position = $users['result'][$signer_1]->position;
-                        $signer_2 = $signers[1];
-                        $signer_2_position = $users['result'][$signer_2]->position;
+                        $signer_1 = $signers[0] ?? null;
+                        $signer_1_position = $signer_1 ? ($users['result'][$signer_1]->position ?? '') : '';
+                        $signer_2 = $signers[1] ?? null;
+                        $signer_2_position = $signer_2 ? ($users['result'][$signer_2]->position ?? '') : '';
                     }
                 }
                 $_POST['agreementlist'] = $clear_agreement;

@@ -17,7 +17,6 @@ $editData = [];
 $act_number = '';
 
 $taskId = intval($_POST['params']['taskId']);
-$view_result = intval($_POST['params']['view_result']) == 1 || intval($chStaff->done) == 1;
 
 $chStaff = $db->selectOne('checkstaff', ' WHERE id = ?', [$taskId]);
 
@@ -25,6 +24,8 @@ if ($chStaff == null) {
     echo '<script>alert("Задача не найдена. Возможно, она была удалена.");setTimeout(function (){$(".wrap_pop_up").remove();}, 2000);</script>';
     die();
 }
+
+$view_result = intval($_POST['params']['view_result']) == 1 || intval($chStaff->done) == 1;
 $insId = $chStaff->institution;
 
 //Получение данных адресанта
