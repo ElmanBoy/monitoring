@@ -192,9 +192,9 @@ $gui->set('module_id', 15);
                     $staff = $db->select('users', ' WHERE division = ' . intval($_SESSION['user_division']));
                     $div_users = array_map(fn($s) => $s->id, $staff);
                     if (count($div_users) > 0) {
-                        $permissionQuery = ' AND user IN (' . implode(', ', $div_users) . ')';
+                        $permissionQuery = ' AND "user" IN (' . implode(', ', $div_users) . ')';
                     } else {
-                        $permissionQuery = ' AND user = 0'; // нет сотрудников — ничего не показываем
+                        $permissionQuery = ' AND "user" = 0'; // нет сотрудников — ничего не показываем
                     }
                 }
             } elseif ($userRole == 7) {
@@ -204,13 +204,13 @@ $gui->set('module_id', 15);
                 }
             } elseif (in_array($userRole, [4, 8])) {
                 // Оператор министерства или сотрудник ОУСР — только себя
-                $permissionQuery = ' AND user = ' . $userId;
+                $permissionQuery = ' AND "user" = ' . $userId;
             } elseif (in_array($userRole, [5, 6])) {
                 // Руководитель/оператор объекта контроля — только себя
-                $permissionQuery = ' AND user = ' . $userId;
+                $permissionQuery = ' AND "user" = ' . $userId;
             } else {
                 // Неизвестная роль — только себя
-                $permissionQuery = ' AND user = ' . $userId;
+                $permissionQuery = ' AND "user" = ' . $userId;
             }
             //echo $permissionQuery;
 

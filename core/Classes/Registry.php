@@ -1969,9 +1969,11 @@ class Registry
             ' . TBL_PREFIX . 'regfields.reg_id = ? ORDER BY ' . TBL_PREFIX . 'regfields.sort', [$regId]
         );
 
-        $exist = $this->db->selectOne('agreement', ' WHERE source_table = ? 
+        $exist = $docId > 0
+            ? $this->db->selectOne('agreement', ' WHERE id = ?', [$docId])
+            : $this->db->selectOne('agreement', ' WHERE source_table = ? 
         AND source_id = ? ORDER BY id DESC LIMIT 1', [$data['source_table'], $data['source_id']]
-        );
+            );
         $documentId = $exist->id;
 
         //Проверяем обязательные поля

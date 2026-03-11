@@ -126,13 +126,15 @@ if (isset($_POST['ajax']) && intval($_POST['ajax']) == 1) {
 
 } else {
 
-    //Создаем токен CSRF в cookie
+    //Создаем токен CSRF в cookie — генерируем только если ещё нет в сессии
     try {
-        $csrfToken = $auth->buildToken();
+        if (empty($_SESSION['csrf-token'])) {
+            $_SESSION['csrf-token'] = $auth->buildToken();
+        }
+        $csrfToken = $_SESSION['csrf-token'];
     } catch (Exception $e) {
         echo $e->getMessage();
     }
-    $_SESSION['csrf-token'] = $csrfToken;
     setcookie('CSRF-TOKEN', $csrfToken, 0, '/', $_SERVER['SERVER_NAME']/*, true*/);;
     //Проверяем авторизацию
     if (!$auth->isLogin()) {

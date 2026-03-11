@@ -35,31 +35,32 @@ $outputType = isset($_POST['outputType']) ? intval($_POST['outputType']) : 1;
 $users = $db->getRegistry('users', '', [], ['surname', 'name', 'middle_name', 'position']);
 $ins = $db->getRegistry('institutions');
 
-if(isset($_POST['data']) && strlen($_POST['data']) > 0) { //Предпросмотр документа во время создания
+if (isset($_POST['data']) && strlen($_POST['data']) > 0) { //Предпросмотр документа во время создания
     //Если данные плана переданы для предпросмотра
     parse_str($_POST['data'], $data);
 //print_r($data);
     $plan = $db->selectOne('checksplans', ' uid = ? OR plan = ?', [$data['uid'], $data['plan']]);
     $agr = $db->selectOne('agreement', ' source_table = ? AND source_id = ?', ['checksplans', $plan->id]);
-    $document = $db->selectOne('documents', " WHERE id = ?", [$data['document']]);
+    $document = $db->selectOne('documents', ' WHERE id = ?', [$data['document']]);
     $docId = $agr->id;
     $documentacial = intval($document->documentacial);
 
-    if($documentacial == 3) { //Предпросмотр плана
+    if ($documentacial == 3) { //Предпросмотр плана
         $plan = $db->selectOne('checksplans', ' uid = ?', [$data['uid']]);
         $agr = $db->selectOne('agreement', ' source_table = ? AND source_id = ?', ['checksplans', $plan->id]);
         $docId = $agr->id;
         $data['agreement_date'] = $date->dateToString($agr->docdate);//TODO: выяснить почему не выводится дата
-    }else{ //Предпросмотр иного документа
+    } else { //Предпросмотр иного документа
         //$tmpl = $db->selectOne('documents', " WHERE id = ?", [$data['document']]);
 
         $executorsArr = [];
         $executors = '';
-        if(is_array($data['executors_list']) && count($data['executors_list']) > 0){
-            foreach($data['executors_list'] as $ex){
-                $executorsArr[] = PersonNameDeclension::decline(trim($users['array'][$ex][0]).' '.
-                    trim($users['array'][$ex][1]).' '.
-                    trim($users['array'][$ex][2]), 'accusative').', '.
+        if (is_array($data['executors_list']) && count($data['executors_list']) > 0) {
+            foreach ($data['executors_list'] as $ex) {
+                $executorsArr[] = PersonNameDeclension::decline(trim($users['array'][$ex][0]) . ' ' .
+                        trim($users['array'][$ex][1]) . ' ' .
+                        trim($users['array'][$ex][2]), 'accusative'
+                    ) . ', ' .
                     PositionDeclension::decline(mb_strtolower(trim($users['array'][$ex][3])), 'accusative');
             }
             $executors = implode(';<br>', $executorsArr);
@@ -67,11 +68,11 @@ if(isset($_POST['data']) && strlen($_POST['data']) > 0) { //Предпросмо
 
         $actionPeriodArr = [];
         $checkPeriodArr = [];
-        if(strlen($data['action_period_hidden'][0]) > 0) {
-            if(substr_count($data['action_period_hidden'][0], '[') > 0) {
+        if (strlen($data['action_period_hidden'][0]) > 0) {
+            if (substr_count($data['action_period_hidden'][0], '[') > 0) {
                 $actionPeriodArr = explode(' - ', $date->getMonthDateRange(json_decode($data['action_period_hidden'][0])));
             }
-        }else{
+        } else {
             $actionPeriodArr = explode(' - ', $data['actionPeriod']);
         }
         $checkPeriodArr = explode(' - ', $data['check_period']);
@@ -93,19 +94,20 @@ if(isset($_POST['data']) && strlen($_POST['data']) > 0) { //Предпросмо
             'action_period_end' => $date->dateToString($actionPeriodArr[1]),
             'check_period_start' => $date->dateToString($checkPeriodArr[0]),
             'check_period_end' => $date->dateToString($checkPeriodArr[1]),
-            'executors_head' => PersonNameDeclension::decline(trim($users['array'][$data['executors_head']][0]).' '.
-                trim($users['array'][$data['executors_head']][1]).' '.
-                trim($users['array'][$data['executors_head']][2]), 'accusative').', '.
+            'executors_head' => PersonNameDeclension::decline(trim($users['array'][$data['executors_head']][0]) . ' ' .
+                    trim($users['array'][$data['executors_head']][1]) . ' ' .
+                    trim($users['array'][$data['executors_head']][2]), 'accusative'
+                ) . ', ' .
                 PositionDeclension::decline(mb_strtolower(trim($users['array'][$data['executors_head']][3])), 'accusative'),
             'executors' => $executors
         ];
     }
     $outputType = 0;
-}elseif($planId > 0){ //Просмотр документа из базы данных
+} elseif ($planId > 0) { //Просмотр документа из базы данных
     $subQuery = '';
-    if($docType > 0){
-        $subQuery = "source_id = ? AND documentacial = ".$docType;
-    }else{
+    if ($docType > 0) {
+        $subQuery = 'source_id = ? AND documentacial = ' . $docType;
+    } else {
         $subQuery = 'id = ?';
     }
     //echo $subQuery;
@@ -114,7 +116,7 @@ if(isset($_POST['data']) && strlen($_POST['data']) > 0) { //Предпросмо
     //$document = $db->selectOne('documents', ' WHERE id = ?', [$agr->document]);
     $documentacial = intval($agr->documentacial);
     //print_r($agr);
-    if($documentacial == 3) { //Просмотр сохраненного плана
+    if ($documentacial == 3) { //Просмотр сохраненного плана
         $plan = $db->selectOne('checksplans', ' id = ?', [$agr->source_id]);
         $docId = $agr->id;
         $docName = $plan->short;
@@ -142,26 +144,27 @@ if(isset($_POST['data']) && strlen($_POST['data']) > 0) { //Предпросмо
         $data['document'] = $agr->document;
         $docId = $agr->id;
         //print_r($data);
-    }else{ //Просмотр иного сохраненного документа, не плана
+    } else { //Просмотр иного сохраненного документа, не плана
         $executorsArr = [];
         $executors = '';
         $executors_list = json_decode($agr->executors_list, true);
         $docName = $agr->name;
 
-        if(is_array($executors_list) && count($executors_list) > 0){
-            foreach($executors_list as $ex){
-                $executorsArr[] = PersonNameDeclension::decline(trim($users['array'][$ex][0]).' '.
-                    trim($users['array'][$ex][1]).' '.
-                    trim($users['array'][$ex][2]), 'accusative').', '.
+        if (is_array($executors_list) && count($executors_list) > 0) {
+            foreach ($executors_list as $ex) {
+                $executorsArr[] = PersonNameDeclension::decline(trim($users['array'][$ex][0]) . ' ' .
+                        trim($users['array'][$ex][1]) . ' ' .
+                        trim($users['array'][$ex][2]), 'accusative'
+                    ) . ', ' .
                     PositionDeclension::decline(mb_strtolower(trim($users['array'][$ex][3])), 'accusative');
             }
             $executors = implode(';<br>', $executorsArr);
         }
         $actionPeriodArr = [];
-        if(strlen($agr->action_period) > 0) {
-            if(substr_count($agr->action_period, '[') > 0) {
+        if (strlen($agr->action_period) > 0) {
+            if (substr_count($agr->action_period, '[') > 0) {
                 $actionPeriodArr = explode(' - ', $date->getMonthDateRange(json_decode($agr->action_period)));
-            }else{
+            } else {
                 $actionPeriodArr = explode(' - ', $agr->action_period);
             }
         }
@@ -184,17 +187,97 @@ if(isset($_POST['data']) && strlen($_POST['data']) > 0) { //Предпросмо
             'action_period_end' => $date->dateToString($actionPeriodArr[1]),
             'check_period_start' => $date->dateToString($checkPeriodArr[0]),
             'check_period_end' => $date->dateToString($checkPeriodArr[1]),
-            'executors_head' => PersonNameDeclension::decline(trim($users['array'][$agr->executors_head][0]).' '.
-                trim($users['array'][$agr->executors_head][1]).' '.
-                trim($users['array'][$agr->executors_head][2]), 'accusative').', '.
+            'executors_head' => PersonNameDeclension::decline(trim($users['array'][$agr->executors_head][0]) . ' ' .
+                    trim($users['array'][$agr->executors_head][1]) . ' ' .
+                    trim($users['array'][$agr->executors_head][2]), 'accusative'
+                ) . ', ' .
                 PositionDeclension::decline(mb_strtolower(trim($users['array'][$agr->executors_head][3])), 'accusative'),
             'executors' => $executors,
-           'agreementlist' => json_decode($agr->agreementlist, true)
+            'agreementlist' => json_decode($agr->agreementlist, true)
         ];
+
+        // Дополнительные переменные для документов типа АКТ (documentacial = 2)
+        // Подгружаются из checkstaff и checksviolations по source_id (ins_id) и plan_id
+        if ($documentacial == 2 && intval($agr->source_id) > 0) {
+            $insId = intval($agr->source_id);
+            $planId_r = intval($agr->plan_id);
+
+            // Ищем приказ на проверку
+            $order_agr = $db->selectOne('agreement', ' WHERE documentacial = 1 AND plan_id = ? AND ins_id = ?', [$planId_r, $insId]);
+            $order_number_r = $order_agr->doc_number ?? ($agr->doc_number ?? '');
+            $order_date_r = $order_agr->docdate ?? ($agr->docdate ?? '');
+
+            // Загружаем проверяющих по ins_id и plan_id через check_uid из checksplans
+            $plan_r = $db->selectOne('checksplans', ' WHERE id = ?', [$planId_r]);
+            $staffRows = [];
+            if ($plan_r && strlen($plan_r->uid ?? '') > 0) {
+                $staffRows = $db->select('checkstaff', ' WHERE check_uid = ? AND institution = ?', [$plan_r->uid, $insId]);
+            }
+
+            $head_fio_r = '';
+            $head_position_r = '';
+            $head_short_r = '';
+            $list_executors_arr = [];
+
+            foreach ($staffRows as $sr) {
+                $u = $db->selectOne('users', ' WHERE id = ?', [$sr->user]);
+                if (!$u) continue;
+                $initials = mb_substr(trim($u->name), 0, 1) . '. ' . mb_substr(trim($u->middle_name), 0, 1) . '. ' . trim($u->surname);
+                if (intval($sr->is_head) == 1) {
+                    $head_fio_r = $initials;
+                    $head_position_r = $u->position ?? '';
+                    $head_short_r = $initials;
+                } else {
+                    $list_executors_arr[] = $initials . ' — ' . ($u->position ?? '');
+                }
+            }
+
+            // Проверяемый период из addinstitution плана
+            $verifiable_start_r = '';
+            $verifiable_end_r = '';
+            if ($plan_r) {
+                $addInstitution_r = json_decode($plan_r->addinstitution ?? '[]', true);
+                foreach ((array)$addInstitution_r as $ads) {
+                    if (intval($ads['institutions'] ?? 0) == $insId && isset($ads['check_periods'])) {
+                        $vArr = explode(' - ', $ads['check_periods']);
+                        $verifiable_start_r = $date->correctDateFormatFromMysql($vArr[0] ?? '');
+                        $verifiable_end_r = $date->correctDateFormatFromMysql($vArr[1] ?? '');
+                        break;
+                    }
+                }
+            }
+
+            // Нарушения из checksviolations через tasks в checkstaff
+            $violation_items_r = [];
+            if (count($staffRows) > 0) {
+                $taskIds = array_filter(array_map(fn($sr) => intval($sr->id), $staffRows));
+                if (count($taskIds) > 0) {
+                    $vRows = $db->db::getAll(
+                        'SELECT * FROM ' . TBL_PREFIX . 'checksviolations WHERE tasks IN (' . implode(',', $taskIds) . ')'
+                    );
+                    foreach ((array)$vRows as $vr) {
+                        if (!empty($vr['name'] ?? '')) {
+                            $violation_items_r[] = ['name' => $vr['name']];
+                        }
+                    }
+                }
+            }
+
+            $doc_data['head_fio'] = $head_fio_r;
+            $doc_data['head_position'] = $head_position_r;
+            $doc_data['head_short'] = $head_short_r;
+            $doc_data['list_executors'] = implode(';<br>', $list_executors_arr);
+            $doc_data['verifiable_start'] = $verifiable_start_r;
+            $doc_data['verifiable_end'] = $verifiable_end_r;
+            $doc_data['violations'] = $violation_items_r;
+            // Перезаписываем order_date/order_number из приказа если нашли
+            if (!empty($order_number_r)) $doc_data['order_number'] = $order_number_r;
+            if (!empty($order_date_r)) $doc_data['order_date'] = $date->dateToString($order_date_r);
+        }
     }
     $docId = $agr->id;
     //$outputType = 1;
-}else{
+} else {
     $html .= '<p>Не передан id документа</p>';
 }
 //print_r($data);
@@ -343,15 +426,15 @@ $html .= '<html lang="ru">
         
         <title>Документ</title>
     </head>
-    <body><footer>Документ создан в электронной форме. №&nbsp;'.$doc_data['doc_number'].' от '.
-    $date->correctDateFormatFromMysql(date('Y-m-d H:i:s')).'. 
-    Исполнитель: '.$initiator_fio.'<img src="data:image/png;base64,' . $temp->bottom_logo . '"></footer><main>';
+    <body><footer>Документ создан в электронной форме. №&nbsp;' . $doc_data['doc_number'] . ' от ' .
+    $date->correctDateFormatFromMysql(date('Y-m-d H:i:s')) . '. 
+    Исполнитель: ' . $initiator_fio . '<img src="data:image/png;base64,' . $temp->bottom_logo . '"></footer><main>';
 
-if($documentacial == 3 || $documentacial == 0){
+if ($documentacial == 3 || $documentacial == 0) {
     //Если это план проверок
     $orientation = 'landscape';
     $footer_position = 576;
-}else{
+} else {
     $orientation = 'portrait';
     $footer_position = 820;
 }
@@ -381,18 +464,18 @@ $dompdf->render();
 $fontFamilies = $fontMetrics->getFontFamilies();
 print_r($fontFamilies);*/
 $canvas = $dompdf->getCanvas();
-$footerText = 'Страница {PAGE_NUM} из {PAGE_COUNT}. Страница создана: '.$date->dateToString(date('Y-m-d H:i:s'));
+$footerText = 'Страница {PAGE_NUM} из {PAGE_COUNT}. Страница создана: ' . $date->dateToString(date('Y-m-d H:i:s'));
 $canvas->page_text(8, $footer_position, $footerText, 'DejaVu Sans', 8, [0, 0, 0]);
 
 $pdfData = base64_encode($dompdf->output());
 //echo $outputType;
-if($outputType == 0){
+if ($outputType == 0) {
     echo $pdfData;
-}else{
+} else {
     echo "
 <div class='pop_up drag' style='width: 60vw'>
     <div class='title handle'>
-        <div class='name'>Просмотр документа &laquo;".$docName."&raquo;</div>
+        <div class='name'>Просмотр документа &laquo;" . $docName . "&raquo;</div>
         <div class='button icon close'><span class='material-icons'>close</span></div>
     </div>
     <div class='pop_up_body'>
@@ -407,4 +490,3 @@ if($outputType == 0){
     document.getElementById('pdf-viewer').src = `data:application/pdf;base64,$pdfData`;
 </script>";
 }
-
