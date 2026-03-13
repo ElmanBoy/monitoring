@@ -70,6 +70,14 @@ if ($auth->isLogin()) {
                 }
             }
 
+            // Валидация листа согласования
+            $agCheck = $reg->checkAgreementList($_POST['agreementlist'] ?? [], 'приказа');
+            if (!$agCheck['result']) {
+                $err++;
+                $errStr[]      = $agCheck['message'];
+                $errorFields[] = $agCheck['errField'];
+            }
+
             if (count($checklistValues) > 0 && $err == 0) {
                 $checklistValues['active'] = 1;
                 $checklistValues['author'] = $_SESSION['user_id'];
@@ -367,6 +375,17 @@ if ($auth->isLogin()) {
             $_POST['source_id'] = $insId;
             $_POST['signators'] = $_POST['signers'];
             $_POST['source_table'] = 'checkinstitutions';
+
+            // Валидация листа согласования
+            $agCheck = $reg->checkAgreementList($_POST['agreementlist'] ?? [], 'акта');
+            if (!$agCheck['result']) {
+                echo json_encode([
+                    'result'      => false,
+                    'resultText'  => $agCheck['message'],
+                    'errorFields' => [$agCheck['errField']]
+                ]);
+                die();
+            }
 
             // Проверяем — акт уже существует?
             $existingAct = $db->selectOne('agreement',

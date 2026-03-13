@@ -100,6 +100,14 @@ foreach ($regProps as $f) {
     }
 }
 
+// Валидация листа согласования
+$agCheck = $reg->checkAgreementList($_POST['agreementlist'] ?? [], 'плана проверок');
+if (!$agCheck['result']) {
+    $err++;
+    $errStr[]      = $agCheck['message'];
+    $errorFields[] = $agCheck['errField'];
+}
+
 if($err == 0) {
 
     $row = $db->selectOne('checksplans', ' where id = ?', [$rowId]);

@@ -76,6 +76,13 @@ if(!is_array($_POST['institutions']) || count($_POST['institutions']) == 0 || st
             $errStr[] = 'Укажите проверяемый период для учреждения №'.($i + 1);
             $errorFields[] = 'check_periods['.$i.']';
         }
+        // Валидация листа согласования
+        $agCheck = $reg->checkAgreementList($_POST['agreementlist'] ?? [], 'плана проверок');
+        if (!$agCheck['result']) {
+            $err++;
+            $errStr[]      = $agCheck['message'];
+            $errorFields[] = $agCheck['errField'];
+        }
         /*if(intval($_POST['inspections'][$i]) == 0){
             $err++;
             $errStr[] = 'Укажите предмет проверки для учреждения №'.($i + 1);

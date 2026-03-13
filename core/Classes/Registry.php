@@ -2473,6 +2473,77 @@ class Registry
     }
 
     /**
+     * Проверяет корректность листа согласования (agreementlist).
+     *
+     * Правила:
+     *  - список не пустой (есть хотя бы одна непустая секция)
+     *  - в секциях присутствует хотя бы один участник (строка с ключом 'id')
+     *  - среди участников есть хотя бы один подписант (type == 1)
+     *
+     * Возвращает тот же формат, что checkRequiredField — можно обрабатывать единообразно:
+     *   $check = $reg->checkAgreementList($_POST['agreementlist'] ?? [], 'плана проверок');
+     *   if (!$check['result']) { $err++; $errStr[] = $check['message']; $errorFields[] = $check['errField']; }
+     *
+     * @param array  $agreementList Массив секций (каждая — JSON-строка или уже массив)
+     * @param string $docLabel      Название документа для текста ошибки
+     * @return array ['result' => bool, 'message' => string, 'errField' => string]
+     */
+    public function checkAgreementList(array $agreementList, string $docLabel = 'документа'): array
+    {
+        $filtered = array_filter($agreementList, function ($section) {
+            $raw = is_array($section) ? json_encode($section) : $section;
+            return strlen(trim((string)$raw)) > 0;
+        });
+
+        if (count($filtered) === 0) {
+            return [
+                'result'   => false,
+                'message'  => 'Укажите список согласовантов и подписантов для ' . $docLabel . '.',
+                'errField' => 'agreementlist',
+            ];
+        }
+
+        $totalParticipants = 0;
+        $hasSigners        = false;
+
+        foreach ($filtered as $section) {
+            if (is_string($section)) {
+                $section = json_decode($section, true);
+                if (!is_array($section)) {
+                    continue;
+                }
+            }
+            foreach ($section as $row) {
+                if (!isset($row['id'])) {
+                    continue; // мета-строка секции (stage, list_type…)
+                }
+                $totalParticipants++;
+                if (intval($row['type'] ?? 0) === 1) {
+                    $hasSigners = true;
+                }
+            }
+        }
+
+        if ($totalParticipants === 0) {
+            return [
+                'result'   => false,
+                'message'  => 'В листе согласования нет ни одного участника для ' . $docLabel . '.',
+                'errField' => 'agreementlist',
+            ];
+        }
+
+        if (!$hasSigners) {
+            return [
+                'result'   => false,
+                'message'  => 'В листе согласования не указан ни один подписант для ' . $docLabel . '.',
+                'errField' => 'agreementlist',
+            ];
+        }
+
+        return ['result' => true, 'message' => '', 'errField' => ''];
+    }
+
+    /**
      * Метод определения типа поля таблицы по типу поля справочника
      *
      * @param string $fieldType - тип поля справочника

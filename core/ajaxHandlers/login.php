@@ -2,7 +2,7 @@
 
 use Core\Auth;
 
-@session_start();
+session_start();
 require_once $_SERVER['DOCUMENT_ROOT'] . '/core/connect.php';
 
 $auth = new Auth();

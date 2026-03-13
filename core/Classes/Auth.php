@@ -288,7 +288,14 @@ class Auth
                 $this->_session['user_subordinates'] = @$result->subordinates;
                 $this->_session['user_settings'] = $this->getUserSettings($result->id);
                 $this->_session['user_permissions'] = $this->getUserPermissions($roles);
+
+                $existingCsrf = $_SESSION['csrf-token'] ?? null;
                 $_SESSION = $this->_session;
+                if ($existingCsrf !== null) {
+                    $_SESSION['csrf-token']       = $existingCsrf;
+                    $this->_session['csrf-token'] = $existingCsrf;
+                }
+
                 $answer = ['result' => true,
                     'message' => 'Добро пожаловать,  ' . $this->_session['user_fio']];
             }else{

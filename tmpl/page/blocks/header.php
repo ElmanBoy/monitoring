@@ -72,6 +72,7 @@ $assetVersion = (defined('APP_ENV') && APP_ENV === 'development') ? time() : APP
     <script src="/js/assets/frappe-gantt/dist/frappe-gantt.umd.js?v=<?= $assetVersion ?>"></script>
     <link href='/js/assets/fullcalendar-6.1.19/dist/main.min.css' rel='stylesheet'>
     <script src='/js/assets/fullcalendar-6.1.19/dist/index.global.premium.js'></script>
+    <script src="/js/assets/validate_agreement.js?v=<?= $assetVersion ?>"></script>
     <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/locales/ru.global.min.js'></script>
     <!--<link rel='stylesheet' href='https://cdn.jsdelivr.net/npm/@event-calendar/build@4.5.1/dist/event-calendar.min.css'>
     <script src='https://cdn.jsdelivr.net/npm/@event-calendar/build@4.5.1/dist/event-calendar.min.js'></script>-->

@@ -53,6 +53,17 @@ $checkModuleAccess = function(string $modulePath) use ($auth): void {
     if ($moduleId === 0) {
         return;
     }
+
+    // Если у пользователя нет ни одного права в сессии (новый пользователь,
+    // сессия только что создана или права ещё не пересчитаны) — пропускаем проверку.
+    // refreshPermissions() уже вызван выше и заполнил сессию из БД.
+    // Если после этого permissions всё равно пусты — значит пользователю
+    // не назначено ни одной роли, блокировать на уровне роутера нельзя.
+    $allPerms = $_SESSION['user_permissions'] ?? [];
+    if (empty($allPerms)) {
+        return;
+    }
+
     $perms = $auth->checkModulePermissions($moduleId);
     if (!($perms['view'] ?? false)) {
         echo '<script>alert("Доступ запрещён.");</script>';
