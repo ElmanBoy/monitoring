@@ -26,3 +26,4 @@ __MACOSX/
 # Дампы БД (осторожно с реальными данными)
 *.dump
 *.sql
+/modules/.violations/
