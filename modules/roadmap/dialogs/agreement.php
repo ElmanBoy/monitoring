@@ -9,449 +9,339 @@ use Core\Registry;
 
 require_once $_SERVER['DOCUMENT_ROOT'] . '/core/connect.php';
 
-$gui = new Gui;
-$db = new Db;
+$gui  = new Gui;
+$db   = new Db;
 $auth = new Auth();
 $temp = new Templates();
 $date = new Date();
-$reg = new Registry();
-$html = '';
-$docId = intval($_POST['params']['docId']);
-$user_signs = [];
+$reg  = new Registry();
 
-$tmpl = $db->selectOne('agreement', ' where id = ?', [$docId]);
-$docs = $db->selectOne('agreement', ' WHERE id = ?', [$tmpl->consultation]);
-$signs = $db->select('signs', " where table_name = 'agreement' AND  doc_id = ?", [$docId]);
+$html       = '';
+$user_signs = [];
+$docId      = intval($_POST['params']['docId']);
+$is_object  = $auth->haveUserRole(5);
+
+$tmpl  = $db->selectOne('agreement', ' WHERE id = ?', [$docId]);
+$signs = $db->select('signs', " WHERE table_name = 'agreement' AND doc_id = ?", [$docId]);
+
 if (count($signs) > 0) {
     foreach ($signs as $s) {
         $user_signs[$s->user_id][$s->section] = ['type' => $s->type, 'date' => $s->created_at];
     }
 }
-$users = $db->getRegistry('users', '', [], ['surname', 'name', 'middle_name', 'position']);
-$initiator_fio = $users['array'][$tmpl->initiator][0] . ' ' . $users['array'][$tmpl->initiator][1] . ' ' .
-    $users['array'][$tmpl->initiator][2];
-$initiator_position = $users['array'][$tmpl->initiator][3];
 
+$users         = $db->getRegistry('users', '', [], ['surname', 'name', 'middle_name', 'position']);
+$urgent_types  = $db->getRegistry('urgent_types');
 
+$initiator_fio      = ($users['array'][$tmpl->initiator][0] ?? '') . ' ' .
+    ($users['array'][$tmpl->initiator][1] ?? '') . ' ' .
+    ($users['array'][$tmpl->initiator][2] ?? '');
+$initiator_position = $users['array'][$tmpl->initiator][3] ?? '';
 
+$agreementlist = json_decode($tmpl->agreementlist ?? '[]', true) ?: [];
 
-//print_r($tmpl);
-$html = '
-        <style>
-            @font-face {
-                font-family: "Jost";
-                src: url("/fonts/Jost-Light.ttf") format("truetype");
-                font-weight: 300;
-                font-style: normal;
-                font-display: swap;
-            }
-            
-            @font-face {
-                font-family: "Jost";
-                src: url("/fonts/Jost-Regular.ttf") format("truetype");
-                font-weight: 400;
-                font-style: normal;
-                font-display: swap;
-            }
-            
-            @font-face {
-                font-family: "Jost";
-                src: url("/fonts/Jost-Medium.ttf") format("truetype");
-                font-weight: 500;
-                font-style: normal;
-                font-display: swap;
-            }
-            
-            @font-face {
-                font-family: "Jost";
-                src: url("/fonts/Jost-SemiBold.ttf") format("truetype");
-                font-weight: 600;
-                font-style: normal;
-                font-display: swap;
-            }
-            
-            @font-face {
-                font-family: "Jost";
-                src: url("/fonts/Jost-Bold.ttf") format("truetype");
-                font-weight: 700;
-                font-style: normal;
-                font-display: swap;
-            }
-            main { 
-                /*font-family: "Jost", sans-serif; 
-                font-size: 3.5mm;*/
-                
-                font-family: "Jost", sans-serif;
-                font-weight: normal;
-                font-size: 16px;
-                font-kerning: auto;
-                hyphens: auto;
-                line-height: 20px;
-                margin: 1cm;
-            }
-            #agreement table.table_data, 
-            #agreement table.table_data tr, 
-            #agreement table.table_data tr td, 
-            #agreement table.table_data tr th{
-                border: 1px solid #000;
-                border-collapse: collapse;
-                padding: 10px;
-            }
-            #agreement table tr td.group{
-                border: none;
-            }
-            footer {
-                position: fixed;
-                bottom: 0;
-                left: 0;
-                right: 0;
-                text-align: left;
-                font-size: 11px;
-                color: #000;
-                padding: 5px 0 0 12px;
-                border-top: 1px solid #000;
-                height: .1cm;
-            }
-            footer img{
-                position: absolute;
-                bottom: -30px;
-                right: 10px;
-                width: 100px;
-            }
-            @page {
-                margin: 1cm 0 1cm 0;
-            }
-            .agreement_list{
-                background-color: #dde8f7;
-                padding: 10px;
-                margin: 10px 0;
-                font-size: 95%;
-            }
-            .agreement_list h4{
-                font-weight: 600;
-                font-size: 14px;
-                margin: 15px 0;
-            }
-            .agreement_list table{
-                width: 100%;
-                margin: 0;
-            }
-            .agreement_list table,
-            .agreement_list table td,
-            .agreement_list table th{
-                background-color: #fff;
-                border-collapse: collapse;
-                border: 1px solid #c5d4fc;
-                font-size: 95%;
-                vertical-align: middle;
-            }
-            .agreement_list table td{
-                padding: 5px;
-            }
-            .agreement_list table th{
-                padding: 0 15px;
-            }
-            .agreement_list table th{
-                background-color: #e5e5e5;
-                color:  #4f6396;
-                font-size: 95%;
-                text-align: center;
-            }
-            .agreement_list table td.divider{
-                font-size: 80%;
-                background-color: #dde8f7;
-                padding: 0 2px;
-                line-height: 14px;
-            }
-            .agreement_list table td.center{
-                text-align: center;
-            }
-            .agreement_list .list_type{
-                text-align: right;
-                margin-top: -25px;
-            }
-            .button_registry{
-                display: none; 
-            }
-            .agreement_list .item.w_50{
-                width: 100%;
-                margin-top: 20px;
-            }
-            .agreement_list button{
-                margin: 5px 0;
-                padding: 5px 10px;
-            }
-            .agreement_list tr.redirected td:nth-child(2){
-                padding-left: 15px;
-            }
-        </style>
-        <main>';
+// Если это акт или документ с листом согласования — строим таблицу
+$html .= '<div style="margin-bottom:10px">
+    <strong>' . htmlspecialchars($tmpl->name) . '</strong><br>
+    <small>Инициатор: ' . $initiator_fio . ' ' . $initiator_position . '</small>
+</div>';
 
-
-    if (strlen($tmpl->header) > 0) {
-        $html .= $temp->twig_parse($tmpl->header, [], []);
+if (is_array($agreementlist) && count($agreementlist) > 0 && isset($agreementlist[0][0]['list_type'])) {
+    // Есть полноценный лист согласования
+    $list_types = [];
+    foreach ($agreementlist as $section) {
+        if (isset($section[0]['list_type']) && !in_array($section[0]['list_type'], $list_types)) {
+            $list_types[] = $section[0]['list_type'];
+        }
     }
-    if (strlen($tmpl->body) > 0) {
-        $html .= $temp->twig_parse($tmpl->body, [], []);
+
+    $html .= '<div id="agreement_block">';
+    $html .= '<div class="agreement_list"><h4>ЛИСТ СОГЛАСОВАНИЯ</h4>
+        <div class="list_type">Тип согласования: <strong>' .
+        (count($list_types) > 1 ? 'смешанное' :
+            ($list_types[0] == '1' ? 'последовательное' : 'параллельное')) .
+        '</strong></div>
+        <table class="agreement-table">
+        <thead><tr>
+            <th>№</th>
+            <th style="width:30%">ФИО</th>
+            <th>Срок согласования</th>
+            <th style="width:30%">Результат согласования</th>
+            <th>Комментарии</th>
+        </tr></thead>';
+
+    for ($i = 0; $i < count($agreementlist); $i++) {
+        $itemArr = $agreementlist[$i];
+        if (!is_array($itemArr) || count($itemArr) === 0) continue;
+
+        $stageComplete = true;
+        foreach (array_slice($itemArr, 1) as $item) {
+            if (empty($item['result']['id']) || !in_array(intval($item['result']['id']), [1, 2, 3])) {
+                $stageComplete = false;
+                break;
+            }
+        }
+
+        $html .= '<tbody' . ($stageComplete ? '' : ' class="notComplete"') . '>
+            <tr><td class="divider" colspan="5">' .
+            (isset($itemArr[0]['stage']) && intval($itemArr[0]['stage']) > 0
+                ? '<strong>Этап ' . $itemArr[0]['stage'] . '</strong><br>' : '') .
+            'Тип согласования: <strong>' .
+            (isset($itemArr[0]['list_type']) && $itemArr[0]['list_type'] == '1'
+                ? 'последовательное' : 'параллельное') . '</strong>' .
+            '<input type="hidden" name="addAgreement" id="ag' . $i . '" value=\'' .
+            json_encode($itemArr, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . '\'></td></tr>';
+
+        $html .= $reg->buildAgreementList($itemArr, $i, $users, $urgent_types, $user_signs, $reg);
+        $html .= '</tbody>';
     }
-    if (strlen($tmpl->bottom) > 0) {
-        $html .= $temp->twig_parse($tmpl->bottom, [], []);
-    }
-    $check = $db->selectOne('checkstaff', ' WHERE id = ?', [$docId]);
-    $tasks = $db->select('checkstaff', " WHERE institution = ?", [5]);
-    $tids = [];
-    if($tasks){
-        foreach($tasks as $task){
+
+    $html .= '</table></div></div>';
+}
+
+// Блок возражений — только для ОК (role=5), только для актов
+if ($is_object && intval($tmpl->documentacial) === 2) {
+    // Берём учреждение из акта
+    $insId = intval($tmpl->ins_id ?: $tmpl->source_id);
+    $tids  = [];
+    if ($insId > 0) {
+        $taskRows = $db->select('checkstaff', ' WHERE institution = ?', [$insId]);
+        foreach ($taskRows as $task) {
             $tids[] = $task->id;
         }
     }
-    if(count($tids) > 0) {
 
-        $violations = $db->db::getAll('SELECT * FROM ' . TBL_PREFIX . 'checksviolations WHERE tasks IN (' . implode(', ', $tids) . ')');
-        if ($violations) {
+    if (count($tids) > 0) {
+        $violations = $db->db::getAll(
+            'SELECT * FROM ' . TBL_PREFIX . 'checksviolations WHERE tasks IN (' . implode(',', $tids) . ') ORDER BY id'
+        );
+        if (!empty($violations)) {
+            $html .= '<div style="margin-top:20px"><strong>Возражения к нарушениям</strong></div><hr>';
             $num = 1;
-            $html .= '<div style="height: 30px"></div>';
             foreach ($violations as $vi) {
-                $html .= '<div class="item w_100"><strong>№'.$num.'.</strong> '.$vi['name'] . '<p>&nbsp;</p>'.
-                    '<div class="item w_100">
+                $html .= '<div class="item w_100">
+                    <strong>№' . $num . '.</strong> ' . htmlspecialchars($vi['name']) . '
+                    <p>&nbsp;</p>
+                    <div class="item w_100">
                         <div class="el_data">
                             <label>Возражения</label>
-                            <input type="hidden" name="violation_id[]" value="'.$vi['id'].'">
-                            <textarea class="el_textarea" name="objections[]">'.stripslashes(htmlspecialchars($vi['objections'])).'</textarea>
+                            <input type="hidden" name="violation_id[]" value="' . intval($vi['id']) . '">
+                            <textarea class="el_textarea" name="objections[]">' .
+                    stripslashes(htmlspecialchars($vi['objections'] ?? '')) .
+                    '</textarea>
                         </div>
-                    </div>'.
-                    '</div><hr>';
+                    </div>
+                </div><hr>';
                 $num++;
             }
         }
     }
-
-
-$html .= '</main>';
-
-
+}
 ?>
 <style>
-    .violations_list{
-        display: none;
+    .violations_list { display: none; }
+    .agreement_list { margin-top: 10px; font-size: 95%; }
+    .agreement_list h4 { font-weight: 600; font-size: 14px; margin: 0 0 4px; }
+    .agreement_list table { width: 100%; margin: 0; }
+    .agreement_list table, .agreement_list table td, .agreement_list table th {
+        background-color: #fff;
+        border-collapse: collapse;
+        border: 1px solid #c5d4fc;
+        font-size: 95%;
+        vertical-align: middle;
     }
+    .agreement_list table td { padding: 5px; }
+    .agreement_list table th { padding: 0 15px; background-color: #e5e5e5; color: #4f6396; text-align: center; }
+    .agreement_list table td.divider { font-size: 80%; background-color: #dde8f7; padding: 0 2px; line-height: 14px; }
+    .agreement_list table td.center { text-align: center; }
+    .agreement_list .list_type { text-align: right; margin-top: -25px; }
+    .button_registry { display: none; }
+    .agreement_list .item.w_50 { width: 100%; margin-top: 20px; }
+    .agreement_list button { margin: 5px 0; padding: 5px 10px; }
+    .agreement_list tr.redirected td:nth-child(2) { padding-left: 15px; }
 </style>
-<div class='pop_up drag' style="width: 60vw; min-height: 70vh;">
-    <div class='title handle'>
-        <div class='name'>Согласование документа</div>
-        <div class='button icon close'><span class='material-icons'>close</span></div>
-    </div>
-    <div class='pop_up_body'>
-        <form class='ajaxFrm noreset' id='objections' onsubmit='return false'>
-        <?= $html ?>
-        <div class='confirm'>
 
-            <button class='button icon text save'><span class='material-icons'>send</span>Отправить</button>
-        </div>
-        </form>
+<div class="pop_up drag" style="width: 60vw; min-height: 70vh;">
+    <div class="title handle">
+        <div class="name">Согласование документа</div>
+        <div class="button icon close"><span class="material-icons">close</span></div>
     </div>
+    <div class="pop_up_body">
+        <ul class="tab-pane">
+            <li id="tab_agreement" class="active">Согласование</li>
+            <li id="tab_preview">Предпросмотр</li>
+        </ul>
+
+        <div class="agreement_block tab-panel" id="tab_agreement-panel">
+            <form class="ajaxFrm noreset" id="objections" onsubmit="return false">
+                <?= $html ?>
+                <?php if ($is_object && intval($tmpl->documentacial) === 2): ?>
+                    <div class="confirm">
+                        <button class="button icon text save">
+                            <span class="material-icons">send</span>Отправить возражения
+                        </button>
+                    </div>
+                <?php endif; ?>
+            </form>
+        </div>
+
+        <div class="preview_block tab-panel" id="tab_preview-panel" style="display:none">
+            <iframe id="pdf-viewer" width="100%" height="600px"></iframe>
+        </div>
+
+        <div class="confirm">
+            <button class="button icon text close">
+                <span class="material-icons">close</span>Закрыть
+            </button>
+        </div>
+    </div>
+
     <script src="/js/assets/cades_sign.js"></script>
     <script>
-        function dateNow() {
-            const now = new Date();
-            return `${String(now.getDate()).padStart(2, '0')}.` +
-                `${String(now.getMonth() + 1).padStart(2, '0')}.` +
-                `${now.getFullYear()} ` +
-                `${String(now.getHours()).padStart(2, '0')}:` +
-                `${String(now.getMinutes()).padStart(2, '0')}`;
-        }
+        (function () {
+            var DOC_ID = <?= $docId ?>;
 
-        function getAgreementList(agj, section, result_type, fallowIds = [], level = 0) {
-            let $comment = $('.actions[data-section=' + section + ']').closest('td').next('td').find('[name=comment]'),
-                $redirect = $('.actions[data-section=' + section + '] [name="redirect[]"]'),
-                currentDateTime = dateNow();
+            el_app.mainInit();
+            el_app.initTabs();
 
-            for (let i = 0; i < agj.length; i++) {
-                if (parseInt(agj[i].id) === <?=$_SESSION['user_id']?>) {
-                    if (parseInt(result_type) === 0) {
-                        //Если добавлен только комментарий
-                        agj[i].comment = $comment.val();
-                    } else if (parseInt(result_type) === 4) {
-                        let vals = $redirect.val();
-                        for(let v = 0; v < vals.length; v++) {
-                            //Если добавлено только перенаправление
-                            if (typeof agj[i].redirect != "undefined") {
-                                //Если редирект уже был - добавляем еще один в рекурсии
-                                if(typeof agj[i].redirect.find(item => parseInt(item.id) === parseInt(vals[v])) == "undefined") {
-                                    agj[i].redirect.push({id: parseInt(vals[v]), type: agj[i].type});
-                                }
-                            } else {
-                                //Если это первый редирект - создаем новый
-                                agj[i].result = {id: 4, date: currentDateTime};
-                                agj[i].redirect = [{id: parseInt(vals[v]), type: agj[i].type}];
-                                if (level === 0) {
-                                    fallowIds.push({index: i, id: agj[i].id, type: agj[i].type});
+            function dateNow() {
+                const now = new Date();
+                return `${String(now.getDate()).padStart(2, '0')}.` +
+                    `${String(now.getMonth() + 1).padStart(2, '0')}.` +
+                    `${now.getFullYear()} ` +
+                    `${String(now.getHours()).padStart(2, '0')}:` +
+                    `${String(now.getMinutes()).padStart(2, '0')}`;
+            }
+
+            function getAgreementList(agj, section, result_type, fallowIds = [], level = 0) {
+                let $comment  = $('.actions[data-section=' + section + ']').closest('td').next('td').find('[name=comment]'),
+                    $redirect = $('.actions[data-section=' + section + '] [name="redirect[]"]'),
+                    currentDateTime = dateNow();
+
+                for (let i = 0; i < agj.length; i++) {
+                    if (parseInt(agj[i].id) === <?= $_SESSION['user_id'] ?>) {
+                        if (parseInt(result_type) === 0) {
+                            agj[i].comment = $comment.val();
+                        } else if (parseInt(result_type) === 4) {
+                            let vals = $redirect.val();
+                            for (let v = 0; v < vals.length; v++) {
+                                if (typeof agj[i].redirect != 'undefined') {
+                                    if (typeof agj[i].redirect.find(item => parseInt(item.id) === parseInt(vals[v])) == 'undefined') {
+                                        agj[i].redirect.push({id: parseInt(vals[v]), type: agj[i].type});
+                                    }
+                                } else {
+                                    agj[i].result = {id: 4, date: currentDateTime};
+                                    agj[i].redirect = [{id: parseInt(vals[v]), type: agj[i].type}];
+                                    if (level === 0) {
+                                        fallowIds.push({index: i, id: agj[i].id, type: agj[i].type});
+                                    }
                                 }
                             }
+                        } else {
+                            agj[i].result = {id: result_type, date: currentDateTime};
                         }
-                    } else {
-                        agj[i].result = {id: result_type, date: currentDateTime};
-                    }
-                } else if (typeof agj[i].redirect != 'undefined') {
-                    agj.concat(getAgreementList(agj[i].redirect, section, result_type, fallowIds, level + 1));
-                }
-            }
-            if (fallowIds.length > 0/* && level === 0*/) {
-                for (let f = 0; f < fallowIds.length; f++) {
-                    agj.splice(fallowIds[f].index + 1, 0, {id: fallowIds[f].id, type: fallowIds[f].type});
-                }
-            }
-
-            return agj;
-        }
-
-        function getAgreementData(section, result_type) {
-            let $ag = $('#ag' + section),
-                agj = JSON.parse($ag.val());
-
-            let agjResult = getAgreementList(agj, section, result_type);
-
-            //console.log(agj);
-            $ag.val(JSON.stringify(agjResult));
-
-            let $agInputs = $('[name=addAgreement]'),
-                agList = [];
-            for (let a = 0; a < $agInputs.length; a++) {
-                agList.push($($agInputs[a]).val());
-            }
-
-            $.post("/", {
-                ajax: 1,
-                action: "updateAgreement",
-                agreementList: agList,
-                docId: <?=$docId?>
-            }, function (data) {
-                let answer = JSON.parse(data);
-                if (answer.result) {
-                    inform('Отлично!', answer.resultText);
-                } else {
-                    el_tools.notify('error', 'Ошибка', answer.resultText);
-                }
-            });
-        }
-
-        async function loadUser(section, user_id) {
-            try {
-                const userData = await el_app.getUserById(user_id, 'short');
-                $("#" + section + "_" + user_id).text(userData);
-            } catch (error) {
-                console.error('Не удалось загрузить:', error);
-            }
-        }
-
-        function getChosenSortedVal(obj){
-            let lis = $(obj).next().find(".search-choice"),
-                out = [];
-            for(let i = 0; i < lis.length; i++){
-                out.push($(obj).find("option:contains('" + $(lis[i]).find('span').text() + "')").val());
-            }
-            return out;
-        }
-
-        $(document).ready(function () {
-            /*
-            * 1 - подписание
-            * 2 - согласование с эп
-            * 3 - согласование
-            * 4 - перенапропавление*/
-            el_app.mainInit();
-            //el_registry.create_init();
-            bindSign('agreement', <?=$docId?>, <?=$_SESSION['user_id']?>);
-
-            $(".setAgree").off("click").on("click", function (e) {
-                e.preventDefault();
-                let section = $(this).closest('.actions').data('section'),
-                    currentDateTime = dateNow();
-                getAgreementData(section, 3);
-                $('.actions[data-section=' + section + ']').hide();
-                $('#agResult' + section).html("<span style='color: #086a9b'>Согласовано<br>" + currentDateTime + '</span>');
-            });
-
-
-
-            $('[name=comment]').off('blur').on('blur', function (e) {
-                e.preventDefault();
-                let section = $(this).closest("td").prev("td").find(".actions").data("section");
-                getAgreementData(section, 0);
-            });
-
-            $('[name=redirect], [name="redirect[]"]').off('change').on('change', function (e, param) {
-                e.preventDefault();
-                let $self = $(this),
-                    section = $(this).closest('.actions').data('section'),
-                    number = $(this).closest("tr").find("td:first").text(),
-                    name = $(this).closest('tr').find('td:nth-child(2)').text(),
-                    //subNumber = parseInt($(this).nextAll(".redirected").last().find("td:first").text().split('.')) || 0,
-                    urgent = $(this).closest('tr').find('td:nth-child(3)').html(),
-                    buttons = $('.actions[data-section=' + section + '] button').hide();
-
-                getAgreementData(section, 4);
-
-                $('#agResult' + section).html("<span style='color: #086a9b'>Перенаправлено<br>" + dateNow() + '</span>');
-
-                let padding = parseInt($(this).closest("tr").find("td:nth-child(2)").css("padding-left").replace("px", ""));
-                let trHtml = '',
-                    lastHtml = '';
-
-                if (typeof param.deselected != 'undefined') {
-                    $('#' + section + '_' + param.deselected).closest("tr").remove();
-                }
-
-                if(typeof param.selected != "undefined") {
-                    trHtml = "<tr class='redirected'>" +
-                        "<td></td>" +
-                        "<td style='padding-left: " + (padding + 15) + "px' id='" + section + '_' + param.selected + "'></td>" +
-                        '<td>' + urgent + '</td>' +
-                        '<td></td>' +
-                        '<td></td>' +
-                        '</tr>';
-                    loadUser(section, param.selected);
-
-                    if ($(this).closest('tr').next('tr').hasClass('redirected')) {
-                        $(this).closest('tr').nextAll('tr.redirected:last').after(trHtml);
-                    } else {
-                        $(this).closest('tr').after(trHtml);
+                    } else if (typeof agj[i].redirect != 'undefined') {
+                        agj.concat(getAgreementList(agj[i].redirect, section, result_type, fallowIds, level + 1));
                     }
                 }
+                if (fallowIds.length > 0) {
+                    for (let f = 0; f < fallowIds.length; f++) {
+                        agj.splice(fallowIds[f].index + 1, 0, {id: fallowIds[f].id, type: fallowIds[f].type});
+                    }
+                }
+                return agj;
+            }
 
-                if (!$self.closest('tr').nextAll('tr.redirected:last').next('tr').hasClass('returned')) {
-                    lastHtml = "<tr class='returned'>" +
-                        '<td></td>' +
-                        '<td style="padding-left: ' + padding + 'px">' + name + '</td>' +
-                        '<td>' + urgent + '</td>' +
-                        '<td></td>' +
-                        '<td></td>' +
-                        '</tr>';
-                    $self.closest('tr').nextAll('.redirected:last').after(lastHtml);
+            function getAgreementData(section, result_type) {
+                let $ag    = $('#ag' + section),
+                    agj    = JSON.parse($ag.val()),
+                    result = getAgreementList(agj, section, result_type);
+
+                $ag.val(JSON.stringify(result));
+
+                let $agInputs = $('[name=addAgreement]'),
+                    agList    = [];
+                for (let a = 0; a < $agInputs.length; a++) {
+                    agList.push($($agInputs[a]).val());
                 }
 
-                if($self.closest('tr').nextAll('tr.redirected').length === 0){
-                    $self.closest('tr').next(".returned").remove();
-                    buttons.show();
-                }else{
-                    buttons.hide();
-                }
+                $.post('/', {
+                    ajax: 1, action: 'updateAgreement', agreementList: agList, docId: DOC_ID
+                }, function (data) {
+                    let answer = JSON.parse(data);
+                    if (answer.result) {
+                        inform('Отлично!', answer.resultText);
+                        el_app.reloadMainContent();
+                    } else {
+                        el_tools.notify('error', 'Ошибка', answer.resultText);
+                    }
+                });
+            }
 
+            // Кнопки действий в листе согласования
+            function reinitEvents() {
+                $('.setSign, .setAgreeSign, .setAgree, .setComment, .setRedirect').each(function () {
+                    $(this).off('click').on('click', function () {
+                        let section     = $(this).closest('.actions').data('section'),
+                            result_type = $(this).data('result');
+                        if (result_type == 1 || result_type == 2) {
+                            // Подпись через КриптоПро — событие doc_signed обрабатывается ниже
+                        } else {
+                            getAgreementData(section, result_type);
+                            $('.actions[data-section=' + section + ']').hide();
+                        }
+                    });
+                });
+                $('.chosen-select').chosen({search_contains: true, no_results_text: 'Ничего не найдено.', group_search: false, allowInput: true});
+            }
+            reinitEvents();
+
+            // Предпросмотр PDF
+            $('#agreement #tab_preview, #tab_preview').on('click', function () {
+                $('.preloader').fadeIn('fast');
+                $.post('/', {
+                    ajax: 1, mode: 'popup', module: 'roadmap', url: 'pdf', outputType: 0,
+                    params: {docId: DOC_ID}
+                }, function (data) {
+                    if (data.length > 0) {
+                        $('#pdf-viewer').attr('src', 'data:application/pdf;base64,' + data);
+                        $('.preloader').fadeOut('fast');
+                    }
+                });
             });
 
-            $(document).off('doc_signed').on("doc_signed", function (e, param) {
-                console.log(param)
-                if (param.class.includes("setAgreeSign")) {
-                    $(".actions[data-section=" + param.section + "]").hide();
+            // Подпись через КриптоПро
+            $(document).off('doc_signed').on('doc_signed', function (e, param) {
+                if (param.class.includes('setAgreeSign')) {
+                    $('.actions[data-section=' + param.section + ']').hide();
                     getAgreementData(param.section, 2);
-                    $("#agResult" + param.section).html("<span style='color: #086a9b'>Согласовано с ЭП<br>" + param.date + "</span>");
+                    $('#agResult' + param.section).html("<span style='color:#086a9b'>Согласовано с ЭП<br>" + param.date + '</span>');
                 }
                 if (param.class.includes('setSign')) {
-                    $(".actions[data-section=" + param.section + "]").hide();
+                    $('.actions[data-section=' + param.section + ']').hide();
                     getAgreementData(param.section, 1);
-                    $('#agResult' + param.section).html("<span style='color: #086a9b'>Подписано с ЭП<br>" + param.date + '</span>');
+                    $('#agResult' + param.section).html("<span style='color:#086a9b'>Подписано с ЭП<br>" + param.date + '</span>');
                 }
             });
-        });
+
+            // Отправка возражений
+            $('#objections').on('submit', function () { return false; });
+            $('#objections .save').off('click').on('click', function () {
+                let $form = $('#objections'),
+                    data  = $form.serializeArray();
+                data.push({name: 'ajax', value: 1});
+                data.push({name: 'action', value: 'objections'});
+                data.push({name: 'path', value: 'roadmap'});
+                data.push({name: 'act_id', value: DOC_ID});
+                data.push({name: 'user_id', value: <?= $_SESSION['user_id'] ?>});
+                $('.preloader').fadeIn('fast');
+                $.post('/', data, function (resp) {
+                    let answer = JSON.parse(resp);
+                    $('.preloader').fadeOut('fast');
+                    inform(answer.result ? 'Отлично!' : 'Ошибка', answer.resultText);
+                });
+            });
+
+        })();
     </script>
 </div>

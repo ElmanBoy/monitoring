@@ -918,7 +918,7 @@ $regs = $gui->getTableData($table->table_name);
             el_app.dialog_open(handler, {doc_id: doc_id, ins_id: ins_id, plan_id: plan_id}, module);
         });
 
-        $('#registry_items_delete .tab-pane li').on('click', function () {
+        $('#registry_items_delete_real .tab-pane li').on('click', function () {
             let docType = $(this).attr('id').replace('tab_', '');
             $(this).closest('.tab-pane').find('li').removeClass('active');
             $(this).addClass('active');

@@ -1,0 +1,12 @@
+{
+  "id": 20,
+  "name": "Нарушения",
+  "description": "Модуль мониторинга устранения нарушений по актам проверок",
+  "minimumCoreVersion": "0.1",
+  "title": "Устранение нарушений",
+  "version": "0.1",
+  "author": "Боязитов Э.М.",
+  "path": "violations",
+  "icon": "report_problem",
+  "number": 5
+}

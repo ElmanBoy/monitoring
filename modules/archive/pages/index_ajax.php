@@ -18,7 +18,7 @@ $table        = $db->selectOne('registry', ' where id = ?', [$regId]);
 $documentacial = $db->getRegistry('documentdocuments');
 $items         = $db->getRegistry($table->table_name);
 
-$regs = $gui->getTableData($table->table_name, 'AND active = -1');
+$regs = $gui->getTableData($table->table_name, 'AND active = -1', true);
 ?>
 <div class="nav">
     <div class="nav_01">

@@ -246,26 +246,42 @@ if ($auth->isLogin()) {
             //Сохранение акта и листа согласования в agreement
             //Получаем шаблон акта
             $tmpl = $db->selectOne('documents', ' where id = ?', [intval($_POST['document'])]);
+
+            // Руководитель проверяемого учреждения (роль 5 — директор)
+            $directorUser = $db->selectOne('users',
+                " WHERE institution = ? AND roles::jsonb @> '[5]' AND active = 1 ORDER BY id LIMIT 1",
+                [$insId]
+            );
+            $director_fio      = '';
+            $director_short    = '';
+            $director_position = '';
+            if ($directorUser && $directorUser->id) {
+                $director_fio = trim($directorUser->surname) . ' ' .
+                    trim($directorUser->name) . ' ' .
+                    trim($directorUser->middle_name);
+                $director_short = mb_substr(trim($directorUser->name), 0, 1) . '.' .
+                    mb_substr(trim($directorUser->middle_name), 0, 1) . '. ' .
+                    trim($directorUser->surname);
+                $director_position = trim($directorUser->position);
+            }
+
             $agreement_header = '';
             $header_vars = [
-                'order_date' => $date->correctDateFormatFromMysql($order_date),
-                'order_number' => $order_number,
+                'order_date'         => $date->correctDateFormatFromMysql($order_date),
+                'order_number'       => $order_number,
                 'check_period_start' => $globalMin,
-                'check_period_end' => $globalMax,
-                'act_number' => $_POST['doc_number'],
-                'act_date' => $date->correctDateFormatFromMysql($_POST['docdate']),
-                'institution' => $insName,
-                'list_executors' => implode(',<br>', $check_executors)
+                'check_period_end'   => $globalMax,
+                // act_number и act_date не передаём — они присваиваются автоматически
+                // в updateAgreement.php после завершения согласования (getNewDocNumber)
+                'act_number'         => '',
+                'act_date'           => '',
+                'institution'        => $insName,
+                'list_executors'     => implode(',<br>', $check_executors),
+                // Руководитель проверяемого учреждения
+                'director_fio'       => $director_fio,
+                'director_short'     => $director_short,
+                'director_position'  => $director_position,
             ];
-            /*
-             * {{ order_date }}
-             * {{ order_number }}
-             * {{ check_period_start }}
-             * {{ check_period_end }}
-             * {{ act_date }}
-             * {{ act_number }}
-             * {{ institution }}
-             * */
             $agreement_header .= $temp->twig_parse($tmpl->header, $header_vars);
 
 
@@ -342,7 +358,7 @@ if ($auth->isLogin()) {
             }*/
 
             $_POST['active'] = 1;
-            $_POST['name'] = 'Акт проверки № ' . $_POST['doc_number'];
+            $_POST['name'] = 'Акт проверки';  // Номер добавляется в updateAgreement после согласования
             $_POST['header'] = $agreement_header;
             $_POST['body'] = $agreement_body;
             $_POST['bottom'] = $agreement_bottom;
@@ -361,22 +377,16 @@ if ($auth->isLogin()) {
 
             $_POST['plan_id'] = $plan->id;
             $_POST['plan'] = $plan->id;  // createDocument читает $_POST['plan'] для поля plan_id
-
-            // DEBUG: логируем входные данные и результат
-            $debugData = [
-                'source_id' => $_POST['source_id'] ?? null,
-                'source_table' => $_POST['source_table'] ?? null,
-                'plan' => $_POST['plan'] ?? null,
-                'documentacial' => $_POST['documentacial'] ?? null,
-                'doc_number' => $_POST['doc_number'] ?? null,
-                'name' => $_POST['name'] ?? null,
-                'existingActId' => $existingActId,
-            ];
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/act_debug.log', date('Y-m-d H:i:s') . ' POST_DATA: ' . json_encode($debugData, JSON_UNESCAPED_UNICODE) . "\n", FILE_APPEND);
+            // Поля, обязательные для createDocument
+            $_POST['executors_head']    = intval($check->user);
+            $_POST['unit_id']           = null;  // unit не обязателен для акта
+            $_POST['agreementtemplate'] = null;  // шаблон согласования не нужен для акта
+            $_POST['check_period']      = $check_period_start . ' - ' . $check_period_end;
+            $_POST['action_period']     = $check_period_start . ' - ' . $check_period_end;
+            $_POST['file_ids']          = $_POST['file_ids'] ?? '[]';
+            $_POST['executors_list']    = $_POST['executors_list'] ?? [];
 
             $docCreateResult = $reg->createDocument($_POST, $existingActId);
-
-            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/act_debug.log', date('Y-m-d H:i:s') . ' RESULT: ' . json_encode($docCreateResult, JSON_UNESCAPED_UNICODE) . "\n", FILE_APPEND);
 
             if (is_array($_POST['agreementlist']) && count($_POST['agreementlist']) > 0) {
                 for ($s = 0; $s < count($_POST['agreementlist']); $s++) {
@@ -406,7 +416,7 @@ if ($auth->isLogin()) {
                                 $agRow[$s]['id'],
                                 $agRow[$s]['type'],
                                 $docCreateResult['documentId'],
-                                $_POST['short'] . ' № ' . $_POST['doc_number']
+                                $_POST['name']
                             );
                         }
                     }
@@ -423,7 +433,7 @@ if ($auth->isLogin()) {
                     $director->id,
                     2,
                     $docCreateResult['documentId'],
-                    $_POST['short'] . ' № ' . $_POST['doc_number']
+                    $_POST['name']
                 );
             } else {
                 //$err++;

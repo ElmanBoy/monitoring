@@ -6,19 +6,21 @@ use Core\Notifications;
 
 require_once $_SERVER['DOCUMENT_ROOT'] . '/core/connect.php';
 
-$db = new Db();
-$reg = new Registry();
+$db    = new Db();
+$reg   = new Registry();
 $alert = new Notifications();
 $user_signs = [];
 
-$docId = intval($_POST['docId']);
-$message = '';
+$docId    = intval($_POST['docId']);
+$message  = '';
 $updateData = [];
-$options = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT;
+$options  = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT;
 
 $agr = $db->selectOne('agreement', ' id = ?', [$docId]);
 
-// Исправляем возможную двойную JSON-сериализацию элементов списка
+// ============================================================
+// Исправляем возможную двойную JSON-сериализацию элементов
+// ============================================================
 function fixAgreementList($agreementlist): array
 {
     $result = [];
@@ -58,9 +60,9 @@ if ($result['result']) {
     $message = '<strong>Ошибка:</strong>&nbsp; ' . $result['resultText'];
 }
 
-$check       = $db->selectOne('agreement', ' WHERE id = ?', [$docId]);
-$planId      = intval($check->source_id);
-$docType     = intval($check->documentacial);
+$check         = $db->selectOne('agreement', ' WHERE id = ?', [$docId]);
+$planId        = intval($check->source_id);
+$docType       = intval($check->documentacial);
 $agreementList = json_decode($check->agreementlist, true);
 $newDocNumber  = $reg->getNewDocNumber($check->documentacial);
 
@@ -76,17 +78,19 @@ function getApproverStatus(array $approver): array
     $resultId = intval($result['id'] ?? 0);
     switch ($resultId) {
         case 1: case 2: case 3:
-        return ['status' => 'approved',    'result_id' => $resultId];
+        return ['status' => 'approved',   'result_id' => $resultId];
         case 4:
-            return ['status' => 'redirected',  'result_id' => 4];
+            return ['status' => 'redirected', 'result_id' => 4];
         case 5:
-            return ['status' => 'rejected',    'result_id' => 5];
+            return ['status' => 'rejected',   'result_id' => 5];
         default:
-            return ['status' => 'pending',     'result_id' => 0];
+            return ['status' => 'pending',    'result_id' => 0];
     }
 }
 
-// Завершено ли перенаправление (рекурсивно по redirect-цепочке)
+// ============================================================
+// Завершена ли redirect-цепочка (рекурсивно)
+// ============================================================
 function isRedirectChainCompleted(array $redirectArr): bool
 {
     foreach ($redirectArr as $approver) {
@@ -94,14 +98,12 @@ function isRedirectChainCompleted(array $redirectArr): bool
         $status = getApproverStatus($approver);
         if ($status['status'] === 'pending') return false;
         if ($status['status'] === 'redirected') {
-            // Вложенное перенаправление — проверяем рекурсивно
             if (isset($approver['redirect']) && is_array($approver['redirect'])) {
                 if (!isRedirectChainCompleted($approver['redirect'])) return false;
             } else {
                 return false;
             }
         }
-        // approved / rejected — считаем завершённым
     }
     return true;
 }
@@ -109,13 +111,11 @@ function isRedirectChainCompleted(array $redirectArr): bool
 // ============================================================
 // ПРАВИЛО 4: Добавить повторную запись перенаправившего
 // сразу после перенаправленного (если ещё не добавлена).
-// Уведомление перенаправившему отправляется позже — после
-// того, как перенаправленный завершит своё действие.
 // ============================================================
 function insertRedirectorRepeatEntry(array &$agreementList): void
 {
     for ($i = 0; $i < count($agreementList); $i++) {
-        $section   = &$agreementList[$i];
+        $section    = &$agreementList[$i];
         $startIndex = isset($section[0]['stage']) ? 1 : 0;
 
         for ($j = $startIndex; $j < count($section); $j++) {
@@ -127,7 +127,7 @@ function insertRedirectorRepeatEntry(array &$agreementList): void
 
             $userId = $approver['id'];
 
-            // Проверяем, есть ли уже повторная запись этого пользователя после текущей позиции
+            // Проверяем, нет ли уже повторной записи после текущей позиции
             $hasRepeat = false;
             for ($k = $j + 1; $k < count($section); $k++) {
                 if (isset($section[$k]['id']) && $section[$k]['id'] == $userId
@@ -139,13 +139,13 @@ function insertRedirectorRepeatEntry(array &$agreementList): void
 
             if (!$hasRepeat) {
                 $repeatEntry = [
-                    'id'     => $userId,
-                    'type'   => $approver['type']   ?? 1,
-                    'vrio'   => $approver['vrio']   ?? '0',
-                    'urgent' => $approver['urgent'] ?? '0',
-                    'role'   => $approver['role']   ?? '0',
-                    'result' => null,
-                    '_is_redirector_repeat' => true  // маркер для отправки уведомления
+                    'id'                    => $userId,
+                    'type'                  => $approver['type']   ?? 1,
+                    'vrio'                  => $approver['vrio']   ?? '0',
+                    'urgent'                => $approver['urgent'] ?? '0',
+                    'role'                  => $approver['role']   ?? '0',
+                    'result'                => null,
+                    '_is_redirector_repeat' => true
                 ];
                 array_splice($section, $j + 1, 0, [$repeatEntry]);
                 $j++; // пропускаем только что вставленную запись
@@ -155,7 +155,7 @@ function insertRedirectorRepeatEntry(array &$agreementList): void
 }
 
 // ============================================================
-// Сбор глобальной статистики для определения итогового статуса
+// Сбор глобальной статистики
 // ============================================================
 function collectGlobalStats(array $agreementList): array
 {
@@ -182,7 +182,7 @@ function collectGlobalStats(array $agreementList): array
 }
 
 // ============================================================
-// ПРАВИЛА 1, 2, 3, 4: Отправка уведомлений
+// ПРАВИЛА 1, 2, 3, 4: Отправка уведомлений следующим участникам
 // ============================================================
 function sendNotificationsToNextActors(
     Db            $db,
@@ -196,7 +196,7 @@ function sendNotificationsToNextActors(
     global $docType;
     $notified = [];
 
-    // Проверяем наличие хотя бы одного ожидающего
+    // Есть ли хотя бы один pending
     $hasAnyPending = false;
     foreach ($agreementList as $section) {
         $si = isset($section[0]['stage']) ? 1 : 0;
@@ -217,25 +217,18 @@ function sendNotificationsToNextActors(
         $listType   = intval($section[0]['list_type'] ?? 2); // 1=последовательный, 2=параллельный
         $stage      = $section[0]['stage'] ?? '';
 
-        // ----------------------------------------------------------
-        // ПРАВИЛО 3: Если в секции есть отклонение — прерываем всё
-        // ----------------------------------------------------------
+        // ПРАВИЛО 3: Если в секции есть отклонение — пропускаем
         $hasRejection = false;
         for ($i = $startIndex; $i < count($section); $i++) {
             if (!isset($section[$i]['id'])) continue;
             if (getApproverStatus($section[$i])['status'] === 'rejected') {
                 $hasRejection = true;
-                if ($docType == 3) {
-                    $db->update('checksplans', (int)(new Db())->selectOne('agreement', 'WHERE id = ?', [$docId])->source_id ?? 0, ['active' => 2]);
-                }
                 break;
             }
         }
-        if ($hasRejection) continue; // уведомлений в этой секции нет
+        if ($hasRejection) continue;
 
-        // ----------------------------------------------------------
         // Предыдущие секции должны быть завершены
-        // ----------------------------------------------------------
         $prevDone = true;
         for ($s = 0; $s < $sectionIndex; $s++) {
             if (!isset($agreementList[$s]) || !is_array($agreementList[$s])) continue;
@@ -243,22 +236,20 @@ function sendNotificationsToNextActors(
             $pStart = isset($pSect[0]['stage']) ? 1 : 0;
             for ($p = $pStart; $p < count($pSect); $p++) {
                 if (!isset($pSect[$p]['id'])) continue;
-                $pst = getApproverStatus($pSect[$p])['status'];
-                if ($pst === 'pending') { $prevDone = false; break 2; }
+                if (getApproverStatus($pSect[$p])['status'] === 'pending') {
+                    $prevDone = false;
+                    break 2;
+                }
             }
         }
         if (!$prevDone) continue;
 
-        // ----------------------------------------------------------
-        // ПРАВИЛО 4: Уведомление тому, на кого перенаправили,
-        // и уведомление перенаправившему, если redirect завершён
-        // ----------------------------------------------------------
+        // ПРАВИЛО 4: Уведомление перенаправленным и перенаправившим
         for ($i = $startIndex; $i < count($section); $i++) {
             if (!isset($section[$i]['id'])) continue;
             $st = getApproverStatus($section[$i]);
 
             if ($st['status'] === 'redirected' && isset($section[$i]['redirect'])) {
-                // Уведомляем каждого в redirect-списке, кто ещё pending
                 foreach ($section[$i]['redirect'] as $rd) {
                     if (!isset($rd['id'])) continue;
                     if (getApproverStatus($rd)['status'] !== 'pending') continue;
@@ -275,11 +266,9 @@ function sendNotificationsToNextActors(
                 }
             }
 
-            // Если это маркированная повторная запись перенаправившего
-            // и redirect-цепочка завершена — уведомляем его снова
+            // Повторная запись перенаправившего — уведомляем, если redirect завершён
             if (isset($section[$i]['_is_redirector_repeat']) && $section[$i]['_is_redirector_repeat']) {
                 $redirectorId = $section[$i]['id'];
-                // Находим предыдущую запись с redirect
                 for ($prev = $startIndex; $prev < $i; $prev++) {
                     if (isset($section[$prev]['id']) && $section[$prev]['id'] == $redirectorId
                         && isset($section[$prev]['redirect'])) {
@@ -297,65 +286,38 @@ function sendNotificationsToNextActors(
                         break;
                     }
                 }
-                continue; // повторную запись не трогаем для обычных уведомлений
+                continue;
             }
         }
 
-        // ----------------------------------------------------------
-        // ПРАВИЛА 1 и 2: Уведомления основным участникам
-        // ----------------------------------------------------------
-        $isSigners  = ($stage === '');
-        $notifType  = $isSigners ? 1 : 4; // 1=подписание, 4=согласование
+        $isSigners = ($stage === '');
+        $notifType = $isSigners ? 1 : 4; // 1=подписание, 4=согласование
 
         if ($listType == 2) {
             // ПРАВИЛО 1: Параллельное — уведомляем ВСЕХ pending
             for ($i = $startIndex; $i < count($section); $i++) {
                 if (!isset($section[$i]['id'])) continue;
                 if (getApproverStatus($section[$i])['status'] !== 'pending') continue;
-                // Пропускаем повторные записи перенаправившего — они обработаны выше
                 if (isset($section[$i]['_is_redirector_repeat'])) continue;
                 $userId = $section[$i]['id'];
-                $key = $userId . '_' . $sectionIndex;
-                if ($userId == $currentUserId || isset($notified[$key])) continue;
-                if ($isNewDocument && $sectionIndex === 0 && $i === $startIndex) continue;
-                try {
-                    $alert->notificationSigner($userId, $notifType, $docId, $docName);
-                    $notified[$key] = true;
-                } catch (\Exception $e) {
-                    error_log('Уведомление (параллельное): ' . $e->getMessage());
+                $key    = $userId . '_' . $sectionIndex;
+                if ($userId != $currentUserId && !isset($notified[$key])) {
+                    try {
+                        $alert->notificationSigner($userId, $notifType, $docId, $docName);
+                        $notified[$key] = true;
+                    } catch (\Exception $e) {
+                        error_log('Уведомление (параллельное): ' . $e->getMessage());
+                    }
                 }
             }
         } else {
-            // ПРАВИЛО 2: Последовательное — уведомляем только первого pending,
-            // при этом перенаправление и отклонение НЕ блокируют следующего
+            // ПРАВИЛО 2: Последовательное — уведомляем только ПЕРВОГО pending
             for ($i = $startIndex; $i < count($section); $i++) {
                 if (!isset($section[$i]['id'])) continue;
                 if (isset($section[$i]['_is_redirector_repeat'])) continue;
-
-                $st = getApproverStatus($section[$i]);
-
-                // approved / redirected — продолжаем к следующему
-                if ($st['status'] === 'approved' || $st['status'] === 'redirected') continue;
-
-                // ПРАВИЛО 3: rejected — цепочка прервана, дальше не идём
-                if ($st['status'] === 'rejected') break;
-
-                // pending — это наш следующий
-                // Проверяем, что все предыдущие завершены (approved или redirected)
-                $allPrevDone = true;
-                for ($j = $startIndex; $j < $i; $j++) {
-                    if (!isset($section[$j]['id'])) continue;
-                    if (isset($section[$j]['_is_redirector_repeat'])) continue;
-                    $pst = getApproverStatus($section[$j])['status'];
-                    if ($pst !== 'approved' && $pst !== 'redirected') {
-                        $allPrevDone = false;
-                        break;
-                    }
-                }
-                if (!$allPrevDone) break;
-
+                if (getApproverStatus($section[$i])['status'] !== 'pending') continue;
                 $userId = $section[$i]['id'];
-                $key = $userId . '_' . $sectionIndex;
+                $key    = $userId . '_' . $sectionIndex;
                 if ($userId != $currentUserId && !isset($notified[$key])) {
                     if ($isNewDocument && $sectionIndex === 0 && $i === $startIndex) {
                         // первый участник при создании документа — не уведомляем
@@ -368,7 +330,7 @@ function sendNotificationsToNextActors(
                         }
                     }
                 }
-                break; // нашли первого pending — дальше не идём
+                break;
             }
         }
     }
@@ -396,10 +358,8 @@ for ($i = 0; $i < count($agreementList); $i++) {
     }
 }
 
-// ПРАВИЛО 4: Добавить повторные записи перенаправивших
 insertRedirectorRepeatEntry($agreementList);
 
-// Собираем глобальную статистику
 $globalStats = collectGlobalStats($agreementList);
 
 // ============================================================
@@ -409,11 +369,11 @@ $finalStatus  = 0;
 $finalMessage = $message;
 
 if ($globalStats['rejected'] > 0) {
-    // ПРАВИЛО 3: Есть отклонение — документ отклонён
+    // Есть отклонение — документ отклонён
     $finalMessage .= '<br>Документ отклонён.';
 
 } elseif ($globalStats['pending'] > 0) {
-    $finalStatus  = 0;
+    $finalStatus   = 0;
     $finalMessage .= '<br>Документ на согласовании.';
 
     try {
@@ -430,12 +390,12 @@ if ($globalStats['rejected'] > 0) {
     }
 
 } elseif ($globalStats['approved'] > 0 && $globalStats['pending'] == 0 && $globalStats['rejected'] == 0) {
-    $finalStatus  = 1;
+    $finalStatus   = 1;
     $finalMessage .= '<br>Документ согласован.';
     $updateData['doc_number'] = $newDocNumber;
     $updateData['docdate']    = date('Y-m-d');
 
-    // Уведомление руководителю при подписании приказа
+    // Уведомление руководителю при подписании приказа (documentacial=1)
     if ($docType == 1) {
         try {
             $alert->notificationOrder($agr->executors_head, $docId, $agr->name);
@@ -444,9 +404,127 @@ if ($globalStats['rejected'] > 0) {
         }
     }
 
+    // ──────────────────────────────────────────────────────────
+    // ТРИГГЕР: Доклад министру подписан (documentacial=8)
+    // → создаём график устранения нарушений + уведомляем ОК
+    // ──────────────────────────────────────────────────────────
+    if ($docType == 8) {
+        $report = $db->selectOne('agreement', ' WHERE id = ?', [$docId]);
+        $actId  = intval($report->source_id ?? 0);
+        $act    = $actId > 0 ? $db->selectOne('agreement', ' WHERE id = ?', [$actId]) : null;
+        $insId  = intval($report->ins_id  ?? 0);
+        $planId = intval($report->plan_id ?? 0);
+
+        if ($act && $insId > 0) {
+
+            // 1. Нарушения, выбранные при формировании доклада
+            $bodyData     = json_decode($report->body ?? '{}', true) ?: [];
+            $violationIds = $bodyData['violation_ids'] ?? [];
+
+            $allViolations = [];
+            if ($planId > 0) {
+                $plan = $db->selectOne('checksplans', ' WHERE id = ?', [$planId]);
+                if ($plan && strlen($plan->uid ?? '') > 0) {
+                    $staffRows = $db->select('checkstaff',
+                        ' WHERE check_uid = ? AND institution = ?', [$plan->uid, $insId]);
+                    if (count($staffRows) > 0) {
+                        $taskIds = array_map(function($r){ return intval($r->id); }, $staffRows);
+                        $rawVio  = $db->db::getAll(
+                            'SELECT * FROM ' . TBL_PREFIX . 'checksviolations WHERE tasks IN (' .
+                            implode(',', $taskIds) . ') ORDER BY id'
+                        );
+                        foreach ((array)$rawVio as $v) {
+                            if (count($violationIds) === 0 || in_array(intval($v['id']), $violationIds)) {
+                                $allViolations[] = $v;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 2. Строки графика (одна строка = одно нарушение)
+            $scheduleItems = [];
+            foreach ($allViolations as $v) {
+                $scheduleItems[] = [
+                    'violation_id'         => intval($v['id']),
+                    'schedule_offers'      => $v['name'] ?? '',
+                    'schedule_actions'     => '',
+                    'schedule_deadlines'   => '',
+                    'schedule_responsible' => '',
+                    'fix_status'           => 0,
+                    'fix_comment'          => '',
+                    'fix_files'            => [],
+                    'check_comment'        => '',
+                    'deadline_extended'    => null,
+                    'extended_reason'      => '',
+                ];
+            }
+
+            // 3. Создаём запись графика (documentacial=5)
+            $ins     = $db->selectOne('institutions', ' WHERE id = ?', [$insId]);
+            $insName = $ins->name ?? '';
+
+            $roadmapId = $db->insert('agreement', [
+                'created_at'    => date('Y-m-d H:i:s'),
+                'author'        => intval($_SESSION['user_id']),
+                'active'        => 1,
+                'name'          => 'График устранения нарушений — ' . $insName,
+                'documentacial' => 5,
+                'status'        => 0,
+                'source_id'     => $actId,
+                'source_table'  => 'agreement',
+                'ins_id'        => $insId,
+                'plan_id'       => $planId,
+                'agreementlist' => json_encode($scheduleItems, JSON_UNESCAPED_UNICODE),
+            ]);
+
+            if ($roadmapId > 0) {
+                $finalMessage .= '<br>График устранения нарушений сформирован.';
+            }
+
+            // 4. Уведомляем пользователей ОК учреждения (роль 5)
+            $okUsers = $db->select('users',
+                " WHERE active = 1 AND institution = ? AND roles LIKE '%5%'", [$insId]);
+
+            foreach ($okUsers as $okUser) {
+                $okUserId = intval($okUser->id ?? 0);
+                if ($okUserId === 0) continue;
+
+                // Внутреннее уведомление (колокольчик + email)
+                try {
+                    $alert->notificationSigner(
+                        $okUserId,
+                        4,
+                        $roadmapId > 0 ? $roadmapId : $docId,
+                        'График устранения нарушений — ' . $insName
+                    );
+                } catch (\Exception $e) {
+                    error_log('Уведомление ОК (доклад): ' . $e->getMessage());
+                }
+
+                // Дополнительный email через notificationObject
+                try {
+                    $alert->notificationObject(
+                        $okUserId,
+                        5,
+                        $roadmapId > 0 ? $roadmapId : $docId,
+                        'График устранения нарушений — ' . $insName
+                    );
+                } catch (\Exception $e) {
+                    error_log('Email ОК (доклад): ' . $e->getMessage());
+                }
+            }
+
+            if (count($okUsers) > 0) {
+                $finalMessage .= '<br>Уведомление направлено в объект контроля.';
+            }
+        }
+    }
+    // ── Конец триггера documentacial=8 ──────────────────────
+
 } else {
     // Только перенаправления, всё ещё в процессе
-    $finalStatus  = 0;
+    $finalStatus   = 0;
     $finalMessage .= '<br>Документ в процессе перенаправлений.';
 }
 

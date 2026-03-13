@@ -42,8 +42,25 @@ $ousr = $db->getRegistry('ousr');
 $task = $db->selectOne('tasks', ' WHERE id = ?', [$chStaff->task_id]);
 //Получение чек-листов
 $checklist = $db->select('checklists', ' WHERE id IN (' . implode(', ', json_decode($task->sheet)) . ')');
-//Справочник шаблонов актов (для выбора щаблона при создании акта)
-$orders = $db->getRegistry('documents', ' WHERE documentacial = 2');
+//Получаем тип проверки для данного учреждения из плана
+$plan_uid = $chStaff->check_uid;
+$plan = $db->selectOne('checksplans', ' WHERE uid = ? ORDER BY version DESC LIMIT 1', [$plan_uid]);
+$check_type_id = 0;
+if ($plan) {
+    $addInstitution = json_decode($plan->addinstitution, true) ?? [];
+    foreach ($addInstitution as $ads) {
+        if (intval($ads['institutions']) == $insId) {
+            $check_type_id = intval($ads['check_types']);
+            break;
+        }
+    }
+}
+//Справочник шаблонов актов — фильтруем по типу проверки, если он известен
+if ($check_type_id > 0) {
+    $orders = $db->getRegistry('documents', ' WHERE documentacial = 2 AND checks = ' . $check_type_id);
+} else {
+    $orders = $db->getRegistry('documents', ' WHERE documentacial = 2');
+}
 //Справочник пользователей (для выбора подписантов)
 $users = $db->getRegistry('users', "where roles <> '2'", [], ['surname', 'name', 'middle_name']);
 
@@ -54,9 +71,14 @@ $users = $db->getRegistry('users', "where roles <> '2'", [], ['surname', 'name',
 $agreement_data = $db->selectOne('agreement', " WHERE documentacial = 2 AND 
 source_table = 'checkinstitutions' AND source_id = " . $insId
 );
-if (strlen($agreement_data->doc_number) > 0) {
-    $act_number = $agreement_data->doc_number;
-}
+$objections_data   = json_decode($agreement_data->objections ?? '{}', true);
+$objections_text   = $objections_data['text']  ?? '';
+$objections_date   = $objections_data['date']  ?? '';
+$objections_files  = $objections_data['files'] ?? [];
+$objections_count  = strlen($objections_text) > 0 ? 1 : 0;
+$is_object_control = $auth->haveUserRole(5);
+$act_signed        = intval($agreement_data->status ?? 0) === 1;
+$act_id            = intval($agreement_data->id ?? 0);
 
 if ($auth->isLogin()) {
 
@@ -115,6 +137,7 @@ if ($auth->isLogin()) {
                             <li id='tab_otherCheckLists'>Остальные чек-листы</li>
                             <li id='tab_act'>Акт</li>
                             <li id='tab_agreement'>Согласование</li>
+                            <li id='tab_objections'>Возражения<?= $objections_count > 0 ? ' <span class="badge">'.$objections_count.'</span>' : '' ?></li>
                             <li id='tab_preview' style='display: none'>Предпросмотр</li>
                         </ul>
                         <?
@@ -215,44 +238,67 @@ if ($auth->isLogin()) {
                                 </h3>
                             </div>
                             <div class='group'>
-                                <div class='item w_50 required'>
-                                    <div class='el_data'>
-                                        <label>Исходящий номер</label>
-                                        <input class='el_input' type='text' name='doc_number' required
-                                               value="<?= $act_number ?>">
+                                <?
+                                // Если акт уже существует — показываем его номер и дату (readonly)
+                                if (strlen($agreement_data->doc_number) > 0): ?>
+                                    <div class='item w_50'>
+                                        <div class='el_data'>
+                                            <label>Исходящий номер</label>
+                                            <input class='el_input' type='text' readonly
+                                                   value="<?= htmlspecialchars($agreement_data->doc_number) ?>"
+                                                   title="Номер присваивается автоматически после согласования">
+                                        </div>
                                     </div>
-                                </div>
-                                <div class='item w_50 required'>
-                                    <div class='el_data'>
-                                        <label>Дата акта</label>
-                                        <input class='el_input single_date' type='date' name='docdate' required
-                                               value="<?= strlen($agreement_data->docdate) > 0 ? $agreement_data->docdate : date('Y-m-d') ?>">
+                                    <div class='item w_50'>
+                                        <div class='el_data'>
+                                            <label>Дата акта</label>
+                                            <input class='el_input' type='text' readonly
+                                                   value="<?= $date->correctDateFormatFromMysql($agreement_data->docdate) ?>"
+                                                   title="Дата присваивается автоматически после согласования">
+                                        </div>
                                     </div>
-                                </div>
-                                <div class='item w_50 required'>
-                                    <select data-label='Шаблон акта' name='document' required>
-                                        <?
-                                        echo $gui->buildSelectFromRegistry($orders['result'], [$agreement_data->document], true);
-                                        ?>
-                                    </select>
-                                </div>
-                                <div class='item w_50 required'>
-                                    <div class='el_data'>
-                                        <label>Период проведения проверки</label>
-                                        <input class='el_input range_date' type='date' name='check_period' required
-                                               value="<?= strlen($agreement_data->docdate) > 0 ? $agreement_data->docdate : date('Y-m-d') ?>">
+                                <?php else: ?>
+                                    <div class='item w_100'>
+                                        <div class='greyText' style='font-size:85%'>
+                                            <span class='material-icons' style='font-size:15px;vertical-align:middle'>info</span>
+                                            Номер и дата акта будут присвоены автоматически после завершения согласования.
+                                        </div>
                                     </div>
-                                </div>
-                                <?/*div class='item w_50 required'>
-                                <select data-label='Подписанты акта' name='signers[]' multiple required>
-                                    <?
-                                    $signers = strlen($agreement_data->signators) > 0 ? json_decode($agreement_data->signators) : [];
-                                    echo $gui->buildSelectFromRegistry($users['result'], $signers,
-                                        true, ['surname', 'name', 'middle_name'], ' '
-                                    );
+                                <?php endif; ?>
+                                <?
+                                $ordersCount = count($orders['result']);
+                                if ($ordersCount == 1) {
+                                    $onlyTemplate = reset($orders['result']);
                                     ?>
-                                </select>
-                            </div*/ ?>
+                                    <input type='hidden' name='document' value='<?= $onlyTemplate->id ?>'>
+                                    <div class='item w_50'>
+                                        <div class='el_data'>
+                                            <label>Шаблон акта</label>
+                                            <div><?= htmlspecialchars($onlyTemplate->name) ?></div>
+                                        </div>
+                                    </div>
+                                    <?
+                                } elseif ($ordersCount > 1) {
+                                    ?>
+                                    <div class='item w_50 required'>
+                                        <select data-label='Шаблон акта' name='document' required>
+                                            <?
+                                            echo $gui->buildSelectFromRegistry($orders['result'], [$agreement_data->document], true);
+                                            ?>
+                                        </select>
+                                    </div>
+                                    <?
+                                } else {
+                                    ?>
+                                    <div class='item w_100'>
+                                        <div class='greyText' style='color:#c00'>
+                                            <span class='material-icons' style='font-size:15px;vertical-align:middle'>warning</span>
+                                            Не найден шаблон акта для данного типа проверки. Обратитесь к администратору.
+                                        </div>
+                                    </div>
+                                    <?
+                                }
+                                ?>
                                 <div style="height:150px">&nbsp;</div>
                             </div>
                         </div>
@@ -370,6 +416,121 @@ if ($auth->isLogin()) {
                         }
                         ?>
                     </div>
+
+                    <div class='tab-panel' id='tab_objections-panel' style='display:none'>
+                        <div class='group'>
+                            <h3 class='item'><strong>ВОЗРАЖЕНИЯ ОБЪЕКТА КОНТРОЛЯ</strong></h3>
+                        </div>
+
+                        <?php if (!$act_signed): ?>
+                            <div class='group'>
+                                <div class='item'>
+                                    <div class='inform_block inform_warning'>
+                                        <span class='material-icons'>info</span>
+                                        Возражения можно подать только после подписания акта.
+                                    </div>
+                                </div>
+                            </div>
+
+                        <?php elseif ($objections_count > 0): ?>
+                            <!-- Уже поданы возражения — показываем всем -->
+                            <div class='group'>
+                                <div class='item w_50'>
+                                    <div class='el_data'>
+                                        <label>Дата подачи возражений</label>
+                                        <div class='el_value'><?= htmlspecialchars($objections_date) ?></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class='group'>
+                                <div class='item'>
+                                    <div class='el_data'>
+                                        <label>Текст возражений</label>
+                                        <div class='el_value' style='white-space:pre-wrap'><?= htmlspecialchars($objections_text) ?></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <?php if (count($objections_files) > 0): ?>
+                                <div class='group'>
+                                    <div class='item'>
+                                        <label>Прикреплённые файлы</label>
+                                        <div id='objections_files_list'>
+                                            <?php foreach ($objections_files as $fid): ?>
+                                                <?php
+                                                $fRec = $db->selectOne('files', ' WHERE id = ?', [intval($fid)]);
+                                                if ($fRec):
+                                                    ?>
+                                                    <div class='file_item'>
+                                                        <span class='material-icons'>attach_file</span>
+                                                        <a href='/uploads/<?= htmlspecialchars($fRec->path) ?>'
+                                                           target='_blank'><?= htmlspecialchars($fRec->name) ?></a>
+                                                    </div>
+                                                <?php endif; ?>
+                                            <?php endforeach; ?>
+                                        </div>
+                                    </div>
+                                </div>
+                            <?php endif; ?>
+                            <!-- ОК может редактировать свои возражения (если акт ещё не закрыт докладом) -->
+                            <?php if ($is_object_control && is_null($agreement_data->report_id)): ?>
+                                <div class='group'>
+                                    <div class='item'>
+                                        <button class='button icon text' id='btn_edit_objections'>
+                                            <span class='material-icons'>edit</span>Редактировать возражения
+                                        </button>
+                                    </div>
+                                </div>
+                            <?php endif; ?>
+
+                        <?php elseif ($is_object_control): ?>
+                            <!-- ОК может подать возражения -->
+                            <div class='group'>
+                                <div class='item'>
+                                    <div class='el_data'>
+                                        <label>Текст возражений <span style='color:var(--color_04);font-size:12px'>(необязательно — можно только прикрепить файлы)</span></label>
+                                        <textarea class='el_input' name='objections_text' rows='8'
+                                                  style='width:100%;resize:vertical'
+                                                  placeholder='Изложите ваши возражения по акту проверки...'></textarea>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class='group'>
+                                <div class='item'>
+                                    <label>Прикрепить файлы (возражения, пояснительные записки)</label>
+                                    <div class='file_attach_area' id='objections_attach'>
+                                        <input type='file' id='objections_files_input' name='objections_files[]'
+                                               multiple style='display:none'>
+                                        <button type='button' class='button icon text' id='btn_attach_objections'>
+                                            <span class='material-icons'>attach_file</span>Прикрепить файлы
+                                        </button>
+                                        <div id='objections_files_preview'></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class='group'>
+                                <div class='item'>
+                                    <button type='button' class='button icon text' id='btn_send_objections'
+                                            data-act-id='<?= $act_id ?>'>
+                                        <span class='material-icons'>send</span>Направить возражения
+                                    </button>
+                                    <span style='margin-left:12px;color:var(--color_04);font-size:12px'>
+                    После отправки возражения поступят в министерство
+                </span>
+                                </div>
+                            </div>
+
+                        <?php else: ?>
+                            <!-- Министерство — возражений нет -->
+                            <div class='group'>
+                                <div class='item'>
+                                    <div class='inform_block'>
+                                        <span class='material-icons'>check_circle</span>
+                                        Объект контроля не направил возражений по акту.
+                                    </div>
+                                </div>
+                            </div>
+                        <?php endif; ?>
+                    </div>
                 </form>
             </div>
         </div>
@@ -447,6 +608,16 @@ if ($auth->isLogin()) {
                         e.preventDefault();
                         e.stopImmediatePropagation();
                         el_tools.notify(false, 'Ошибка', 'Заполните свой чек-лист перед подписанием.');
+                        return false;
+                    }
+                    // Проверяем шаблон акта (если показан select)
+                    let $docSelect = $('select[name=document]');
+                    if ($docSelect.length > 0 && (!$docSelect.val() || $docSelect.val() == '0')) {
+                        e.preventDefault();
+                        e.stopImmediatePropagation();
+                        el_tools.notify(false, 'Ошибка', 'Выберите шаблон акта.');
+                        $('#tab_act').trigger('click');
+                        $docSelect.focus();
                         return false;
                     }
                     let $executors = $('#tab_otherCheckLists-panel .executor');
@@ -664,6 +835,82 @@ if ($auth->isLogin()) {
                     );
                 });
             }
+
+            (function () {
+                // ── Прикрепление файлов ──────────────────────────────────
+                var selectedFiles = [];
+
+                $('#btn_attach_objections').on('click', function () {
+                    $('#objections_files_input').trigger('click');
+                });
+
+                $('#objections_files_input').on('change', function () {
+                    var files = this.files;
+                    var $preview = $('#objections_files_preview');
+                    for (var i = 0; i < files.length; i++) {
+                        selectedFiles.push(files[i]);
+                        $preview.append(
+                            '<div class="file_item" data-idx="' + (selectedFiles.length - 1) + '">' +
+                            '<span class="material-icons">attach_file</span>' +
+                            '<span>' + files[i].name + '</span>' +
+                            '<span class="material-icons" style="cursor:pointer;color:var(--color_red)" ' +
+                            'onclick="$(this).parent().remove()">close</span></div>'
+                        );
+                    }
+                });
+
+                // ── Отправка возражений ──────────────────────────────────
+                $('#btn_send_objections').on('click', function () {
+                    var actId = $(this).data('act-id');
+                    var text  = $('textarea[name=objections_text]').val().trim();
+                    var $remainFiles = $('#objections_files_preview .file_item');
+
+                    if (text.length === 0 && $remainFiles.length === 0) {
+                        inform('Введите текст возражений или прикрепите файлы.', false);
+                        return;
+                    }
+
+                    var fd = new FormData();
+                    fd.append('ajax', '1');
+                    fd.append('path', 'calendar');
+                    fd.append('action', 'save_objections');
+                    fd.append('params[act_id]', actId);
+                    fd.append('params[text]', text);
+
+                    // Собираем только оставшиеся файлы
+                    $remainFiles.each(function () {
+                        var idx = parseInt($(this).data('idx'));
+                        if (!isNaN(idx) && selectedFiles[idx]) {
+                            fd.append('objections_files[]', selectedFiles[idx]);
+                        }
+                    });
+
+                    $.ajax({
+                        url: '/',
+                        method: 'POST',
+                        data: fd,
+                        processData: false,
+                        contentType: false,
+                        headers: {'X-Requested-With': 'XMLHttpRequest', 'x-csrf-token': $.cookie('CSRF-TOKEN')},
+                        success: function (data) {
+                            try {
+                                var r = JSON.parse(data);
+                                inform(r.resultText, r.result);
+                                if (r.result) {
+                                    setTimeout(function () { el_app.reloadMainContent(); }, 1500);
+                                }
+                            } catch (e) { inform(data, false); }
+                        }
+                    });
+                });
+
+                // ── Редактирование (показываем форму заново) ─────────────
+                $('#btn_edit_objections').on('click', function () {
+                    // Перезагружаем диалог с флагом edit
+                    el_app.dialog_close();
+                    // TODO: при необходимости открыть диалог повторно с параметром edit=1
+                });
+            })();
 
         </script>
         <?php

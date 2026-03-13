@@ -441,4 +441,42 @@ class Auth
             return $_SESSION['user_roles'] == $role_id;
         }
     }
+
+    /**
+     * Пересчитывает права пользователя из БД и обновляет сессию.
+     * Вызывается при каждой загрузке страницы (GET-запрос),
+     * чтобы изменения ролей вступали в силу без перелогина.
+     */
+    public function refreshPermissions(): void
+    {
+        $userId = intval($_SESSION['user_id'] ?? 0);
+        if ($userId === 0) {
+            return;
+        }
+
+        $user = $this->db->selectOne('users', ' WHERE id = ?', [$userId]);
+        if (!$user) {
+            return;
+        }
+
+        // Роли могут быть в виде "1", "1,2" или "[1,2]"
+        $rolesRaw = $user->roles ?? '';
+        if (substr_count($rolesRaw, '[') > 0) {
+            $roles = json_decode($rolesRaw, true);
+        } elseif (substr_count($rolesRaw, ',') > 0) {
+            $roles = array_map('intval', explode(',', $rolesRaw));
+        } else {
+            $roles = [intval($rolesRaw)];
+        }
+        $roles = array_filter($roles); // убираем нули
+
+        if (empty($roles)) {
+            return;
+        }
+
+        $newPerms = $this->getUserPermissions($roles);
+        $_SESSION['user_permissions'] = $newPerms;
+        $_SESSION['user_roles']       = $user->roles;
+        $this->_session['user_permissions'] = $newPerms;
+    }
 }
