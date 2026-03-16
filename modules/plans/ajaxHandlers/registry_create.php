@@ -222,27 +222,17 @@ if($err == 0) {
             $_POST['body'] = $agreement_body;
             $_POST['bottom'] = $agreement_bottom;
             $_POST['documentacial'] = 3;
-            $_POST['status'] = 0;
-            $_POST['source_id'] = $new_plan_id;
-            $_POST['source_table'] = 'checksplans';
+            $_POST['status']        = 0;
+            $_POST['source_id']     = $new_plan_id;
+            $_POST['source_table']  = 'checksplans';
 
+            // Сначала обрабатываем загрузку файлов, чтобы иметь file_ids
             if (isset($_FILES['files']) && count($_FILES['files']) > 0 && is_array($_POST['custom_names'])) {
                 $files = new \Core\Files();
                 $existFilesIds = [];
-                if ($new_plan_id > 0) {
-                    $fileExist = $db->selectOne('agreement', ' WHERE id = ?', [$new_plan_id]);
-                    if (!is_null($fileExist->file_ids)) {
-                        $existFilesIds = is_string($fileExist->file_ids)
-                            ? json_decode($fileExist->file_ids) : $fileExist->file_ids;
-                    }
-                }
                 $fileIds = $files->attachFiles($_FILES['files'], $_POST['custom_names']);
                 if ($fileIds['result']) {
-                    if (!is_null($existFilesIds)) {
-                        $_POST['file_ids'] = json_encode(array_merge($existFilesIds, $fileIds['ids']));
-                    } else {
-                        $_POST['file_ids'] = json_encode($fileIds['ids']);
-                    }
+                    $_POST['file_ids'] = json_encode($fileIds['ids'], JSON_UNESCAPED_UNICODE);
                     $reg->insertTaskLog($new_plan_id, 'Приложение файлов &laquo;' .
                         implode('&raquo;, &laquo;', $_POST['custom_names']) . '&raquo;', 'plans', 'registry_edit'
                     );
@@ -251,7 +241,35 @@ if($err == 0) {
                 }
             }
 
-            $docCreateResult = $reg->createDocument($_POST);
+            // ЯВНО создаём запись документа плана в cam_agreement
+            $agreementData = [
+                'active'        => 1,
+                'created_at'    => date('Y-m-d H:i:s'),
+                'author'        => $_SESSION['user_id'],
+                'documentacial' => 3,
+                'document'      => $_POST['document'],
+                'name'          => $_POST['name'],
+                'header'        => $_POST['header'],
+                'body'          => $_POST['body'],
+                'bottom'        => $_POST['bottom'],
+                'status'        => 0,
+                'source_id'     => $new_plan_id,
+                'source_table'  => 'checksplans',
+            ];
+
+            if (!empty($_POST['file_ids'])) {
+                $agreementData['file_ids'] = $_POST['file_ids'];
+            }
+            if (!empty($_POST['agreementlist'])) {
+                // Преобразуем массив JSON-строк в нормальный массив перед сохранением
+                $agreementData['agreementlist'] = json_encode(
+                    $reg->fixJsonArray($_POST['agreementlist']),
+                    JSON_UNESCAPED_UNICODE
+                );
+            }
+
+            $docCreateResult = $db->insert('agreement', $agreementData);
+            $docId           = $db->last_insert_id ?? 0;
 
             //TODO: Добавить отправку уведомленний подписанту и объекту проверки
             foreach ($clear_agreement as $ag) {
@@ -261,7 +279,7 @@ if($err == 0) {
                         $alert->notificationSigner(
                             $agRow[$s]['id'],
                             $agRow[$s]['type'],
-                            $docCreateResult['documentId'],
+                            $docId,
                             $_POST['short'] . $docNumber);
                     }
                 }*/
@@ -270,7 +288,7 @@ if($err == 0) {
                         $alert->notificationSigner(
                             $agRow[$s]['id'],
                             $agRow[$s]['type'],
-                            $docCreateResult['documentId'],
+                            $docId,
                             $_POST['short'] . $docNumber);
                         break;
                     }

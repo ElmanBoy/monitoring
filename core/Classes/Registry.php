@@ -2039,11 +2039,37 @@ class Registry
     public function renderFileInput(?array $f, ?array $editData, string $mode): string
     {
         $html = '';
-        $gui = new \Core\Gui();
+        $gui  = new \Core\Gui();
         $files = new Files();
-        $editData['file_ids'] = (is_string($editData['file_ids']))
-            ? json_decode($editData['file_ids']) : $editData['file_ids'];
-        $fileArr = $files->getAttachedFiles($editData['file_ids']);
+
+        // file_ids может прийти не всегда; пытаемся подтянуть их по document_id из cam_agreement
+        $fileIds = $editData['file_ids'] ?? null;
+
+        if ((!is_array($fileIds) || count($fileIds) === 0) && !empty($editData['document_id'])) {
+            // Сначала ищем по id документа
+            $doc = $this->db->selectOne('agreement', ' WHERE id = ?', [(int)$editData['document_id']]);
+
+            // Если не нашли по id, пробуем по source_id (для планов и других сущностей)
+            if (!$doc) {
+                $doc = $this->db->selectOne(
+                    'agreement',
+                    ' WHERE source_id = ? ORDER BY id DESC LIMIT 1',
+                    [(int)$editData['document_id']]
+                );
+            }
+
+            if ($doc && !is_null($doc->file_ids) && $doc->file_ids !== '') {
+                $fileIds = is_string($doc->file_ids)
+                    ? json_decode($doc->file_ids, true)
+                    : $doc->file_ids;
+            }
+        }
+
+        if (is_string($fileIds)) {
+            $fileIds = json_decode($fileIds, true);
+        }
+
+        $fileArr = $files->getAttachedFiles($fileIds);
         $auth = new \Core\Auth();
         if (is_array($fileArr) && count($fileArr) > 0) {
             $html .= '<ul class="attached_files"><strong>Приложенные файлы:</strong>';

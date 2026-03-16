@@ -181,19 +181,23 @@ if($err == 0) {
             $files = new \Core\Files();
             $existFilesIds = [];
             if ($rowId > 0) {
-                $fileExist = $db->selectOne('agreement', ' WHERE id = ?', [$rowId]);
-                if (!is_null($fileExist->file_ids)) {
+                // Ищем связанный документ плана в cam_agreement
+                $fileExist = $db->selectOne(
+                    'agreement',
+                    " WHERE source_table = 'checksplans' AND source_id = ? ORDER BY id DESC LIMIT 1",
+                    [$rowId]
+                );
+                if ($fileExist && !is_null($fileExist->file_ids)) {
                     $existFilesIds = is_string($fileExist->file_ids)
-                        ? json_decode($fileExist->file_ids) : $fileExist->file_ids;
+                        ? json_decode($fileExist->file_ids, true) : $fileExist->file_ids;
                 }
             }
             $fileIds = $files->attachFiles($_FILES['files'], $_POST['custom_names']);
             if ($fileIds['result']) {
-                if (!is_null($existFilesIds)) {
-                    $_POST['file_ids'] = json_encode(array_merge($existFilesIds, $fileIds['ids']));
-                } else {
-                    $_POST['file_ids'] = json_encode($fileIds['ids']);
-                }
+                $mergedIds = is_array($existFilesIds) && count($existFilesIds) > 0
+                    ? array_merge($existFilesIds, $fileIds['ids'])
+                    : $fileIds['ids'];
+                $_POST['file_ids'] = json_encode($mergedIds, JSON_UNESCAPED_UNICODE);
                 $reg->insertTaskLog($rowId, 'Приложение файлов &laquo;' .
                     implode('&raquo;, &laquo;', $_POST['custom_names']) . '&raquo;', 'plans', 'registry_edit'
                 );
@@ -268,10 +272,34 @@ if($err == 0) {
             $_POST['status'] = 0;
             $_POST['source_id'] = $rowId;
             $_POST['source_table'] = 'checksplans';
-            //Создание документа плана в cam_agreement
-            $docCreateResult = $reg->createDocument($_POST, $rowId);
+            // ЯВНО обновляем документ плана в cam_agreement, связанный с checksplans
+            $planDoc = $db->selectOne(
+                'agreement',
+                " WHERE source_table = 'checksplans' AND source_id = ? ORDER BY id DESC LIMIT 1",
+                [$rowId]
+            );
 
+            if ($planDoc) {
+                $docUpdate = [
+                    'name'   => $_POST['name'],
+                    'header' => $_POST['header'],
+                    'body'   => $_POST['body'],
+                    'bottom' => $_POST['bottom'],
+                ];
 
+                if (!empty($_POST['file_ids'])) {
+                    $docUpdate['file_ids'] = $_POST['file_ids'];
+                }
+
+                if (!empty($_POST['agreementlist']) && is_array($_POST['agreementlist'])) {
+                    $docUpdate['agreementlist'] = json_encode(
+                        $reg->fixJsonArray($_POST['agreementlist']),
+                        JSON_UNESCAPED_UNICODE
+                    );
+                }
+
+                $db->update('agreement', (int)$planDoc->id, $docUpdate);
+            }
 
             //TODO: Добавить отправку уведомленний подписанту и объекту проверки
             /*foreach ($clear_agreement as $ag) {
