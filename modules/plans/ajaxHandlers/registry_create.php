@@ -14,6 +14,7 @@ $regId = 38;
 $insArr = [];
 $uniqueIns = [];
 $clear_agreement = [];
+$docCreateResult = [];
 
 $db = new Db();
 $temp = new Templates();

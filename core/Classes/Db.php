@@ -221,9 +221,9 @@ class Db
                 mkdir(ROOT . '/logs', 0775, true);
             }
             file_put_contents(ROOT . '/logs/pg_log.txt', $logs->grep('INSERT'));
-            return ['result' => true, 'resultText' => '', 'id' => $result->id];
+            return ['result' => true, 'resultText' => 'Данные успешно добавлены', 'id' => $result->id];
         } catch (\Exception $e) {
-            return $this->handleDbException($e);
+            return ['result' => false, 'resultText' => 'Ошибка добавления в базе данных. '.$this->handleDbException($e)];
         }
     }
 
@@ -301,10 +301,10 @@ class Db
             if (isset($_SESSION['registry'][$tableName])) {
                 unset($_SESSION['registry'][$tableName]);
             }
-            return ['result' => true, 'resultText' => ''];
+            return ['result' => true, 'resultText' => 'Изменения успешно сохранены'];
         } catch (\Exception $e) {
             $this->db::rollback();
-            return $this->handleDbException($e);
+            return ['result' => false, 'resultText' => 'Ошибка сохранения в базе данных. '.$this->handleDbException($e)];
         }
     }
 

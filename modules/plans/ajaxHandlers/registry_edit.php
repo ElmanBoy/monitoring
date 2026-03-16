@@ -14,6 +14,7 @@ $regId = 38; //План проверок
 $rowId = intval($_POST['reg_id']); // ID плана
 $insArr = [];
 $uniqueIns = [];
+$docCreateResult = [];
 
 $db = new Db();
 $temp = new Templates();
@@ -298,7 +299,7 @@ if($err == 0) {
                     );
                 }
 
-                $db->update('agreement', (int)$planDoc->id, $docUpdate);
+                $docCreateResult = $db->update('agreement', (int)$planDoc->id, $docUpdate);
             }
 
             //TODO: Добавить отправку уведомленний подписанту и объекту проверки
