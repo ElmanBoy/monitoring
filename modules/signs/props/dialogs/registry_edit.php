@@ -370,7 +370,7 @@ if ($busy != []) {
     </div>
     <script>
         el_app.mainInit();
-        el_registry.create_init();
+        el_signs_registry.create_init();
         $("select[name=field_types], select[name=fromdb]").trigger("change");
         $("#registry_edit .close").on("click", function () {
             $.post("/", {ajax: 1, action: "transaction_close", id: <?=$trans_id?>}, function () {

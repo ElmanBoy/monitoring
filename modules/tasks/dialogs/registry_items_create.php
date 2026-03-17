@@ -41,7 +41,7 @@ $parent = $db->selectOne('registry', ' where id = ?', [$_POST['params']]);
 <script>
     $(document).ready(function(){
         el_app.mainInit();
-        el_registry.create_init();
+        el_tasks_registry.create_init();
         $(".el_input[name=name]").focus();
     });
 </script>

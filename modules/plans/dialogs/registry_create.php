@@ -68,7 +68,7 @@ $reg = new Registry();
 <script>
     $(document).ready(function(){
         el_app.mainInit();
-        el_registry.create_init();
+        el_plans_registry.create_init();
         agreement_list.agreement_list_init();
 
         function save_doc_available(){
@@ -158,7 +158,7 @@ $reg = new Registry();
         $('#save_doc').off('click').on('click', async function (event) {
             event.preventDefault();
             let $form = $(this).closest('form'),
-                isAvailable = await el_registry.check_institution_availability($('.institutions'), 'confirm');
+                isAvailable = await el_plans_registry.check_institution_availability($('.institutions'), 'confirm');
             console.log(isAvailable)
             if (!isAvailable) {
                 $form.addClass('rejected');

@@ -1,6 +1,6 @@
 $(document).ready(function(){
     el_app.mainInit();
-    el_registry.create_init();
+    el_calendar_registry.create_init();
 });
 
 var check_number = 1;
@@ -11,7 +11,7 @@ var calendars = {};
 var quarters = {};
 var is_head_checked = null;
 
-var el_registry = {
+var el_calendar_registry = {
     //Инициализация контролов в разделе "Календарь"
     create_init: function(){
 
@@ -126,7 +126,7 @@ var el_registry = {
             e.preventDefault();
             $(".pop_up_body .check_button:last").clone().insertAfter(".pop_up_body .check_button:last");
             $(".pop_up_body .check_button:last input").val("");
-            el_registry.setCheckNumber();
+            el_calendar_registry.setCheckNumber();
 
             check_number++;
             //$(".check_number").last().text("Кнопка №" + check_number);
@@ -135,7 +135,7 @@ var el_registry = {
                 $(".check_button .close").off("click").on("click", function (){
                     check_number--;
                     $(this).closest(".check_button").remove();
-                    el_registry.setCheckNumber();
+                    el_calendar_registry.setCheckNumber();
                 });
             }
         });
@@ -144,7 +144,7 @@ var el_registry = {
             e.preventDefault();
             $(".pop_up_body .option_button:last").clone().insertAfter(".pop_up_body .option_button:last");
             $(".pop_up_body .option_button:last input").val("");
-            el_registry.setOptionNumber();
+            el_calendar_registry.setOptionNumber();
 
             option_number++;
             if(option_number > 1){
@@ -152,7 +152,7 @@ var el_registry = {
                 $(".option_button .close").off("click").on("click", function (){
                     option_number--;
                     $(this).closest(".option_button").remove();
-                    el_registry.setOptionNumber();
+                    el_calendar_registry.setOptionNumber();
                 });
             }
         });
@@ -163,7 +163,7 @@ var el_registry = {
             $selected.closest(".item").appendTo("#reg_props_list");
             $("#reg_props_list input:checked").prop("checked", false);
             $("#reg_props_list input[type=hidden]").attr("name", "prop[]");
-            el_registry.getPropsInRegistry();
+            el_calendar_registry.getPropsInRegistry();
         });
         $("#remove_props").on("click", function (e){
             e.preventDefault();
@@ -172,7 +172,7 @@ var el_registry = {
                 .find(".rename, .rename_done, .drag_handler, .required, .unique").remove();
             $("#all_props_list input:checked").prop("checked", false);
             $("#all_props_list input[type=hidden]").attr("name", "props[]");
-            el_registry.getPropsInRegistry();
+            el_calendar_registry.getPropsInRegistry();
         });
         $("#addProps").off("click").on("click", function () {
             el_app.dialog_open("prop_create", "", "registry/props");
@@ -201,11 +201,11 @@ var el_registry = {
         });
 
         /*$(document).on("content_load", function (){
-            el_registry.getAllPropsInCreateRegistry();
+            el_calendar_registry.getAllPropsInCreateRegistry();
         });*/
 
         $("select[name=fromdb]").on("change", function (){
-            el_registry.showFieldsFromDB($(this).val(), $("input[name=selected_field]").val());
+            el_calendar_registry.showFieldsFromDB($(this).val(), $("input[name=selected_field]").val());
         });
 
         $("[in_menu]").on("change", function (){
@@ -255,17 +255,17 @@ var el_registry = {
 
         $(".pop_up_body .new_institution").off("click").on("click", function(e){
             e.preventDefault();
-            el_registry.cloneInstitution();
+            el_calendar_registry.cloneInstitution();
         });
 
         $(".pop_up_body .new_staff").off("click").on("click", function(e){
             e.preventDefault();
-            el_registry.cloneStaff();
+            el_calendar_registry.cloneStaff();
         });
 
         $(".pop_up_body .new_violation").off("click").on("click", function(e){
             e.preventDefault();
-            el_registry.cloneViolation();
+            el_calendar_registry.cloneViolation();
         });
 
         $(".institutions .clear").off("click").on("click", function (){
@@ -322,7 +322,7 @@ var el_registry = {
 
         $(".pop_up_body .institutions:last input[name='check_periods[]']")
             .flatpickr({
-                defaultDate: el_registry.getPrevPeriod(),
+                defaultDate: el_calendar_registry.getPrevPeriod(),
                 locale: 'ru',
                 mode: 'range',
                 time_24hr: true,
@@ -335,14 +335,14 @@ var el_registry = {
                 firstDayOfWeek: 1,
             });
 
-        el_registry.bindSetOrgByType();
-        el_registry.bindPassword();
-        el_registry.bindLoginAlias();
-        el_registry.getPropsInRegistry();
-        el_registry.bindDadata();
+        el_calendar_registry.bindSetOrgByType();
+        el_calendar_registry.bindPassword();
+        el_calendar_registry.bindLoginAlias();
+        el_calendar_registry.getPropsInRegistry();
+        el_calendar_registry.bindDadata();
         el_app.sort_init();
         el_app.filter_init();
-        el_registry.bindChangeIsHead();
+        el_calendar_registry.bindChangeIsHead();
     },
 
     getPrevPeriod: function (){
@@ -389,7 +389,7 @@ var el_registry = {
                 '<span class="material-icons rename_done" title="Переименовать поле">done</span>\n' +
                 '    <span class="material-icons drag_handler" title="Переместить">drag_handle</span>');
         }
-        el_registry.setNewRegistryData();
+        el_calendar_registry.setNewRegistryData();
 
         $items.find(".rename").off("click").on("click", function (){
             let $label = $(this).closest(".item").find(".fieldName"),
@@ -404,7 +404,7 @@ var el_registry = {
                 $(this).closest(".item").find(".fieldName").text(newVal);
                 $(this).hide();
                 $(this).closest(".item").find(".rename").show();
-                el_registry.setNewRegistryData();
+                el_calendar_registry.setNewRegistryData();
             });
         });
 
@@ -415,11 +415,11 @@ var el_registry = {
             if (icon === "panorama_fish_eye") {
                 $(this).text("check_circle");
                 $item.attr("data-" + action, 1);
-                el_registry.setNewRegistryData();
+                el_calendar_registry.setNewRegistryData();
             }else{
                 $(this).text("panorama_fish_eye");
                 $item.attr("data-" + action, 0);
-                el_registry.setNewRegistryData();
+                el_calendar_registry.setNewRegistryData();
             }
         });
 
@@ -438,7 +438,7 @@ var el_registry = {
             handle: ".drag_handler",
             items: "li",
             stop: function (event, ui) {
-                el_registry.setNewRegistryData();
+                el_calendar_registry.setNewRegistryData();
             }
         });
     },
@@ -510,15 +510,15 @@ var el_registry = {
                 $("#tab_form-panel [required]").removeAttr("required");
                 $(".pop_up_body .new_institution").off("click").on("click", function(e){
                     e.preventDefault();
-                    el_registry.cloneInstitution();
+                    el_calendar_registry.cloneInstitution();
                 });
                 $("input[type=tel]").mask('+7 (999) 999-99-99');
-                el_registry.bindDadata();
-                el_registry.bindSetOrgByType();
-                el_registry.bindPassword();
-                el_registry.bindLoginAlias();
-                el_registry.bindTipsy();
-                el_registry.bindCalendar();
+                el_calendar_registry.bindDadata();
+                el_calendar_registry.bindSetOrgByType();
+                el_calendar_registry.bindPassword();
+                el_calendar_registry.bindLoginAlias();
+                el_calendar_registry.bindTipsy();
+                el_calendar_registry.bindCalendar();
 
             });
 
@@ -585,7 +585,7 @@ var el_registry = {
         $(".pop_up_body .institutions:last").clone().insertAfter(".pop_up_body .institutions:last");
         $(".pop_up_body .new_institution").off("click").on("click", function(e){
             e.preventDefault();
-            el_registry.cloneInstitution();
+            el_calendar_registry.cloneInstitution();
         });
         $(".pop_up_body .institutions select").chosen({
             search_contains: true,
@@ -596,7 +596,7 @@ var el_registry = {
         $(".pop_up_body .institutions:last input").val("");
 
         $(".pop_up_body .institutions:last select[name='institutions[]']").empty().trigger("chosen:updated");
-        el_registry.bindSetOrgByType();
+        el_calendar_registry.bindSetOrgByType();
         $(".pop_up_body .institutions:last select[name='check_types[]']").val(current_check)
             .trigger("chosen:updated").trigger("change");
         $(".pop_up_body .institutions:last select[name='inspections[]']").val(check_type)
@@ -624,7 +624,7 @@ var el_registry = {
             $(".question_number").last().after('<div class="button icon clear"><span class="material-icons">close</span></div>');
             $(".institutions .clear").off("click").on("click", function (){
                 $(this).closest(".institutions").remove();
-                el_registry.setItemsNumbers($(".pop_up_body .institutions"), "Учреждение");
+                el_calendar_registry.setItemsNumbers($(".pop_up_body .institutions"), "Учреждение");
                 institutions_counter--;
             });
         }
@@ -633,11 +633,11 @@ var el_registry = {
         for (let i = 0; i < $institutions.length; i++){
             $($institutions[i]).find(".question_number").text("Учреждение №" + (i+ 1));
         }*/
-        el_registry.setItemsNumbers($(".pop_up_body .institutions"), "Учреждение");
-        el_registry.bindTipsy();
+        el_calendar_registry.setItemsNumbers($(".pop_up_body .institutions"), "Учреждение");
+        el_calendar_registry.bindTipsy();
         quarter.bindQuarter("#" + $(".pop_up_body .institutions:last .quarter_select").attr("id"));
-        el_registry.bindCalendar();
-        el_registry.scrollToLastInstitution();
+        el_calendar_registry.bindCalendar();
+        el_calendar_registry.scrollToLastInstitution();
     },
 
     cloneStaff: function(){
@@ -649,7 +649,7 @@ var el_registry = {
         $(".pop_up_body .staff:last").clone().insertAfter(".pop_up_body .staff:last");
         $(".pop_up_body .new_staff").off("click").on("click", function(e){
             e.preventDefault();
-            el_registry.cloneStaff();
+            el_calendar_registry.cloneStaff();
         });
         $(".pop_up_body .staff:last select[name='executors_hidden[]']").val("");
         $(".pop_up_body .staff select").chosen({
@@ -664,7 +664,7 @@ var el_registry = {
         $(".pop_up_body .staff:last select[name='executors[]']").val("").trigger("chosen:updated");
         $(".pop_up_body .staff:last input[type=radio], .pop_up_body .staff:last input[type=checkbox]")
             .prop("checked", false);
-        //el_registry.bindSetOrgByType();
+        //el_calendar_registry.bindSetOrgByType();
         $(".pop_up_body .staff:last select[name='units[]']").val(current_unit)
             .trigger("chosen:updated").trigger("change");
 
@@ -687,25 +687,25 @@ var el_registry = {
             $(".question_number").last().after('<div class="button icon clear"><span class="material-icons">close</span></div>');
             $(".staff .clear").off("click").on("click", function (){
                 $(this).closest(".staff").remove();
-                el_registry.setItemsNumbers($(".pop_up_body .staff"), "Объект проверки");
+                el_calendar_registry.setItemsNumbers($(".pop_up_body .staff"), "Объект проверки");
                 staffs_counter--;
             });
         }
         el_app.bindGetUnitsByOrg();
         //el_app.bindSetMinistriesByOrg($(".staff:last"));
         //el_app.bindSetUnitsByOrg($('.staff:last'));
-        //el_registry.bindSetExecutorByUnit($(".staff:last"));
+        //el_calendar_registry.bindSetExecutorByUnit($(".staff:last"));
         //$("select[name='institutions[]']:last").trigger("change");
 
         /*let $staffs = $(".pop_up_body .staff");
         for (let i = 0; i < $staffs.length; i++){
             $($staffs[i]).find(".question_number").text("Сотрудник №" + (i+ 1));
         }*/
-        el_registry.setItemsNumbers($(".pop_up_body .staff"), "Сотрудник");
-        el_registry.bindTipsy();
-        el_registry.bindCalendar(minDate, maxDate);
-        el_registry.bindChangeIsHead();
-        el_registry.scrollToLastStaff();
+        el_calendar_registry.setItemsNumbers($(".pop_up_body .staff"), "Сотрудник");
+        el_calendar_registry.bindTipsy();
+        el_calendar_registry.bindCalendar(minDate, maxDate);
+        el_calendar_registry.bindChangeIsHead();
+        el_calendar_registry.scrollToLastStaff();
 
         $(".pop_up_body .staff [name='" + is_head_checked + "']").prop("checked", true);
     },
@@ -716,7 +716,7 @@ var el_registry = {
         $(".pop_up_body .violation:last").clone().insertAfter(".pop_up_body .violation:last");
         $(".pop_up_body .new_vioaltion").off("click").on("click", function(e){
             e.preventDefault();
-            el_registry.cloneViolation();
+            el_calendar_registry.cloneViolation();
         });
 
         $(".pop_up_body .violation select").chosen({
@@ -727,7 +727,7 @@ var el_registry = {
         $(".pop_up_body .violation:last textarea").val("");
 
         $(".pop_up_body .violation:last select[name='executors[]']").val("").trigger("chosen:updated");
-        //el_registry.bindSetOrgByType();
+        //el_calendar_registry.bindSetOrgByType();
         $(".pop_up_body .violation:last select[name='units[]']").val(current_unit)
             .trigger("chosen:updated").trigger("change");
 
@@ -737,14 +737,14 @@ var el_registry = {
             $(".section_number").last().after('<div class="button icon clear"><span class="material-icons">close</span></div>');
             $(".violation .clear").off("click").on("click", function (){
                 $(this).closest(".violation").remove();
-                el_registry.setItemsNumbers($(".pop_up_body .violation"), "Нарушение");
+                el_calendar_registry.setItemsNumbers($(".pop_up_body .violation"), "Нарушение");
                 staffs_counter--;
             });
         }
-        el_registry.setItemsNumbers($(".pop_up_body .violation"), "Нарушение");
-        el_registry.bindTipsy();
+        el_calendar_registry.setItemsNumbers($(".pop_up_body .violation"), "Нарушение");
+        el_calendar_registry.bindTipsy();
 
-        el_registry.scrollToLastViolation();
+        el_calendar_registry.scrollToLastViolation();
     },
 
     setItemsNumbers: function (objects, title){

@@ -112,7 +112,7 @@ $parent = $db->selectOne('registry', ' where id = ?', [$_POST['params']]);
 <script>
     $(document).ready(function(){
         el_app.mainInit();
-        el_registry.create_item_init();
+        el_refs_registry.create_item_init();
         $(".el_input[name=name]").focus();
     });
 </script>

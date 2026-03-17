@@ -376,7 +376,7 @@ if ($auth->isLogin()) {
         <script>
             $(document).ready(function () {
                 el_app.initTabs();
-                //el_registry.bindCalendar("<?=$minDate?>", "<?=$maxDate?>");
+                //el_calendar_registry.bindCalendar("<?=$minDate?>", "<?=$maxDate?>");
                 // Инициализируем flatpickr на каждом поле дат (в т.ч. предзаполненных при редактировании)
                 $("#check_staff [name='dates[]']").each(function () {
                     let inputEl = this;

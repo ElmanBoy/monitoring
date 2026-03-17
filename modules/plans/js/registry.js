@@ -1,6 +1,6 @@
 $(document).ready(function(){
     el_app.mainInit();
-    el_registry.create_init();
+    el_plans_registry.create_init();
 });
 
 var check_number = 1;
@@ -10,7 +10,7 @@ var staffs_counter = 1;
 var calendars = {};
 var quarters = {};
 
-var el_registry = {
+var el_plans_registry = {
     check_institutions: 0,
     just_opened: false,
     //Инициализация контролов в разделе "Планы проверок"
@@ -126,7 +126,7 @@ var el_registry = {
             e.preventDefault();
             $(".pop_up_body .check_button:last").clone().insertAfter(".pop_up_body .check_button:last");
             $(".pop_up_body .check_button:last input").val("");
-            el_registry.setCheckNumber();
+            el_plans_registry.setCheckNumber();
 
             check_number++;
             //$(".check_number").last().text("Кнопка №" + check_number);
@@ -135,7 +135,7 @@ var el_registry = {
                 $(".check_button .close").off("click").on("click", function (){
                     check_number--;
                     $(this).closest(".check_button").remove();
-                    el_registry.setCheckNumber();
+                    el_plans_registry.setCheckNumber();
                 });
             }
         });
@@ -144,7 +144,7 @@ var el_registry = {
             e.preventDefault();
             $(".pop_up_body .option_button:last").clone().insertAfter(".pop_up_body .option_button:last");
             $(".pop_up_body .option_button:last input").val("");
-            el_registry.setOptionNumber();
+            el_plans_registry.setOptionNumber();
 
             option_number++;
             if(option_number > 1){
@@ -152,7 +152,7 @@ var el_registry = {
                 $(".option_button .close").off("click").on("click", function (){
                     option_number--;
                     $(this).closest(".option_button").remove();
-                    el_registry.setOptionNumber();
+                    el_plans_registry.setOptionNumber();
                 });
             }
         });
@@ -163,7 +163,7 @@ var el_registry = {
             $selected.closest(".item").appendTo("#reg_props_list");
             $("#reg_props_list input:checked").prop("checked", false);
             $("#reg_props_list input[type=hidden]").attr("name", "prop[]");
-            el_registry.getPropsInRegistry();
+            el_plans_registry.getPropsInRegistry();
         });
         $("#remove_props").on("click", function (e){
             e.preventDefault();
@@ -172,7 +172,7 @@ var el_registry = {
                 .find(".rename, .rename_done, .drag_handler, .required, .unique").remove();
             $("#all_props_list input:checked").prop("checked", false);
             $("#all_props_list input[type=hidden]").attr("name", "props[]");
-            el_registry.getPropsInRegistry();
+            el_plans_registry.getPropsInRegistry();
         });
         $("#addProps").off("click").on("click", function () {
             el_app.dialog_open("prop_create", "", "registry/props");
@@ -201,11 +201,11 @@ var el_registry = {
         });
 
         /*$(document).on("content_load", function (){
-            el_registry.getAllPropsInCreateRegistry();
+            el_plans_registry.getAllPropsInCreateRegistry();
         });*/
 
         $("select[name=fromdb]").on("change", function (){
-            el_registry.showFieldsFromDB($(this).val(), $("input[name=selected_field]").val());
+            el_plans_registry.showFieldsFromDB($(this).val(), $("input[name=selected_field]").val());
         });
 
         $("[in_menu]").on("change", function (){
@@ -255,12 +255,12 @@ var el_registry = {
 
         $(".pop_up_body .new_institution").off("click").on("click", function(e){
             e.preventDefault();
-            el_registry.cloneInstitution();
+            el_plans_registry.cloneInstitution();
         });
 
         $(".pop_up_body .new_staff").off("click").on("click", function(e){
             e.preventDefault();
-            el_registry.cloneStaff();
+            el_plans_registry.cloneStaff();
         });
 
         /*$("select[name=year]").on("change", function (){
@@ -329,9 +329,9 @@ var el_registry = {
 
                         if (addinstitution !== null && addinstitution.length > 0) {
                             for (let i = 0; i < addinstitution.length; i++) {
-                                el_registry.setInstitution(addinstitution[i]);
+                                el_plans_registry.setInstitution(addinstitution[i]);
                                 if (i < addinstitution.length - 1) {
-                                    el_registry.cloneInstitution(i >= (addinstitution.length - 2), false);
+                                    el_plans_registry.cloneInstitution(i >= (addinstitution.length - 2), false);
                                 }
                             }
                             $('[name^="institutions["]').trigger("change");
@@ -356,7 +356,7 @@ var el_registry = {
 
         $(".pop_up_body .institutions:last input[name='check_periods[]']")
             .flatpickr({
-                defaultDate: el_registry.getPrevPeriod(),
+                defaultDate: el_plans_registry.getPrevPeriod(),
                 locale: 'ru',
                 mode: 'range',
                 time_24hr: true,
@@ -379,20 +379,20 @@ var el_registry = {
 
         });
 
-        el_registry.bindSetOrgByType();
-        el_registry.bindPassword();
-        el_registry.bindLoginAlias();
-        el_registry.getPropsInRegistry();
-        el_registry.bindDadata();
-        el_registry.bindChangeInstitution();
-        //el_registry.bind_check_institution_availability($(".institutions:last"));
+        el_plans_registry.bindSetOrgByType();
+        el_plans_registry.bindPassword();
+        el_plans_registry.bindLoginAlias();
+        el_plans_registry.getPropsInRegistry();
+        el_plans_registry.bindDadata();
+        el_plans_registry.bindChangeInstitution();
+        //el_plans_registry.bind_check_institution_availability($(".institutions:last"));
         el_app.sort_init();
         el_app.filter_init();
-        el_registry.bindRemoveInstitution();
-        el_registry.just_opened = true;
+        el_plans_registry.bindRemoveInstitution();
+        el_plans_registry.just_opened = true;
 
         $('.pop_up_body select[name="institutions[]"]').trigger("change");
-        el_registry.just_opened = false;
+        el_plans_registry.just_opened = false;
     },
 
     showLoadingIndicator: function () {
@@ -416,14 +416,14 @@ var el_registry = {
                 onUploadProgress: (event) => {
                     if (event.lengthComputable) {
                         const percent = (event.loaded / event.total) * 100;
-                        el_registry.updateProgressBar(percent);
+                        el_plans_registry.updateProgressBar(percent);
                     }
                 }
             });
 
             if (response.ok) {
                 const result = await response.json();
-                el_registry.hideLoadingIndicator(); console.log(result);
+                el_plans_registry.hideLoadingIndicator(); console.log(result);
                 if (result.result) {
 
                     $("#importFields").html(result.resultHtml);
@@ -439,7 +439,7 @@ var el_registry = {
                             year = $('[name="plan_year"]').val(),
                             addinstitution = $('[name^="institution["]');
 
-                        el_registry.clearInstitutions();
+                        el_plans_registry.clearInstitutions();
 
                         $(".preloader").fadeIn();
                         $("textarea[name=longname]").val(full_name);
@@ -458,9 +458,9 @@ var el_registry = {
                                     check_periods: $("[name='check_periods[" + index + "]']").val()
                                 };
                                 //console.log(data);
-                                el_registry.setInstitution(data);
+                                el_plans_registry.setInstitution(data);
                                 if (i < addinstitution.length - 1){
-                                    el_registry.cloneInstitution(i >= (addinstitution.length - 2), false);
+                                    el_plans_registry.cloneInstitution(i >= (addinstitution.length - 2), false);
                                 }
                                 //console.log(index, $("[name='check_periods[" + index + "]']").val(), data);
                             }
@@ -476,7 +476,7 @@ var el_registry = {
                 alert('Ошибка при загрузке файла');
             }
         } catch (error) {
-            el_registry.hideLoadingIndicator();
+            el_plans_registry.hideLoadingIndicator();
             $("#result").html(`<div style="color: red;">Ошибка: ${error.message}</div>`);
         }
     },
@@ -536,7 +536,7 @@ var el_registry = {
                 '<span class="material-icons rename_done" title="Переименовать поле">done</span>\n' +
                 '    <span class="material-icons drag_handler" title="Переместить">drag_handle</span>');
         }
-        el_registry.setNewRegistryData();
+        el_plans_registry.setNewRegistryData();
 
         $items.find(".rename").off("click").on("click", function (){
             let $label = $(this).closest(".item").find(".fieldName"),
@@ -551,7 +551,7 @@ var el_registry = {
                 $(this).closest(".item").find(".fieldName").text(newVal);
                 $(this).hide();
                 $(this).closest(".item").find(".rename").show();
-                el_registry.setNewRegistryData();
+                el_plans_registry.setNewRegistryData();
             });
         });
 
@@ -562,11 +562,11 @@ var el_registry = {
             if (icon === "panorama_fish_eye") {
                 $(this).text("check_circle");
                 $item.attr("data-" + action, 1);
-                el_registry.setNewRegistryData();
+                el_plans_registry.setNewRegistryData();
             }else{
                 $(this).text("panorama_fish_eye");
                 $item.attr("data-" + action, 0);
-                el_registry.setNewRegistryData();
+                el_plans_registry.setNewRegistryData();
             }
         });
 
@@ -585,7 +585,7 @@ var el_registry = {
             handle: ".drag_handler",
             items: "li",
             stop: function (event, ui) {
-                el_registry.setNewRegistryData();
+                el_plans_registry.setNewRegistryData();
             }
         });
     },
@@ -657,14 +657,14 @@ var el_registry = {
                 $("#tab_form-panel [required]").removeAttr("required");
                 $(".pop_up_body .new_institution").off("click").on("click", function(e){
                     e.preventDefault();
-                    el_registry.cloneInstitution();
+                    el_plans_registry.cloneInstitution();
                 });
-                el_registry.bindDadata();
-                el_registry.bindSetOrgByType();
-                el_registry.bindPassword();
-                el_registry.bindLoginAlias();
-                el_registry.bindTipsy();
-                el_registry.bindCalendar();
+                el_plans_registry.bindDadata();
+                el_plans_registry.bindSetOrgByType();
+                el_plans_registry.bindPassword();
+                el_plans_registry.bindLoginAlias();
+                el_plans_registry.bindTipsy();
+                el_plans_registry.bindCalendar();
 
             });
 
@@ -743,7 +743,7 @@ var el_registry = {
         $(".pop_up_body .institutions:last").clone().insertAfter(".pop_up_body .institutions:last");
         $(".pop_up_body .new_institution").off("click").on("click", function(e){
             e.preventDefault();
-            el_registry.cloneInstitution();
+            el_plans_registry.cloneInstitution();
         });
 
         $(".pop_up_body .institutions:last .quarterWrapper")
@@ -751,7 +751,7 @@ var el_registry = {
         $(".pop_up_body .institutions:last input").val("");
 
         /*$(".pop_up_body .institutions:last select[name='institutions[]']").empty().trigger("chosen:updated");
-        el_registry.bindSetOrgByType();*/
+        el_plans_registry.bindSetOrgByType();*/
         $(".pop_up_body .institutions:last select[name='check_types[]']").val(current_check)
             .trigger("chosen:updated");//.trigger("change");
         $(".pop_up_body .institutions:last select[name='inspections[]']").val(check_type)
@@ -789,7 +789,7 @@ var el_registry = {
 
             $(".institutions:last .clear").off("click").on("click", function (){
                 $(this).closest(".institutions").remove();
-                el_registry.setItemsNumbers($(".pop_up_body .institutions"), "Учреждение");
+                el_plans_registry.setItemsNumbers($(".pop_up_body .institutions"), "Учреждение");
                 if(institutions_counter > 1){
                     institutions_counter--;
                 }
@@ -801,16 +801,16 @@ var el_registry = {
                 search_contains: true,
                 no_results_text: "Ничего не найдено."
             });
-            el_registry.setItemsNumbers($(".pop_up_body .institutions"), "Учреждение");
-            el_registry.bindTipsy();
-            el_registry.bindChangeInstitution();
+            el_plans_registry.setItemsNumbers($(".pop_up_body .institutions"), "Учреждение");
+            el_plans_registry.bindTipsy();
+            el_plans_registry.bindChangeInstitution();
             quarter.bindQuarter("#" + $(".pop_up_body .institutions:last .quarter_select").attr("id"));
-            el_registry.bindCalendar();
-            //el_registry.bind_check_institution_availability($(".institutions:last"));
-            //el_registry.check_institution_availability($(".institutions"));
-            el_registry.scrollToLastInstitution();
+            el_plans_registry.bindCalendar();
+            //el_plans_registry.bind_check_institution_availability($(".institutions:last"));
+            //el_plans_registry.check_institution_availability($(".institutions"));
+            el_plans_registry.scrollToLastInstitution();
             el_app.bindRegistryButtonsExternal();
-            el_registry.bindRemoveInstitution();
+            el_plans_registry.bindRemoveInstitution();
         }
     },
 
@@ -820,27 +820,27 @@ var el_registry = {
             $.post("/", {ajax: 1, action: "getAddressByOrg", insId: $(this).val()}, function (data){
                 $self.closest(".institutions").find('select[name="units[]"]').html(data).trigger("chosen:updated");
             });
-            //el_registry.check_institution_availability($(this).closest(".institutions"));
+            //el_plans_registry.check_institution_availability($(this).closest(".institutions"));
         });
     },
 
     bind_check_institution_availability: function ($block){
         $block.find("[name='institutions[]'], [name='periods_hidden[]']")
             .on("change input", function (){
-            el_registry.check_institution_availability($block);
+            el_plans_registry.check_institution_availability($block);
         });
         $block.find("[name='periods[]']")
             .on("blur", function (){
-                el_registry.check_institution_availability($block);
+                el_plans_registry.check_institution_availability($block);
             });
         $(".pop_up_body [name=year]").on("change", function (){
-            el_registry.check_institution_availability($block);
+            el_plans_registry.check_institution_availability($block);
         });
     },
 
     /*check_institution_availability: async function ($block, mode = 'alert'){
        let result;
-        if ((el_registry.just_opened && el_registry.check_institutions === 0) || !el_registry.just_opened) {
+        if ((el_plans_registry.just_opened && el_plans_registry.check_institutions === 0) || !el_plans_registry.just_opened) {
            let year = $("[name=year]").val(),
                ins = [],//parseInt($block.find("[name='institutions[]']").val()),
                $insSelect = $("select[name='institutions[]']"),
@@ -886,11 +886,11 @@ var el_registry = {
                });
            }
        }
-        el_registry.check_institutions++;
+        el_plans_registry.check_institutions++;
        return result;
     },*/
     check_institution_availability: async function ($block, mode = 'alert') {
-        if ((el_registry.just_opened && el_registry.check_institutions === 0) || !el_registry.just_opened) {
+        if ((el_plans_registry.just_opened && el_plans_registry.check_institutions === 0) || !el_plans_registry.just_opened) {
             let year = $("[name=year]").val(),
                 ins = [],
                 $insSelect = $("select[name='institutions[]']"),
@@ -930,13 +930,13 @@ var el_registry = {
 
                         if (mode === 'alert') {
                             alert("<div style='display:block'>" + html.join("<hr>") + "</div>");
-                            el_registry.check_institutions++;
+                            el_plans_registry.check_institutions++;
                             return false; // Возвращаем false, если есть конфликты
                         } else {
                             // Создаем кастомное диалоговое окно вместо confirm
                             const userConfirmed = await confirm("<div style='display:block'>" + html.join("<hr>") +
                                 "<p>&nbsp;</p>Всё равно продолжить?</div>");
-                            el_registry.check_institutions++;
+                            el_plans_registry.check_institutions++;
                             return userConfirmed; // Возвращаем true если пользователь нажал "Отмена" (хочет продолжить)
                         }
                     }
@@ -944,7 +944,7 @@ var el_registry = {
             }
         }
 
-        el_registry.check_institutions++;
+        el_plans_registry.check_institutions++;
         return true; // Возвращаем true если проверка пройдена (можно отправлять)
     },
 
@@ -985,7 +985,7 @@ var el_registry = {
         $(".pop_up_body .staff:last").clone().insertAfter(".pop_up_body .staff:last");
         $(".pop_up_body .new_staff").off("click").on("click", function(e){
             e.preventDefault();
-            el_registry.cloneStaff();
+            el_plans_registry.cloneStaff();
         });
         $(".pop_up_body .staff select").chosen({
             search_contains: true,
@@ -996,7 +996,7 @@ var el_registry = {
         $(".pop_up_body .staff:last input").val("");
 
         $(".pop_up_body .staff:last select[name='users[]']").val("").trigger("chosen:updated");
-        //el_registry.bindSetOrgByType();
+        //el_plans_registry.bindSetOrgByType();
         $(".pop_up_body .staff:last select[name='units[]']").val(current_unit)
             .trigger("chosen:updated").trigger("change");
 
@@ -1008,7 +1008,7 @@ var el_registry = {
             $(".question_number").last().after('<div class="button icon clear"><span class="material-icons">close</span></div>');
             $(".staff .clear").off("click").on("click", function (){
                 $(this).closest(".staff").remove();
-                el_registry.setItemsNumbers($(".pop_up_body .staff"), "Учреждение");
+                el_plans_registry.setItemsNumbers($(".pop_up_body .staff"), "Учреждение");
                 staffs_counter--;
             });
         }
@@ -1019,11 +1019,11 @@ var el_registry = {
         for (let i = 0; i < $staffs.length; i++){
             $($staffs[i]).find(".question_number").text("Сотрудник №" + (i+ 1));
         }*/
-        el_registry.setItemsNumbers($(".pop_up_body .staff"), "Сотрудник");
-        el_registry.bindTipsy();
-        el_registry.bindCalendar();
+        el_plans_registry.setItemsNumbers($(".pop_up_body .staff"), "Сотрудник");
+        el_plans_registry.bindTipsy();
+        el_plans_registry.bindCalendar();
 
-        el_registry.scrollToLastInstitution();
+        el_plans_registry.scrollToLastInstitution();
     },
 
     setItemsNumbers: function (objects, title){
@@ -1052,7 +1052,7 @@ var el_registry = {
             $inst.html("").trigger("chosen:updated");
             $.post("/", {ajax: 1, action: "getOrgByCheckType", check_type: $(this).val(), selected: $instSelected.val()},
                 function (data){
-                    //el_registry.bindSetUnitsByOrg();
+                    //el_plans_registry.bindSetUnitsByOrg();
                     el_app.bindGetUnitsByOrg();
                     $inst.html(data).trigger("chosen:updated");//.trigger("change");
                 });

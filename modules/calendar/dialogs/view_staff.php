@@ -261,7 +261,7 @@ if ($auth->isLogin()) {
             ?>
             $(document).ready(function(){
                 const $reminder = $('.reminder, .reminder ~ div:first()');
-                el_registry.bindCalendar("<?=$minDate?>", "<?=$maxDate?>");
+                el_calendar_registry.bindCalendar("<?=$minDate?>", "<?=$maxDate?>");
                 let cal = $(".staff [name='dates[]']").flatpickr({
                     locale: 'ru',
                     mode: 'range',
@@ -279,7 +279,7 @@ if ($auth->isLogin()) {
                 })
                 //el_app.bindSetMinistriesByOrg($(".staff"));
                 //el_app.bindSetUnitsByOrg($('.staff'));
-                //el_registry.bindSetExecutorByUnit($('.staff'));
+                //el_calendar_registry.bindSetExecutorByUnit($('.staff'));
                 agreement_list.agreement_list_init();
                 $("select[name='institutions[]']").trigger("change");
 

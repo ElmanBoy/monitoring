@@ -121,7 +121,7 @@ if ($err == 0) {
     try {
         $db->insert('regprops', $registry);
         $result = true;
-        $message = 'Поле успешно создано.<script>el_app.reloadMainContent();el_app.dialog_close("prop_create");el_registry.getAllPropsInCreateRegistry();</script>';
+        $message = 'Поле успешно создано.<script>el_app.reloadMainContent();el_app.dialog_close("prop_create");el_regprops_registry.getAllPropsInCreateRegistry();</script>';
     } catch (\RedBeanPHP\RedException $e) {
         $result = false;
         $message = '<strong>Ошибка:</strong><br> ' . $e->getMessage();

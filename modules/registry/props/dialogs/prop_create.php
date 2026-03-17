@@ -266,5 +266,5 @@ $registry = $db->getRegistry('registry');
 </div>
 <script>
     el_app.mainInit();
-    el_registry.create_init();
+    el_regprops_registry.create_init();
 </script>

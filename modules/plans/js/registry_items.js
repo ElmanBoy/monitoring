@@ -1,9 +1,9 @@
 $(document).ready(function(){
-    el_registry.create_init();
+    el_plans_registry.create_init();
     //el_app.mainInit();
 });
 
-var el_registry = {
+var el_plans_registry = {
     //Инициализация контролов в разделе "Роли"
     create_init: function(){
 
@@ -108,7 +108,7 @@ var el_registry = {
             }
         });
 
-        el_registry.bindDadata();
+        el_plans_registry.bindDadata();
         el_app.sort_init();
         el_app.filter_init();
     },

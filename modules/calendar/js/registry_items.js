@@ -1,9 +1,9 @@
 $(document).ready(function(){
-    el_registry.create_init();
+    el_calendar_registry.create_init();
     //el_app.mainInit();
 });
 var violation_counter = 1;
-var el_registry = {
+var el_calendar_registry = {
     //Инициализация контролов в разделе "Календарь"
     create_init: function(){
 
@@ -148,9 +148,9 @@ var el_registry = {
             gantt.render();
         });
 
-        el_registry.bindCloneViolation();
-        el_registry.bindRemoveViolation();
-        el_registry.bindDadata();
+        el_calendar_registry.bindCloneViolation();
+        el_calendar_registry.bindRemoveViolation();
+        el_calendar_registry.bindDadata();
         el_app.sort_init();
         el_app.filter_init();
     },
@@ -195,28 +195,28 @@ var el_registry = {
             $("#tab_my-panel .violation_number").last().after('<div class="button icon clear"><span class="material-icons">close</span></div>');
             /*$(".violation .clear").off("click").on("click", function (){
                 $(this).closest(".violation").remove();
-                el_registry.setItemsNumbers($(".pop_up_body .violation"), "Нарушение");
+                el_calendar_registry.setItemsNumbers($(".pop_up_body .violation"), "Нарушение");
                 violation_counter--;
             });*/
         }
-        el_registry.setItemsNumbers($("#tab_my-panel .violation"), "Нарушение");
-        el_registry.bindTipsy();
-        el_registry.bindCloneViolation();
-        el_registry.bindRemoveViolation();
-        el_registry.scrollToLastViolation();
+        el_calendar_registry.setItemsNumbers($("#tab_my-panel .violation"), "Нарушение");
+        el_calendar_registry.bindTipsy();
+        el_calendar_registry.bindCloneViolation();
+        el_calendar_registry.bindRemoveViolation();
+        el_calendar_registry.scrollToLastViolation();
     },
 
     bindCloneViolation: function (){
         $("#tab_my-panel .new_violation").off("click").on("click", function(e){
             e.preventDefault();
-            el_registry.cloneViolation();
+            el_calendar_registry.cloneViolation();
         });
     },
 
     bindRemoveViolation: function(){
         $(".violation .clear").off("click").on("click", function (){
             $(this).closest(".violation").remove();
-            el_registry.setItemsNumbers($(".pop_up_body .violation"), "Нарушение");
+            el_calendar_registry.setItemsNumbers($(".pop_up_body .violation"), "Нарушение");
             violation_counter--;
         });
     },

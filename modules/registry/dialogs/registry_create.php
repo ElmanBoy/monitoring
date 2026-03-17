@@ -210,6 +210,6 @@ $regs = $db->getRegistry('registry');
 </div>
 <script>
     el_app.mainInit();
-    el_registry.create_init();
+    el_refs_registry.create_init();
 </script>
 <script type='text/javascript' src='/js/assets/icon-picker/js/scripts.js?v=<?= $gui->genpass() ?>'></script>

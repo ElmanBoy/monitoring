@@ -104,7 +104,7 @@ if($err == 0) {
         $errStr[] = $e->getMessage();
     }
     $result = true;
-    $message = 'Поле успешно создано.<script>el_app.reloadMainContent();el_app.dialog_close("prop_create");el_registry.getAllPropsInCreateRegistry();
+    $message = 'Поле успешно создано.<script>el_app.reloadMainContent();el_app.dialog_close("prop_create");el_signs_registry.getAllPropsInCreateRegistry();
     </script>';
 }else{
     $message = '<strong>Ошибка:</strong><br> '.implode('<br>', $errStr);

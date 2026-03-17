@@ -56,7 +56,7 @@ $parent = $db->selectOne('registry', ' where id = ?', [$_POST['params']]);
 
     $(document).ready(function(){
         el_app.mainInit();
-        el_registry.create_item_init();
+        el_documents_registry.create_item_init();
         $(".el_input[name=name]").focus();
 
         agreement_list.agreement_list_init();

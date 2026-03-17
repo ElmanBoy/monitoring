@@ -202,7 +202,7 @@ if ($auth->isLogin()) {
         <script src="/modules/calendar/js/registry.js"></script>
         <script>
             $(document).ready(function(){
-                el_registry.bindCalendar();
+                el_calendar_registry.bindCalendar();
 
                 $("[name='allowremind[]']").off('change').on('change', function () {
                     let $reminder = $(this).closest(".group").find(".reminder");
@@ -217,7 +217,7 @@ if ($auth->isLogin()) {
 
                 let $staff = $(".staff");
                 for(let i = 0; i < $staff.length; i++) {
-                    el_registry.bindSetExecutorByDates($($staff[i]));
+                    el_calendar_registry.bindSetExecutorByDates($($staff[i]));
                 }
                 $("input[name='dates[]']").trigger("change");
 

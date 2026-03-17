@@ -114,7 +114,7 @@ $registrys = $db->getRegistry('registry');
 </div>
     <script>
         el_app.mainInit();
-        el_registry.create_item_init();
+        el_dashboard_registry.create_item_init();
         $("#parent_registry").trigger("change");
         $("#registry_items_edit .close").on("click", function(){
             $.post("/", {ajax: 1, action: "transaction_close", id: <?=$trans_id?>}, function(){})

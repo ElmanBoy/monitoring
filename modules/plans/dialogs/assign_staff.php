@@ -110,7 +110,7 @@ if ($auth->isLogin()) {
         </div>
         <script src="/modules/plans/js/registry.js"></script>
         <script>
-            el_registry.bindCalendar();
+            el_plans_registry.bindCalendar();
             el_app.bindGetUnitsByOrg();
             $("select[name='institutions[]']").trigger("change");
         </script>

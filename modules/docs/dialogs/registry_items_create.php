@@ -48,7 +48,7 @@ $parent = $db->selectOne('registry', ' where id = ?', [$_POST['params']]);
     $('#registry_items_create .item:nth-child(n+3), #registry_items_create .institutions').hide();
     $(document).ready(function(){
         el_app.mainInit();
-        el_registry.create_item_init();
+        el_docs_registry.create_item_init();
         $(".el_input[name=name]").focus();
 
         agreement_list.agreement_list_init();

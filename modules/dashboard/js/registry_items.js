@@ -1,9 +1,9 @@
 $(document).ready(function(){
-    el_registry.create_item_init();
+    el_dashboard_registry.create_item_init();
     //el_app.mainInit();
 });
 
-var el_registry = {
+var el_dashboard_registry = {
     //Инициализация контролов в разделе "Документы"
     create_item_init: function(){
 
@@ -85,7 +85,7 @@ var el_registry = {
             el_app.dialog_open("pdf", {docId: taskId}, "documents");
         });
 
-        el_registry.bindDadata();
+        el_dashboard_registry.bindDadata();
         el_app.sort_init();
         el_app.filter_init();
     },

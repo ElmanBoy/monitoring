@@ -1,12 +1,12 @@
 $(document).ready(function () {
-    el_registry.create_item_init();
+    el_roadmap_registry.create_item_init();
     el_app.mainInit();
 });
 
 var institutions_counter = 1;
 var calendars = {};
 
-var el_registry = {
+var el_roadmap_registry = {
 
     create_item_init: function () {
 
@@ -113,10 +113,10 @@ var el_registry = {
             $clone.find(".button.clear").show();
             $clone.insertAfter($last);
             // Пересчитываем № п/п
-            el_registry.renumberRows();
+            el_roadmap_registry.renumberRows();
         });
 
-        el_registry.bindDadata();
+        el_roadmap_registry.bindDadata();
         el_app.sort_init();
         el_app.filter_init();
     },
@@ -134,7 +134,7 @@ var el_registry = {
         $(".pop_up_body .institutions:last").clone().insertAfter(".pop_up_body .institutions:last");
         $(".pop_up_body .new_institution").off("click").on("click", function (e) {
             e.preventDefault();
-            el_registry.cloneInstitution();
+            el_roadmap_registry.cloneInstitution();
         });
         $(".pop_up_body .institutions select").chosen({
             search_contains: true,
@@ -145,7 +145,7 @@ var el_registry = {
         $(".pop_up_body .institutions:last input").val("");
         $(".pop_up_body .institutions:last select[name='institutions[]']")
             .empty().trigger("chosen:updated");
-        el_registry.bindSetOrgByType($(".institutions:last"));
+        el_roadmap_registry.bindSetOrgByType($(".institutions:last"));
         $(".pop_up_body .institutions:last select[name='check_types[]']")
             .val(current_check).trigger("chosen:updated").trigger("change");
     },

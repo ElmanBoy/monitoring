@@ -1,9 +1,9 @@
 $(document).ready(function(){
-    el_registry.create_item_init();
+    el_signs_registry.create_item_init();
     el_app.mainInit();
 });
 
-var el_registry = {
+var el_signs_registry = {
     //Инициализация контролов в разделе "Роли"
     create_item_init: function(){
 
@@ -44,8 +44,8 @@ var el_registry = {
             const file = event.target.files[0];
             if (file) {
                 $("#uploadStatus").html("Выбран файл: &laquo;" + file.name + "&raquo;");
-                el_registry.showLoadingIndicator();
-                el_registry.uploadFile(file).then(r => console.log(r));
+                el_signs_registry.showLoadingIndicator();
+                el_signs_registry.uploadFile(file).then(r => console.log(r));
             }
         });
 
@@ -104,7 +104,7 @@ var el_registry = {
         });
 
 
-        el_registry.bindDadata();
+        el_signs_registry.bindDadata();
         el_app.sort_init();
         el_app.filter_init();
     },
@@ -129,14 +129,14 @@ var el_registry = {
                 onUploadProgress: (event) => {
                     if (event.lengthComputable) {
                         const percent = (event.loaded / event.total) * 100;
-                        el_registry.updateProgressBar(percent);
+                        el_signs_registry.updateProgressBar(percent);
                     }
                 }
             });
 
             if (response.ok) {
                 const result = await response.json();
-                el_registry.hideLoadingIndicator();
+                el_signs_registry.hideLoadingIndicator();
                 if (result.result) {
                     $("#importFields").html(result.resultHtml);
                     $("#importFields select").chosen();
@@ -151,7 +151,7 @@ var el_registry = {
                 alert('Ошибка при загрузке файла');
             }
         } catch (error) {
-            el_registry.hideLoadingIndicator();
+            el_signs_registry.hideLoadingIndicator();
             $("#result").html(`<div style="color: red;">Ошибка: ${error.message}</div>`);
         }
     },

@@ -1,13 +1,13 @@
 $(document).ready(function(){
     el_app.mainInit();
-    el_registry.create_init();
+    el_signs_registry.create_init();
 });
 
 var check_number = 1;
 var option_number = 1;
 var newRegistryData = [];
 
-var el_registry = {
+var el_signs_registry = {
     //Инициализация контролов в разделе "Роли"
     create_init: function(){
 
@@ -132,7 +132,7 @@ var el_registry = {
             e.preventDefault();
             $(".pop_up_body .check_button:last").clone().insertAfter(".pop_up_body .check_button:last");
             $(".pop_up_body .check_button:last input").val("");
-            el_registry.setCheckNumber();
+            el_signs_registry.setCheckNumber();
 
             check_number++;
             if(check_number > 1){
@@ -140,7 +140,7 @@ var el_registry = {
                 $(".check_button .close").off("click").on("click", function (){
                     check_number--;
                     $(this).closest(".check_button").remove();
-                    el_registry.setCheckNumber();
+                    el_signs_registry.setCheckNumber();
                 });
             }
         });
@@ -149,7 +149,7 @@ var el_registry = {
             e.preventDefault();
             $(".pop_up_body .option_button:last").clone().insertAfter(".pop_up_body .option_button:last");
             $(".pop_up_body .option_button:last input").val("");
-            el_registry.setOptionNumber();
+            el_signs_registry.setOptionNumber();
 
             option_number++;
             if(option_number > 1){
@@ -157,7 +157,7 @@ var el_registry = {
                 $(".option_button .close").off("click").on("click", function (){
                     option_number--;
                     $(this).closest(".option_button").remove();
-                    el_registry.setOptionNumber();
+                    el_signs_registry.setOptionNumber();
                 });
             }
         });
@@ -167,7 +167,7 @@ var el_registry = {
             let $selected = $("#all_props_list input:checked");
             $selected.closest(".item").appendTo("#reg_props_list");
             $("#reg_props_list input:checked").prop("checked", false);
-            el_registry.getPropsInRegistry();
+            el_signs_registry.getPropsInRegistry();
         });
         $("#remove_props").on("click", function (e){
             e.preventDefault();
@@ -175,7 +175,7 @@ var el_registry = {
             $selected.closest(".item").appendTo("#all_props_list")
                 .find(".rename, .rename_done, .drag_handler").remove();
             $("#all_props_list input:checked").prop("checked", false);
-            el_registry.getPropsInRegistry();
+            el_signs_registry.getPropsInRegistry();
         });
 
         $("input[name=field_name]").on("input paste blur", function (){
@@ -195,7 +195,7 @@ var el_registry = {
         });
 
         $("select[name=fromdb]").on("change", function (){
-            el_registry.showFieldsFromDB(
+            el_signs_registry.showFieldsFromDB(
                 $(this).val(),
                 $("input[name=selected_field]").val(),
                 $("input[name=selected_value]").val());
@@ -247,7 +247,7 @@ var el_registry = {
                 '<span class="material-icons rename_done" title="Переименовать поле">done</span>\n' +
                 '    <span class="material-icons drag_handler" title="Переместить">drag_handle</span>');
         }
-        el_registry.setNewRegistryData();
+        el_signs_registry.setNewRegistryData();
 
         $items.find(".rename").off("click").on("click", function (){
             let $label = $(this).closest(".item").find(".fieldName"),
@@ -262,7 +262,7 @@ var el_registry = {
                 $(this).closest(".item").find(".fieldName").text(newVal);
                 $(this).hide();
                 $(this).closest(".item").find(".rename").show();
-                el_registry.setNewRegistryData();
+                el_signs_registry.setNewRegistryData();
             });
         });
 
@@ -281,7 +281,7 @@ var el_registry = {
             handle: ".drag_handler",
             items: "li",
             stop: function (event, ui) {
-                el_registry.setNewRegistryData();
+                el_signs_registry.setNewRegistryData();
             }
         });
     },

@@ -86,7 +86,7 @@ if ($busy != []) {
     <script>
         $(document).ready(function(){
             el_app.mainInit();
-            el_registry.create_init();
+            el_plans_registry.create_init();
             agreement_list.agreement_list_init();
             $('[name=initiator]').val("<?=$_SESSION['user_id']?>").trigger('chosen:updated');
 
@@ -124,7 +124,7 @@ if ($busy != []) {
             $('#save_doc').off("click").on('click', async function (event) {
                 event.preventDefault();
                 let $form = $(this).closest('form'),
-                    isAvailable = await el_registry.check_institution_availability($('.institutions'), 'confirm');
+                    isAvailable = await el_plans_registry.check_institution_availability($('.institutions'), 'confirm');
                 console.log(isAvailable)
                 if (!isAvailable) {
                     $form.addClass("rejected");
@@ -179,11 +179,11 @@ if ($busy != []) {
                 handle: '.drag_handler',
                 items: '.institutions',
                 stop: function (event, ui) {
-                    el_registry.setItemsNumbers($('.pop_up_body .institutions'), 'Учреждение');
+                    el_plans_registry.setItemsNumbers($('.pop_up_body .institutions'), 'Учреждение');
                 }
             });
 
-            el_registry.check_institution_availability($('.institutions'));
+            el_plans_registry.check_institution_availability($('.institutions'));
 
         });
 

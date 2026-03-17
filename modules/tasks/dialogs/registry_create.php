@@ -33,5 +33,5 @@ $reg = new Registry();
 </div>
 <script>
     el_app.mainInit();
-    el_registry.create_init();
+    el_tasks_registry.create_init();
 </script>

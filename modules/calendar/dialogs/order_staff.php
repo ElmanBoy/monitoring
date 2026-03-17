@@ -491,7 +491,7 @@ if ($auth->isLogin()) {
                 el_app.initTabs();
                 $('[name=order_number]').attr('readonly', true);
                 $("[name='plan'], input[name=plan_id]").trigger("change");
-                //el_registry.bindCalendar("<?=$minDate?>", "<?=$maxDate?>");
+                //el_calendar_registry.bindCalendar("<?=$minDate?>", "<?=$maxDate?>");
                 let $cal = $("#check_staff [name='dates[]']").flatpickr({
                         locale: 'ru',
                         mode: 'range',
@@ -520,7 +520,7 @@ if ($auth->isLogin()) {
                 /*for (let i = 0; i < $staffs.length; i++) {
                     el_app.bindSetMinistriesByOrg($($staffs[i]));
                     el_app.bindSetUnitsByOrg($($staffs[i]));
-                    //el_registry.bindSetExecutorByUnit($($staffs[i]));
+                    //el_calendar_registry.bindSetExecutorByUnit($($staffs[i]));
                 }*/
                 $("select[name='institutions[]']").trigger('change');
 

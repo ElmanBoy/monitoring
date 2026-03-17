@@ -53,7 +53,7 @@ $registrys = $db->getRegistry('registry');
 
         $(document).ready(function(){
             el_app.mainInit();
-            el_registry.create_item_init();
+            el_roadmap_registry.create_item_init();
             $('#parent_registry').trigger('change');
             $('#registry_items_edit .close').on('click', function () {
                 $.post('/', {ajax: 1, action: 'transaction_close', id: <?=$trans_id?>}, function () {

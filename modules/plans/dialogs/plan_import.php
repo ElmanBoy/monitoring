@@ -112,8 +112,8 @@ $subject_type = $db->getRegistry('subject');
             const file = event.target.files[0];
             if (file) {
                 $('#uploadStatus').html('Выбран файл: &laquo;' + file.name + '&raquo;');
-                el_registry.showLoadingIndicator();
-                el_registry.uploadFile(file).then(r => console.log(r));
+                el_plans_registry.showLoadingIndicator();
+                el_plans_registry.uploadFile(file).then(r => console.log(r));
             }
         });
     });

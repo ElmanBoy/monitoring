@@ -34,7 +34,7 @@ $reg = new Registry();
 <script>
     $(document).ready(function(){
         el_app.mainInit();
-        el_registry.create_init();
+        el_users_registry.create_init();
         el_users.create_init();
     });
 </script>

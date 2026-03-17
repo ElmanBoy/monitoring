@@ -313,7 +313,7 @@ if($err == 0) {
 
         } catch (\RedBeanPHP\RedException $e) {
             $result = false;
-            $message = $e->getMessage();
+            $message = 'Ошибка создания плана. '.$e->getMessage();
         }
     } else {
         $result = false;

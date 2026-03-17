@@ -259,7 +259,7 @@ if ($busy != []) {
     <script>
         $(document).ready(function(){
             el_app.mainInit();
-            el_registry.create_init();
+            el_signs_registry.create_init();
             $('.custom_checkbox input#in_menu').trigger("change");
             $('#reg_props_list').nestedSortable({
                 axis: 'y',
@@ -268,7 +268,7 @@ if ($busy != []) {
                 handle: '.drag_handler',
                 items: 'li',
                 stop: function (event, ui) {
-                    el_registry.setNewRegistryData();
+                    el_signs_registry.setNewRegistryData();
                 }
             });
             $("#registry_edit .close").on("click", function () {

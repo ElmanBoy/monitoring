@@ -67,7 +67,7 @@ HTML;
 </div>
     <script>
         el_app.mainInit();
-        el_registry.create_item_init();
+        el_signs_registry.create_item_init();
         $(document).ready(function() {
             try {
                 const inputJson = $('#jsonInput').val();

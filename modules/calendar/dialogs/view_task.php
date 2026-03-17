@@ -694,7 +694,7 @@ if ($auth->isLogin()) {
                         console.log('Блок удален');
                     }
                 });*/
-                el_registry.create_init();
+                el_calendar_registry.create_init();
 
                 let $document = $('[name=document]'),
                     $tab_preview = $('#tab_preview');

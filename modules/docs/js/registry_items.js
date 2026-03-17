@@ -1,12 +1,12 @@
 $(document).ready(function(){
-    el_registry.create_item_init();
+    el_docs_registry.create_item_init();
     //el_app.mainInit();
 });
 
 var institutions_counter = 1;
 var calendars = {};
 
-var el_registry = {
+var el_docs_registry = {
     //Инициализация контролов в разделе "Документы"
     create_item_init: function() {
 
@@ -93,7 +93,7 @@ var el_registry = {
             $(this).closest("td").trigger("dblclick");
         });
 
-        el_registry.bindDadata();
+        el_docs_registry.bindDadata();
         el_app.sort_init();
         el_app.filter_init();
 
@@ -106,7 +106,7 @@ var el_registry = {
         $(".pop_up_body .institutions:last").clone().insertAfter(".pop_up_body .institutions:last");
         $(".pop_up_body .new_institution").off("click").on("click", function(e){
             e.preventDefault();
-            el_registry.cloneInstitution();
+            el_docs_registry.cloneInstitution();
         });
         $(".pop_up_body .institutions select").chosen({
             search_contains: true,
@@ -117,7 +117,7 @@ var el_registry = {
         $(".pop_up_body .institutions:last input").val("");
 
         $(".pop_up_body .institutions:last select[name='institutions[]']").empty().trigger("chosen:updated");
-        el_registry.bindSetOrgByType($(".institutions:last"));
+        el_docs_registry.bindSetOrgByType($(".institutions:last"));
         $(".pop_up_body .institutions:last select[name='check_types[]']").val(current_check)
             .trigger("chosen:updated").trigger("change");
 
@@ -138,10 +138,10 @@ var el_registry = {
             $($institutions[i]).find(".question_number").text("Учреждение №" + (i+ 1));
         }
 
-        el_registry.bindTipsy();
+        el_docs_registry.bindTipsy();
         quarter.bindQuarter("#" + $(".pop_up_body .institutions:last .quarter_select").attr("id"));
-        el_registry.bindCalendar();
-        el_registry.scrollToLastInstitution();
+        el_docs_registry.bindCalendar();
+        el_docs_registry.scrollToLastInstitution();
     },
 
     bindCalendar(minDate, maxDate){

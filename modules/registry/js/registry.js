@@ -1,6 +1,6 @@
 $(document).ready(function(){
     el_app.mainInit();
-    el_registry.create_init();
+    el_refs_registry.create_init();
 });
 
 var check_number = 1;
@@ -10,7 +10,7 @@ var calendars = {};
 var quarters = {};
 var agreement_list_arr = [];
 
-var el_registry = {
+var el_refs_registry = {
     //Инициализация контролов в разделе "Справочники"
     create_init: function(){
 
@@ -112,7 +112,7 @@ var el_registry = {
             e.preventDefault();
             $(".pop_up_body .check_button:last").clone().insertAfter(".pop_up_body .check_button:last");
             $(".pop_up_body .check_button:last input").val("");
-            el_registry.setCheckNumber();
+            el_refs_registry.setCheckNumber();
 
             check_number++;
             //$(".check_number").last().text("Кнопка №" + check_number);
@@ -121,7 +121,7 @@ var el_registry = {
                 $(".check_button .close").off("click").on("click", function (){
                     check_number--;
                     $(this).closest(".check_button").remove();
-                    el_registry.setCheckNumber();
+                    el_refs_registry.setCheckNumber();
                 });
             }
         });
@@ -130,7 +130,7 @@ var el_registry = {
             e.preventDefault();
             $(".pop_up_body .option_button:last").clone().insertAfter(".pop_up_body .option_button:last");
             $(".pop_up_body .option_button:last input").val("");
-            el_registry.setOptionNumber();
+            el_refs_registry.setOptionNumber();
 
             option_number++;
             if(option_number > 1){
@@ -138,7 +138,7 @@ var el_registry = {
                 $(".option_button .close").off("click").on("click", function (){
                     option_number--;
                     $(this).closest(".option_button").remove();
-                    el_registry.setOptionNumber();
+                    el_refs_registry.setOptionNumber();
                 });
             }
         });
@@ -149,7 +149,7 @@ var el_registry = {
             $selected.closest(".item").appendTo("#reg_props_list");
             $("#reg_props_list input:checked").prop("checked", false);
             $("#reg_props_list input[type=hidden]").attr("name", "prop[]");
-            el_registry.getPropsInRegistry();
+            el_refs_registry.getPropsInRegistry();
         });
         $("#remove_props").on("click", function (e){
             e.preventDefault();
@@ -158,7 +158,7 @@ var el_registry = {
                 .find(".rename, .rename_done, .drag_handler, .required, .unique").remove();
             $("#all_props_list input:checked").prop("checked", false);
             $("#all_props_list input[type=hidden]").attr("name", "props[]");
-            el_registry.getPropsInRegistry();
+            el_refs_registry.getPropsInRegistry();
         });
         $("#addProps").off("click").on("click", function () {
             el_app.dialog_open("prop_create", "", "registry/props");
@@ -187,13 +187,13 @@ var el_registry = {
         });
 
         $(document).on("content_load", function (){
-            if (el_tools.function_exists("el_registry.getAllPropsInCreateRegistry")) {
-                el_registry.getAllPropsInCreateRegistry();
+            if (el_tools.function_exists("el_refs_registry.getAllPropsInCreateRegistry")) {
+                el_refs_registry.getAllPropsInCreateRegistry();
             }
         });
 
         $("select[name=fromdb]").on("change", function (){
-            el_registry.showFieldsFromDB($(this).val(), $("input[name=selected_field]").val());
+            el_refs_registry.showFieldsFromDB($(this).val(), $("input[name=selected_field]").val());
         });
 
         $("[in_menu]").on("change", function (){
@@ -243,7 +243,7 @@ var el_registry = {
 
         $(".pop_up_body .new_institution").off("click").on("click", function(e){
             e.preventDefault();
-            el_registry.cloneInstitution();
+            el_refs_registry.cloneInstitution();
         });
 
         $(".reg_settings").off("click").on("click", function (e){
@@ -253,10 +253,10 @@ var el_registry = {
 
         $("input[type=tel]").mask('+7 (999) 999-99-99');
 
-        el_registry.bindPassword();
-        el_registry.bindLoginAlias();
-        el_registry.getPropsInRegistry();
-        el_registry.bindDadata();
+        el_refs_registry.bindPassword();
+        el_refs_registry.bindLoginAlias();
+        el_refs_registry.getPropsInRegistry();
+        el_refs_registry.bindDadata();
         el_app.sort_init();
         el_app.filter_init();
     },
@@ -298,7 +298,7 @@ var el_registry = {
                 '<span class="material-icons rename_done" title="Переименовать поле">done</span>\n' +
                 '    <span class="material-icons drag_handler" title="Переместить">drag_handle</span>');
         }
-        el_registry.setNewRegistryData();
+        el_refs_registry.setNewRegistryData();
 
         $items.find(".rename").off("click").on("click", function (){
             let $label = $(this).closest(".item").find(".fieldName"),
@@ -313,7 +313,7 @@ var el_registry = {
                 $(this).closest(".item").find(".fieldName").text(newVal);
                 $(this).hide();
                 $(this).closest(".item").find(".rename").show();
-                el_registry.setNewRegistryData();
+                el_refs_registry.setNewRegistryData();
             });
         });
 
@@ -324,11 +324,11 @@ var el_registry = {
             if (icon === "panorama_fish_eye") {
                 $(this).text("check_circle");
                 $item.attr("data-" + action, 1);
-                el_registry.setNewRegistryData();
+                el_refs_registry.setNewRegistryData();
             }else{
                 $(this).text("panorama_fish_eye");
                 $item.attr("data-" + action, 0);
-                el_registry.setNewRegistryData();
+                el_refs_registry.setNewRegistryData();
             }
         });
 
@@ -347,7 +347,7 @@ var el_registry = {
             handle: ".drag_handler",
             items: "li",
             stop: function (event, ui) {
-                el_registry.setNewRegistryData();
+                el_refs_registry.setNewRegistryData();
             }
         });
     },
@@ -419,22 +419,22 @@ var el_registry = {
                 $("#tab_form-panel [required]").removeAttr("required");
                 $(".pop_up_body .new_institution").off("click").on("click", function(e){
                     e.preventDefault();
-                    el_registry.cloneInstitution();
+                    el_refs_registry.cloneInstitution();
                 });
                 $(".pop_up_body .new_section").off("click").on("click", function(e){
                     e.preventDefault();
-                    el_registry.cloneSection();
+                    el_refs_registry.cloneSection();
                 });
                 $("input[type=tel]").mask('+7 (999) 999-99-99');
-                el_registry.bindDadata();
-                el_registry.bindSetOrgByType($(".institutions:last"));
-                el_registry.bindSetMinistriesByOrg($(".institutions:last"));
-                el_registry.bindSetUnitsByOrg($(".institutions:last"));
-                el_registry.bindSetUserByUnit($(".institutions:last"));
-                el_registry.bindPassword();
-                el_registry.bindLoginAlias();
-                el_registry.bindTipsy();
-                el_registry.bindCalendar();
+                el_refs_registry.bindDadata();
+                el_refs_registry.bindSetOrgByType($(".institutions:last"));
+                el_refs_registry.bindSetMinistriesByOrg($(".institutions:last"));
+                el_refs_registry.bindSetUnitsByOrg($(".institutions:last"));
+                el_refs_registry.bindSetUserByUnit($(".institutions:last"));
+                el_refs_registry.bindPassword();
+                el_refs_registry.bindLoginAlias();
+                el_refs_registry.bindTipsy();
+                el_refs_registry.bindCalendar();
 
             });
 
@@ -451,7 +451,7 @@ var el_registry = {
         $(".pop_up_body .institutions:last").clone().insertAfter(".pop_up_body .institutions:last");
         $(".pop_up_body .new_institution").off("click").on("click", function(e){
             e.preventDefault();
-            el_registry.cloneSection();
+            el_refs_registry.cloneSection();
         });
         $(".pop_up_body .institutions select").chosen({
             search_contains: true,
@@ -460,12 +460,12 @@ var el_registry = {
 
         $(".pop_up_body .institutions:last .agreement_list").html("");
         $(".pop_up_body .institutions:last [name='agreementlist[]']").val("");
-        el_registry.setStageNumber();
+        el_refs_registry.setStageNumber();
 
         $(".pop_up_body .institutions:last select[name='institutions[]']").val(current_institutions).trigger("chosen:updated");
-        el_registry.bindSetMinistriesByOrg($(".institutions:last"));
-        el_registry.bindSetUnitsByOrg($(".institutions:last"));
-        el_registry.bindSetUserByUnit($(".institutions:last"));
+        el_refs_registry.bindSetMinistriesByOrg($(".institutions:last"));
+        el_refs_registry.bindSetUnitsByOrg($(".institutions:last"));
+        el_refs_registry.bindSetUserByUnit($(".institutions:last"));
 
         $(".pop_up_body .institutions:last [name='check_periods[]']").
         removeClass("flatpickr-input").attr("type", "date").next("input").remove();
@@ -484,9 +484,9 @@ var el_registry = {
             $($institutions[i]).find(".section_number").text("Секция №" + (i+ 1));
         }
 
-        el_registry.bindTipsy();
-        el_registry.bindCalendar();
-        el_registry.scrollToLastInstitution();
+        el_refs_registry.bindTipsy();
+        el_refs_registry.bindCalendar();
+        el_refs_registry.scrollToLastInstitution();
     },
 
     bindTipsy(){
@@ -569,7 +569,7 @@ var el_registry = {
         $(".pop_up_body .institutions:last").clone().insertAfter(".pop_up_body .institutions:last");
         $(".pop_up_body .new_institution").off("click").on("click", function(e){
             e.preventDefault();
-            el_registry.cloneInstitution();
+            el_refs_registry.cloneInstitution();
         });
         $(".pop_up_body .institutions select").chosen({
             search_contains: true,
@@ -580,7 +580,7 @@ var el_registry = {
         $(".pop_up_body .institutions:last input").val("");
 
         $(".pop_up_body .institutions:last select[name='institutions[]']").empty().trigger("chosen:updated");
-        el_registry.bindSetOrgByType($(".institutions:last"));
+        el_refs_registry.bindSetOrgByType($(".institutions:last"));
         $(".pop_up_body .institutions:last select[name='check_types[]']").val(current_check)
             .trigger("chosen:updated").trigger("change");
 
@@ -601,10 +601,10 @@ var el_registry = {
             $($institutions[i]).find(".question_number").text("Учреждение №" + (i+ 1));
         }
 
-        el_registry.bindTipsy();
+        el_refs_registry.bindTipsy();
         quarter.bindQuarter("#" + $(".pop_up_body .institutions:last .quarter_select").attr("id"));
-        el_registry.bindCalendar();
-        el_registry.scrollToLastInstitution();
+        el_refs_registry.bindCalendar();
+        el_refs_registry.scrollToLastInstitution();
     },
 
     scrollToLastInstitution: function(){
@@ -679,13 +679,13 @@ var el_registry = {
                             "<span class='material-icons drag_handler' title='Переместить'>drag_handle</span>" +
                             "<span class='material-icons close' title='Удалить'>close</span></li>");
 
-                        el_registry.setAgreementList(instanceObj);
+                        el_refs_registry.setAgreementList(instanceObj);
                         $(this).hide();
 
                         $agreement_list.find(".close").off("click").on("click", function (){
                             $(this).closest("li").remove();
                             $add_agreement_message.text("");
-                            el_registry.setAgreementList(instanceObj);
+                            el_refs_registry.setAgreementList(instanceObj);
                         });
 
                         $agreement_list.nestedSortable({
@@ -695,11 +695,11 @@ var el_registry = {
                             handle: ".drag_handler",
                             items: "li",
                             stop: function (event, ui) {
-                                el_registry.setAgreementList(instanceObj);
+                                el_refs_registry.setAgreementList(instanceObj);
                                 console.log(event, ui);
                             }
                         });
-                        el_registry.bindTipsy();
+                        el_refs_registry.bindTipsy();
                     });
 
                     let agArr = [];
