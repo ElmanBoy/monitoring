@@ -131,7 +131,7 @@ function insertRedirectorRepeatEntry(array &$agreementList): void
             $hasRepeat = false;
             for ($k = $j + 1; $k < count($section); $k++) {
                 if (isset($section[$k]['id']) && $section[$k]['id'] == $userId
-                    && !isset($section[$k]['result'])) {
+                    && isset($section[$k]['_is_redirector_repeat'])) {
                     $hasRepeat = true;
                     break;
                 }
@@ -358,7 +358,8 @@ for ($i = 0; $i < count($agreementList); $i++) {
     }
 }
 
-insertRedirectorRepeatEntry($agreementList);
+// Повторная запись перенаправившего вставляется на клиенте (agreement.php),
+// поэтому insertRedirectorRepeatEntry здесь не вызывается во избежание дублирования.
 
 $globalStats = collectGlobalStats($agreementList);
 

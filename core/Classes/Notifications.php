@@ -28,6 +28,7 @@ class Notifications
         }
         file_put_contents($logDir . '/reminders.log', '[' . date('Y-m-d H:i:s') . '] ' . $msg . PHP_EOL, FILE_APPEND);
     }
+
     /**
      * @var array
      */
@@ -402,7 +403,7 @@ class Notifications
         int $documentId,
         string $documentName,
         string $mode = 'new',
-        bool $allowRemind = true,
+        bool $allowRemind = false,
         ?string $remindDateTime = '',
         ?string $remindComment = ''
     ): bool
@@ -414,12 +415,14 @@ class Notifications
         $agreementAction = $agreementType == 1 ? 'Ваша подпись' : 'Ваше согласование';
 
 
+        $caption = 'Вы включены в список согласования';
+        $letterText =
+            '<p>Ожидается ' . $agreementAction . ' для документа «' . $documentName . '»</p>';
+
+        // Панель уведомлений — всегда, task_id=null чтобы не нарушать FK на cam_tasks
+        $this->addRecordToPanel($signerId, $letterText, $documentId, '/documents');
+
         if (strlen(trim($executorEmail)) > 0) {
-
-            $caption = 'Вы включены в список согласования';
-            $letterText =
-                '<p>Ожидается ' . $agreementAction . ' для документа «' . $documentName . '»</p>';
-
 
             if ($allowRemind) {
                 $this->setRemind(
@@ -437,10 +440,6 @@ class Notifications
                 );
             }
 
-            // Удаление remind выполняется в вызывающем коде до вызова этого метода
-
-            $this->addRecordToPanel($signerId, $letterText, $documentId, '/documents');
-
             $letter_body = $this->mail->template_render('/tmpl/letter/task_letter.php',
                 [
                     'email' => $executorEmail,
@@ -453,9 +452,9 @@ class Notifications
             return $this->mail->send($executorEmail, $caption,
                 $letter_body, 'noreply@mosreg.ru', 'html', 'smtp', '', 'noreply@mosreg.ru'
             );
-        } else {
-            return false;
         }
+
+        return true;
     }
 
     /**
@@ -465,7 +464,7 @@ class Notifications
         int $signerId,
         int $documentId,
         string $documentName,
-        bool $allowRemind = true,
+        bool $allowRemind = false,
         ?string $remindComment = 'Необходимо назначить задания сотрудникам группы проверки'
     ): bool
     {
@@ -475,12 +474,14 @@ class Notifications
         $executorEmail = $executor->email;
 
 
+        $caption = 'Подписан приказ о проведении проверки';
+        $letterText =
+            '<p>Вы назначены руководителем проверки в приказе «' . $documentName . '»</p>';
+
+        // Панель уведомлений — всегда
+        $this->addRecordToPanel($signerId, $letterText, $documentId, '/documents');
+
         if (strlen(trim($executorEmail)) > 0) {
-
-            $caption = 'Подписан приказ о проведении проверки';
-            $letterText =
-                '<p>Вы назначены руководителем проверки в приказе «' . $documentName . '»</p>';
-
 
             if ($allowRemind) {
                 $this->setRemind(
@@ -500,8 +501,6 @@ class Notifications
 
             // Удаление remind выполняется в вызывающем коде до вызова этого метода
 
-            $this->addRecordToPanel($signerId, $letterText, $documentId, '/documents');
-
             $letter_body = $this->mail->template_render('/tmpl/letter/task_letter.php',
                 [
                     'email' => $executorEmail,
@@ -514,9 +513,9 @@ class Notifications
             return $this->mail->send($executorEmail, $caption,
                 $letter_body, 'noreply@mosreg.ru', 'html', 'smtp', '', 'noreply@mosreg.ru'
             );
-        } else {
-            return false;
         }
+
+        return true;
     }
 
     public function notificationObject(
@@ -525,7 +524,7 @@ class Notifications
         int $documentId,
         string $documentName,
         string $mode = 'new',
-        bool $allowRemind = true,
+        bool $allowRemind = false,
         ?string $remindDateTime = '',
         ?string $remindComment = ''
     ): bool
@@ -537,12 +536,14 @@ class Notifications
         $agreementAction = $agreementType == 1 ? 'Ваша подпись' : 'Ваше согласование';
 
 
+        $caption = 'Вам поступил акт проверки';
+        $letterText =
+            '<p>Ожидается ваше согласие или возражения по документу «' . $documentName . '»</p>';
+
+        // Панель уведомлений — всегда
+        $this->addRecordToPanel($signerId, $letterText, $documentId, '/documents');
+
         if (strlen(trim($executorEmail)) > 0) {
-
-            $caption = 'Вам поступил акт проверки';
-            $letterText =
-                '<p>Ожидается ваше согласие или возражения по документу «' . $documentName . '»</p>';
-
 
             if ($allowRemind) {
                 $this->setRemind(
@@ -562,8 +563,6 @@ class Notifications
 
             // Удаление remind выполняется в вызывающем коде до вызова этого метода
 
-            $this->addRecordToPanel($signerId, $letterText, $documentId, '/documents');
-
             $letter_body = $this->mail->template_render('/tmpl/letter/task_letter.php',
                 [
                     'email' => $executorEmail,
@@ -576,9 +575,9 @@ class Notifications
             return $this->mail->send($executorEmail, $caption,
                 $letter_body, 'noreply@mosreg.ru', 'html', 'smtp', '', 'noreply@mosreg.ru'
             );
-        } else {
-            return false;
         }
+
+        return true;
     }
 
     public function sendWSMessage(string $message): bool
@@ -624,18 +623,18 @@ class Notifications
                 'privateKey' => VAPID_PRIVATE_KEY
             ]
         ], [
-            //'TTL' => 2419200,
-            //'batchSize' => 200,
-            //'urgency' => 'high',
-            'timeout' => 60,
-            'proxy' => PROXY_URL,
-            'https_proxy' => PROXY_URL,
-            'curlOptions' => [
-                CURLOPT_TIMEOUT => 60,
-                CURLOPT_CONNECTTIMEOUT => 60,
-                CURLOPT_PROXY => PROXY_URL,
+                //'TTL' => 2419200,
+                //'batchSize' => 200,
+                //'urgency' => 'high',
+                'timeout' => 60,
+                'proxy' => PROXY_URL,
+                'https_proxy' => PROXY_URL,
+                'curlOptions' => [
+                    CURLOPT_TIMEOUT => 60,
+                    CURLOPT_CONNECTTIMEOUT => 60,
+                    CURLOPT_PROXY => PROXY_URL,
+                ]
             ]
-        ]
         );
 
         $payload = json_encode([

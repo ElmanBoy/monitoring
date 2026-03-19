@@ -81,7 +81,7 @@ if(!isset($_POST['institutions']) || count($_POST['institutions']) == 0){
         $insArr[$i] = [
             'check_types' => $_POST['checks'],
             'institutions' => $_POST['institutions'][$i],
-            'units' => $_POST['units'][$i],
+            'units' => intval($_POST['units'][$i]) > 0 ? intval($_POST['units'][$i]) : null,
             'periods' => $_POST['periods'][$i],
             'periods_hidden' => $_POST['periods_hidden'][$i],
             'inspections' => $_POST['inspections'],
@@ -127,6 +127,11 @@ if($err == 0) {
     foreach ($regProps as $f) {
         $value = $reg->prepareValues($f, $_POST);
         $registry[$f['field_name']] = $value;
+    }
+    foreach (['planname', 'inspections'] as $fkField) {
+        if (isset($registry[$fkField]) && intval($registry[$fkField]) === 0) {
+            $registry[$fkField] = null;
+        }
     }
 
     //Обновляем проверяемые учреждения. Удаляем старые и добавляем по новой.

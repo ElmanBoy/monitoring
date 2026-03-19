@@ -266,8 +266,17 @@ $initialAgreementList = json_decode($tmpl->agreementlist, true) ?? [];
                 const $redirect = $actions.find('[name="redirect[]"]');
                 const currentDateTime = dateNow();
 
+                // Флаг: действие уже применено через redirect[] на этом уровне
+                let appliedViaRedirect = false;
+
                 for (let i = 0; i < agj.length; i++) {
                     if (parseInt(agj[i].id) === CURRENT_USER_ID) {
+                        // Не трогаем повторную запись перенаправившего
+                        if (agj[i]._is_redirector_repeat) continue;
+
+                        // Если действие уже применено через redirect — пропускаем обычную запись
+                        if (appliedViaRedirect) continue;
+
                         if (parseInt(result_type) === 0) {
                             // Только комментарий — не трогаем result
                             agj[i].comment = (agj[i].comment || '') +
@@ -313,7 +322,15 @@ $initialAgreementList = json_decode($tmpl->agreementlist, true) ?? [];
                             }
                         }
                     } else if (agj[i].redirect && Array.isArray(agj[i].redirect)) {
+                        // Проверяем есть ли текущий пользователь в redirect[]
+                        const userInRedirect = agj[i].redirect.some(
+                            r => parseInt(r.id) === CURRENT_USER_ID && !r._is_redirector_repeat
+                        );
                         applyUserAction(agj[i].redirect, section, result_type, pendingRepeats, level + 1);
+                        // Если пользователь был в redirect и действие не перенаправление — ставим флаг
+                        if (userInRedirect && parseInt(result_type) !== 4) {
+                            appliedViaRedirect = true;
+                        }
                     }
                 }
 
@@ -324,7 +341,7 @@ $initialAgreementList = json_decode($tmpl->agreementlist, true) ?? [];
                         const pr = pendingRepeats[f];
                         // Проверяем, нет ли уже повторной записи (защита от двойного клика)
                         const alreadyExists = agj.some(
-                            (item, idx) => idx > pr.index && parseInt(item.id) === parseInt(pr.data.id) && !item.result
+                            (item, idx) => idx > pr.index && parseInt(item.id) === parseInt(pr.data.id) && item._is_redirector_repeat
                         );
                         if (!alreadyExists) {
                             agj.splice(pr.index + 1 + f, 0, {
@@ -333,7 +350,8 @@ $initialAgreementList = json_decode($tmpl->agreementlist, true) ?? [];
                                 vrio: pr.data.vrio,
                                 urgent: pr.data.urgent,
                                 role: pr.data.role,
-                                result: null
+                                result: null,
+                                _is_redirector_repeat: true
                             });
                         }
                     }

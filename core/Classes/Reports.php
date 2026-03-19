@@ -221,7 +221,10 @@ class Reports
 
         $result = $this->rb::getAll($query);
         foreach($result as $item){
-            $data['data'][] = ['name' => trim($item['institution_name']), 'value' => $item['checks_count']];
+            $data['data'][] = [
+                'name' => trim(html_entity_decode($item['institution_name'], ENT_QUOTES | ENT_HTML5, 'UTF-8')),
+                'value' => $item['checks_count']
+            ];
         }
         $data['columns'] = ['Учреждение', 'Количество проверок'];
 

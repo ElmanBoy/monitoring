@@ -3863,7 +3863,7 @@ class Registry
                 'created_at' => date('Y-m-d H:i:s'),
                 'author' => $_SESSION['user_id'],
                 'institution' => $ins_id,
-                'units' => $unit_id,
+                'units' => ($unit_id > 0) ? $unit_id : null,
                 'check_types' => $check_type,
                 'periods' => $periods,
                 'periods_hidden' => $periods_hidden,

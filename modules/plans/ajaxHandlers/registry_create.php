@@ -92,7 +92,7 @@ if(!is_array($_POST['institutions']) || count($_POST['institutions']) == 0 || st
         $insArr[$i] = [
             'check_types' => $_POST['checks'],
             'institutions' => $_POST['institutions'][$i],
-            'units' => $_POST['units'][$i],
+            'units' => intval($_POST['units'][$i]) > 0 ? intval($_POST['units'][$i]) : null,
             'periods' => $_POST['periods'][$i],
             'periods_hidden' => $_POST['periods_hidden'][$i],
             'inspections' => $_POST['inspections'],
@@ -150,167 +150,177 @@ if($err == 0) {
             $value = $reg->prepareValues($f, $_POST);
             $registry[$f['field_name']] = $value;
         }
+        foreach (['planname', 'inspections'] as $fkField) {
+            if (isset($registry[$fkField]) && intval($registry[$fkField]) === 0) {
+                $registry[$fkField] = null;
+            }
+        }
         try {
-            $db->insert('checksplans', $registry);
-            $new_plan_id = $db->last_insert_id;
-            $signer_1 = 0;
-            $signer_2 = 0;
-            $signer_1_position = '';
-            $signer_2_position = '';
+            $planResult = $db->insert('checksplans', $registry);
+            if($planResult['result']) {
+                $new_plan_id = $db->last_insert_id;
+                $signer_1 = 0;
+                $signer_2 = 0;
+                $signer_1_position = '';
+                $signer_2_position = '';
 
 
-            for($s = 0; $s < count($_POST['agreementlist']); $s++){
-                if(strlen(trim($_POST['agreementlist'][$s])) > 0){
-                    $clear_agreement[] = $_POST['agreementlist'][$s];
+                for ($s = 0; $s < count($_POST['agreementlist']); $s++) {
+                    if (strlen(trim($_POST['agreementlist'][$s])) > 0) {
+                        $clear_agreement[] = $_POST['agreementlist'][$s];
 
-                    //Выявляем подписантов
-                    $sections = json_decode($_POST['agreementlist'][$s], true);
-                    $signers = [];
-                    foreach($sections as $sec){
-                        if(intval($sec['type']) == 1){ //подписание
-                            $signers[] = $sec['id'];
+                        //Выявляем подписантов
+                        $sections = json_decode($_POST['agreementlist'][$s], true);
+                        $signers = [];
+                        foreach ($sections as $sec) {
+                            if (intval($sec['type']) == 1) { //подписание
+                                $signers[] = $sec['id'];
+                            }
+                        }
+                        $signer_1 = $signers[0];
+                        $signer_1_position = $users['result'][$signer_1]->position;
+                        $signer_2 = $signers[1];
+                        $signer_2_position = $users['result'][$signer_2]->position;
+                    }
+                }
+                $_POST['agreementlist'] = $clear_agreement;
+
+                //Создаём документ плана
+                $agreement_header = '';
+                $header_vars = [
+                    'agreement_date' => '_________',
+                    'signer_1' => $signer_1,
+                    'signer_1_position' => $signer_1_position
+                ];
+
+                $agreement_header .= $temp->twig_parse($tmpl->header, $header_vars);
+
+                $agreement_header .= $temp->twig_parse($_POST['longname'], ['curr_year' => date('Y')]);
+
+                $body_vars = [];
+                $check_number = 1;
+                if (is_array($insArr) && count($insArr) > 0) {
+                    foreach ($insArr as $ch) {
+                        $body_vars[] = [
+                            'check_number' => $check_number,
+                            'institution' => stripslashes($inst['result'][$ch['institutions']]->name),
+                            'unit' => stripslashes($units['array'][$ch['units']]),
+                            'inspections' => stripslashes($insp['array'][$ch['inspections']]),
+                            'period' => $ch['periods'],
+                            'check_periods' => $ch['check_periods']
+                        ];
+                        $check_number++;
+                    }
+                }
+                $agreement_body = $temp->twig_parse($tmpl->body, ['checks' => $body_vars]);
+
+                $bottom_vars = [
+                    'agreement_date' => '_________',
+                    'signer_1' => $signer_2,
+                    'signer_1_position' => $signer_2_position
+                ];
+                $agreement_bottom = $temp->twig_parse($tmpl->bottom, $bottom_vars);
+
+
+                $docNumber = strlen($_POST['doc_number']) > 0 ? ' № ' . $_POST['doc_number'] : '';
+                $_POST['active'] = 1;
+                $_POST['name'] = $_POST['short'] . $docNumber;
+                $_POST['header'] = $agreement_header;
+                $_POST['body'] = $agreement_body;
+                $_POST['bottom'] = $agreement_bottom;
+                $_POST['documentacial'] = 3;
+                $_POST['status'] = 0;
+                $_POST['source_id'] = $new_plan_id;
+                $_POST['source_table'] = 'checksplans';
+
+                // Сначала обрабатываем загрузку файлов, чтобы иметь file_ids
+                if (isset($_FILES['files']) && count($_FILES['files']) > 0 && is_array($_POST['custom_names'])) {
+                    $files = new \Core\Files();
+                    $existFilesIds = [];
+                    $fileIds = $files->attachFiles($_FILES['files'], $_POST['custom_names']);
+                    if ($fileIds['result']) {
+                        $_POST['file_ids'] = json_encode($fileIds['ids'], JSON_UNESCAPED_UNICODE);
+                        $reg->insertTaskLog($new_plan_id, 'Приложение файлов &laquo;' .
+                            implode('&raquo;, &laquo;', $_POST['custom_names']) . '&raquo;', 'plans', 'registry_edit'
+                        );
+                    } else {
+                        echo $fileIds['message'];
+                    }
+                }
+
+                // ЯВНО создаём запись документа плана в cam_agreement
+                $agreementData = [
+                    'active' => 1,
+                    'created_at' => date('Y-m-d H:i:s'),
+                    'author' => $_SESSION['user_id'],
+                    'documentacial' => 3,
+                    'document' => $_POST['document'],
+                    'name' => $_POST['name'],
+                    'header' => $_POST['header'],
+                    'body' => $_POST['body'],
+                    'bottom' => $_POST['bottom'],
+                    'status' => 0,
+                    'source_id' => $new_plan_id,
+                    'source_table' => 'checksplans',
+                ];
+
+                if (!empty($_POST['file_ids'])) {
+                    $agreementData['file_ids'] = $_POST['file_ids'];
+                }
+                if (!empty($_POST['agreementlist'])) {
+                    // Преобразуем массив JSON-строк в нормальный массив перед сохранением
+                    $agreementData['agreementlist'] = json_encode(
+                        $reg->fixJsonArray($_POST['agreementlist']),
+                        JSON_UNESCAPED_UNICODE
+                    );
+                }
+
+                $docCreateResult = $db->insert('agreement', $agreementData);
+                $docId = $db->last_insert_id ?? 0;
+
+                //TODO: Добавить отправку уведомленний подписанту и объекту проверки
+                foreach ($clear_agreement as $ag) {
+                    $agRow = json_decode($ag, true);
+                    /*for($s = 0; $s < count($agRow); $s++) {
+                        if (!isset($agRow[$s]['stage'])) {
+                            $alert->notificationSigner(
+                                $agRow[$s]['id'],
+                                $agRow[$s]['type'],
+                                $docId,
+                                $_POST['short'] . $docNumber);
+                        }
+                    }*/
+                    for ($s = 0; $s < count($agRow); $s++) {
+                        if (!isset($agRow[$s]['stage']) && isset($agRow[$s]['id'])) {
+                            $alert->notificationSigner(
+                                $agRow[$s]['id'],
+                                $agRow[$s]['type'],
+                                $docId,
+                                $_POST['short'] . $docNumber
+                            );
+                            break;
                         }
                     }
-                    $signer_1 = $signers[0];
-                    $signer_1_position = $users['result'][$signer_1]->position;
-                    $signer_2 = $signers[1];
-                    $signer_2_position = $users['result'][$signer_2]->position;
                 }
-            }
-            $_POST['agreementlist'] = $clear_agreement;
-
-            //Создаём документ плана
-            $agreement_header = '';
-            $header_vars = [
-                'agreement_date' => '_________',
-                'signer_1' => $signer_1,
-                'signer_1_position' => $signer_1_position
-            ];
-
-            $agreement_header .= $temp->twig_parse($tmpl->header, $header_vars);
-
-            $agreement_header .= $temp->twig_parse($_POST['longname'], ['curr_year' => date('Y')]);
-
-            $body_vars = [];
-            $check_number = 1;
-            if(is_array($insArr) && count($insArr) > 0) {
-                foreach ($insArr as $ch) {
-                    $body_vars[] = [
-                        'check_number' => $check_number,
-                        'institution' => stripslashes($inst['result'][$ch['institutions']]->name),
-                        'unit' => stripslashes($units['array'][$ch['units']]),
-                        'inspections' => stripslashes($insp['array'][$ch['inspections']]),
-                        'period' => $ch['periods'],
-                        'check_periods' => $ch['check_periods']
-                    ];
-                    $check_number++;
-                }
-            }
-            $agreement_body = $temp->twig_parse($tmpl->body, ['checks' => $body_vars]);
-
-            $bottom_vars = [
-                'agreement_date' => '_________',
-                'signer_1' => $signer_2,
-                'signer_1_position' => $signer_2_position
-            ];
-            $agreement_bottom = $temp->twig_parse($tmpl->bottom, $bottom_vars);
 
 
-            $docNumber = strlen($_POST['doc_number']) > 0 ? ' № '.$_POST['doc_number'] : '';
-            $_POST['active'] = 1;
-            $_POST['name'] = $_POST['short'].$docNumber;
-            $_POST['header'] = $agreement_header;
-            $_POST['body'] = $agreement_body;
-            $_POST['bottom'] = $agreement_bottom;
-            $_POST['documentacial'] = 3;
-            $_POST['status']        = 0;
-            $_POST['source_id']     = $new_plan_id;
-            $_POST['source_table']  = 'checksplans';
-
-            // Сначала обрабатываем загрузку файлов, чтобы иметь file_ids
-            if (isset($_FILES['files']) && count($_FILES['files']) > 0 && is_array($_POST['custom_names'])) {
-                $files = new \Core\Files();
-                $existFilesIds = [];
-                $fileIds = $files->attachFiles($_FILES['files'], $_POST['custom_names']);
-                if ($fileIds['result']) {
-                    $_POST['file_ids'] = json_encode($fileIds['ids'], JSON_UNESCAPED_UNICODE);
-                    $reg->insertTaskLog($new_plan_id, 'Приложение файлов &laquo;' .
-                        implode('&raquo;, &laquo;', $_POST['custom_names']) . '&raquo;', 'plans', 'registry_edit'
-                    );
+                if (!$docCreateResult['result']) {
+                    $result = false;
+                    $message = $docCreateResult['resultText'];
                 } else {
-                    echo $fileIds['message'];
-                }
-            }
-
-            // ЯВНО создаём запись документа плана в cam_agreement
-            $agreementData = [
-                'active'        => 1,
-                'created_at'    => date('Y-m-d H:i:s'),
-                'author'        => $_SESSION['user_id'],
-                'documentacial' => 3,
-                'document'      => $_POST['document'],
-                'name'          => $_POST['name'],
-                'header'        => $_POST['header'],
-                'body'          => $_POST['body'],
-                'bottom'        => $_POST['bottom'],
-                'status'        => 0,
-                'source_id'     => $new_plan_id,
-                'source_table'  => 'checksplans',
-            ];
-
-            if (!empty($_POST['file_ids'])) {
-                $agreementData['file_ids'] = $_POST['file_ids'];
-            }
-            if (!empty($_POST['agreementlist'])) {
-                // Преобразуем массив JSON-строк в нормальный массив перед сохранением
-                $agreementData['agreementlist'] = json_encode(
-                    $reg->fixJsonArray($_POST['agreementlist']),
-                    JSON_UNESCAPED_UNICODE
-                );
-            }
-
-            $docCreateResult = $db->insert('agreement', $agreementData);
-            $docId           = $db->last_insert_id ?? 0;
-
-            //TODO: Добавить отправку уведомленний подписанту и объекту проверки
-            foreach ($clear_agreement as $ag) {
-                $agRow = json_decode($ag, true);
-                /*for($s = 0; $s < count($agRow); $s++) {
-                    if (!isset($agRow[$s]['stage'])) {
-                        $alert->notificationSigner(
-                            $agRow[$s]['id'],
-                            $agRow[$s]['type'],
-                            $docId,
-                            $_POST['short'] . $docNumber);
-                    }
-                }*/
-                for($s = 0; $s < count($agRow); $s++) {
-                    if (!isset($agRow[$s]['stage']) && isset($agRow[$s]['id'])) {
-                        $alert->notificationSigner(
-                            $agRow[$s]['id'],
-                            $agRow[$s]['type'],
-                            $docId,
-                            $_POST['short'] . $docNumber);
-                        break;
-                    }
-                }
-            }
-
-
-            if(!$docCreateResult['result']){
-                $result = false;
-                $message = $docCreateResult['resultText'];
-            }else {
-                $reg->insertTaskLog($new_plan_id, 'Создан новый план', 'plans', 'registry_edit');
-                $result = true;
-                $message = 'План успешно создан.
+                    $reg->insertTaskLog($new_plan_id, 'Создан новый план', 'plans', 'registry_edit');
+                    $result = true;
+                    $message = 'План успешно создан.
                 <script>
                 el_app.reloadMainContent();
                 el_app.dialog_close("registry_create");
                 el_app.updateNotifications();
                 </script>';
+                }
+            }else{
+                $result = false;
+                $message = 'Ошибка создания плана. '.$planResult['resultText'];
             }
-
         } catch (\RedBeanPHP\RedException $e) {
             $result = false;
             $message = 'Ошибка создания плана. '.$e->getMessage();
@@ -319,6 +329,7 @@ if($err == 0) {
         $result = false;
         $message = implode('<br>', $errStr);
     }
+
 
 }else{
     $message = '<strong>Ошибка:</strong><br>'.implode('<br>', $errStr);

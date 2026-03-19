@@ -13,20 +13,31 @@ if (isset($_POST['params']) && substr_count($_POST['params'], 'plan=') > 0) {
     $gui = new Gui;
     $module_props = $gui->getModuleProps('plans');
     $regs = $gui->getTableData('checksplans');
+
+    // Загружаем даты утверждения планов из cam_agreement
+    $db = new \Core\Db();
+    $date = new \Core\Date();
+    $planDates = [];
+    $agreementDates = $db->select('agreement',
+        " WHERE source_table = 'checksplans' AND status = 1"
+    );
+    foreach ($agreementDates as $agr) {
+        $planDates[intval($agr->source_id)]['approved'] = $agr->docdate;
+    }
     ?>
     <div class="nav">
         <div class="nav_01">
             <?
             echo $gui->buildTopNav([
-                'title' => 'Планы проверок',
-                //'registryList' => '',
-                'renew' => 'Сбросить все фильтры',
-                'create' => 'Новый план',
-                //'clone' => 'Копия плана',
-                'delete' => 'Удалить выделенные',
-                //'list_props' => 'Поля справочников',
-                'logout' => 'Выйти'
-            ]
+                    'title' => 'Планы проверок',
+                    //'registryList' => '',
+                    'renew' => 'Сбросить все фильтры',
+                    'create' => 'Новый план',
+                    //'clone' => 'Копия плана',
+                    'delete' => 'Удалить выделенные',
+                    //'list_props' => 'Поля справочников',
+                    'logout' => 'Выйти'
+                ]
             );
             ?>
         </div>
@@ -69,7 +80,7 @@ if (isset($_POST['params']) && substr_count($_POST['params'], 'plan=') > 0) {
                         );
                         ?>
                     </th>
-                    <th class="sort" style='width: 60%'>
+                    <th class="sort" style='width: 40%'>
                         <?
                         echo $gui->buildSortFilter(
                             'registry',
@@ -102,6 +113,18 @@ if (isset($_POST['params']) && substr_count($_POST['params'], 'plan=') > 0) {
                         );
                         ?>
                     </th>
+                    <th class='sort'>
+                        <?
+                        echo $gui->buildSortFilter(
+                            'registry',
+                            'Дата создания',
+                            'created_at',
+                            'el_data',
+                            []
+                        );
+                        ?>
+                    </th>
+                    <th style="white-space: nowrap;">Дата утверждения</th>
                 </tr>
                 </thead>
 
@@ -144,6 +167,8 @@ if (isset($_POST['params']) && substr_count($_POST['params'], 'plan=') > 0) {
                             <td class="link"><a href="/plans/?plan=' . $reg->id . '">' . $reg->short . $reg->doc_number.'</a></td>
                             <td>' . $reg->year . '</td>
                             <td>' . $reg->version . '</td>
+                            <td>' . (strlen($reg->created_at) > 0 ? $date->dateToString(explode(' ', $reg->created_at)[0]) : '—') . '</td>
+                            <td>' . (isset($planDates[$reg->id]['approved']) && strlen($planDates[$reg->id]['approved']) > 0 ? $date->dateToString($planDates[$reg->id]['approved']) : '—') . '</td>
                             <td class="link" style="justify-content: right">';
                     if($reg->active != 1 && $reg->approved != 1){
                         if($_SESSION['user_id'] == $reg->author || $auth->isAdmin()){
@@ -152,7 +177,7 @@ if (isset($_POST['params']) && substr_count($_POST['params'], 'plan=') > 0) {
                     }else{
                         echo '<span class="material-icons reg_settings" title="Редактирование плана">edit</span>';
                     }
-                        echo '
+                    echo '
                             <!--span class="material-icons" title="Печать">print</span-->
                             <span class="material-icons viewDoc" data-value="' . $reg->id . '" data-type="3" title="Просмотр документа">picture_as_pdf</span>
                             <!--span class="material-icons" title="Расписание">edit_calendar</span-->

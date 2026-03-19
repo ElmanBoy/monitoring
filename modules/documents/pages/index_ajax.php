@@ -355,26 +355,34 @@ function getDocumentStatusForIcon(int $userId, ?string $agreementListJson, int $
         ];
     }
 
-    // Сначала ищем пользователя во всём дереве согласования (включая перенаправления)
+    // Ищем пользователя во всём дереве согласования.
+    // Приоритет: pending > redirected > approved — чтобы не скрывать активную очередь
+    // за уже выполненным действием в другой секции.
     $userFound = false;
-    $userInfo = null;
+    $userInfo  = null;
+    $allFound  = []; // все вхождения пользователя
 
     foreach ($data as $section) {
-        // Сначала ищем в основном списке
         $found = $findUserInSection($section, $userId);
         if ($found) {
-            $userFound = true;
-            $userInfo = $found;
-            break;
+            $allFound[] = $found;
         }
-
-        // Если не нашли в основном списке, ищем во всех перенаправлениях
         $foundInRedirect = $findUserInAllRedirects($section, $userId);
         if ($foundInRedirect) {
-            $userFound = true;
-            $userInfo = $foundInRedirect;
-            break;
+            $allFound[] = $foundInRedirect;
         }
+    }
+
+    if (!empty($allFound)) {
+        $userFound = true;
+        // Выбираем запись с наивысшим приоритетом статуса
+        $priority = ['pending' => 0, 'redirected' => 1, 'approved' => 2, 'rejected' => 3];
+        usort($allFound, function($a, $b) use ($getApproverStatus, $priority) {
+            $sa = $getApproverStatus($a['approver'])['status'];
+            $sb = $getApproverStatus($b['approver'])['status'];
+            return ($priority[$sa] ?? 9) <=> ($priority[$sb] ?? 9);
+        });
+        $userInfo = $allFound[0];
     }
 
     // Если пользователь найден в списке согласования

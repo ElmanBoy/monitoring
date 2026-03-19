@@ -223,7 +223,8 @@ class Db
             file_put_contents(ROOT . '/logs/pg_log.txt', $logs->grep('INSERT'));
             return ['result' => true, 'resultText' => 'Данные успешно добавлены', 'id' => $result->id];
         } catch (\Exception $e) {
-            return ['result' => false, 'resultText' => 'Ошибка добавления в базе данных. '.$this->handleDbException($e)];
+            return ['result' => false, 'resultText' => 'Ошибка добавления в базе данных. '.
+                implode('<br>', $this->handleDbException($e))];
         }
     }
 

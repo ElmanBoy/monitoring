@@ -18,7 +18,7 @@ $date = new Date();
 $plan_id = 0;
 $doc_id = 0;
 $ins_id = 0;
-if(isset($_POST['params']) && is_array($_POST['params'])) {
+if (isset($_POST['params']) && is_array($_POST['params'])) {
     $plan_id = intval($_POST['params']['plan_id']);
     $doc_id = intval($_POST['params']['doc_id']);
     $ins_id = intval($_POST['params']['ins_id']);
@@ -30,10 +30,10 @@ $in_calendar = isset($_POST['params']['in_calendar']) && intval($_POST['params']
 
 $taskStr = '';
 $insStr = '';
-if(isset($_POST['params']['taskId'])) {
+if (isset($_POST['params']['taskId'])) {
     $taskStr = $_POST['params']['taskId'];
 }
-if(isset($_POST['params']['insId'])){
+if (isset($_POST['params']['insId'])) {
     $insStr = $_POST['params']['insId'];
 }
 $task = 0;
@@ -63,30 +63,30 @@ if ($auth->isLogin()) {
         $exist_task = $db->select('checkstaff', " WHERE check_uid = '$plan_uid' AND institution = " . $insId);
         $plan_uid = $exist_task[$taskId]->check_uid;
 
-    } elseif(strlen($taskStr) > 0) {//echo '2222  '.$taskStr;
+    } elseif (strlen($taskStr) > 0) {//echo '2222  '.$taskStr;
         //Есть номер задачи - Редактирование существующей задачи
         $taskArr = explode('_', $taskStr);
         //$plan_uid = $taskArr[0];
         $taskId = intval($taskArr[1]);
-        $current_task = $db->select('checkstaff', " WHERE id = ?", [$taskId]);
+        $current_task = $db->select('checkstaff', ' WHERE id = ?', [$taskId]);
         $insId = intval($current_task[$taskId]->institution);
         $plan_uid = $current_task[$taskId]->check_uid;
         $exist_task = $db->select('checkstaff', " WHERE check_uid = '$plan_uid' AND institution = " . $insId);
         //echo '<pre>';print_r($exist_task);echo '</pre>';
 
-    }elseif($plan_id > 0){ //Есть id плана, ищем последний номер
+    } elseif ($plan_id > 0) { //Есть id плана, ищем последний номер
         $plan = $db->selectOne('checksplans', " WHERE id = '$plan_id' ORDER BY version DESC LIMIT 1"); //print_r($plan);
         if (strlen($plan->addinstitution) > 0) {
             $actionPeriods = $date->getReviewPeriodsFromJson($plan->addinstitution, $plan->year);
             $insArr = json_decode($plan->addinstitution, true);
             $plan_name = $plan->short;
 
-            if($ins_id > 0){
+            if ($ins_id > 0) {
                 $object = stripslashes(htmlspecialchars($ins['result'][$ins_id]->short));
             }
 
             //Смотрим статус приказа
-            $doc_data = $db->selectOne("agreement", " WHERE id = '$doc_id'");
+            $doc_data = $db->selectOne('agreement', " WHERE id = '$doc_id'");
             $doc_status = $doc_data->status;
             $doc_name = $doc_data->name;
 
@@ -99,7 +99,7 @@ if ($auth->isLogin()) {
                     $minDate = $actionPeriods[$ins_id]['action_start_date'];//$datesArr['start'];
                     $maxDate = $actionPeriods[$ins_id]['action_end_date'];//$datesArr['end'];
                     $checkPeriod = $actionPeriods[$ins_id]['checkPeriod'];
-                    if(strlen($checkPeriod) > 0) {
+                    if (strlen($checkPeriod) > 0) {
                         $checkPeriodArr = explode(' - ', $checkPeriod);
                         $checkPeriodStart = $date->correctDateFormatToMysql($checkPeriodArr[0]);
                         $checkPeriodEnd = $date->correctDateFormatToMysql($checkPeriodArr[1]);
@@ -111,11 +111,11 @@ if ($auth->isLogin()) {
 
     if ($doc_id > 0) {
         //Если такой приказ уже есть
-        $agreement_data = $db->selectOne('agreement', " WHERE id = " . $doc_id);
+        $agreement_data = $db->selectOne('agreement', ' WHERE id = ' . $doc_id);
         $doc_number = $agreement_data->doc_number;
     } /*else {
         //Если новый приказ, то генерим новый номер приказа
-        $doc = $db->selectOne('agreement', " WHERE source_table = 'checkinstitutions' 
+        $doc = $db->selectOne('agreement', " WHERE source_table = 'checkinstitutions'
         AND doc_number LIKE 'ПРП%' ORDER BY id DESC LIMIT 1");
         if (strlen($doc->doc_number) > 0) {
             $plan_number = $doc->doc_number;
@@ -154,10 +154,10 @@ if ($auth->isLogin()) {
         $tasks = $db->getRegistry('tasks');
         $ousr = $db->getRegistry('ousr');
         $oSubQuery = '';
-        if($plan->checks > 0){
-            $oSubQuery = ' AND checks = '.$plan->checks;
+        if ($plan->checks > 0) {
+            $oSubQuery = ' AND checks = ' . $plan->checks;
         }
-        $orders = $db->getRegistry('documents', ' WHERE documentacial = 1'.$oSubQuery); //print_r($orders);
+        $orders = $db->getRegistry('documents', ' WHERE documentacial = 1' . $oSubQuery); //print_r($orders);
 
         //Если это уже назначенная задача
         if ($taskId > 0) {
@@ -182,7 +182,7 @@ if ($auth->isLogin()) {
             $object = stripslashes(htmlspecialchars($ins['array'][$insId]));
         }//Иначе это новая задача по клику по учреждению
 
-        if(strlen($plan_uid) == 0){
+        if (strlen($plan_uid) == 0) {
             $plan_uid = '0';
         }
 
@@ -207,17 +207,17 @@ if ($auth->isLogin()) {
         $users = $db->getRegistry('users', "where roles <> '2'", [], ['surname', 'name', 'middle_name']);
         $new_order_number = 'ПРП' . $new_order_num . '-' . date('Y');
 
-        $prevDate = date('Y-m-d', strtotime($datesEventArr[0] .' -1 day'));
+        $prevDate = date('Y-m-d', strtotime($datesEventArr[0] . ' -1 day'));
 
         ?>
-            <style>
-                /*.datesInputWrapper{
-                    display: none;
-                }*/
-            </style>
+        <style>
+            /*.datesInputWrapper{
+                display: none;
+            }*/
+        </style>
         <div class='pop_up drag' style="width: 70rem">
             <div class='title handle'>
-                <div class='name'><?= strlen(trim($doc_name)) > 0 ? 'Редактирование приказа &laquo;'.$doc_name.'&raquo;' : 'Создание нового приказа'?></div>
+                <div class='name'><?= strlen(trim($doc_name)) > 0 ? 'Редактирование приказа &laquo;' . $doc_name . '&raquo;' : 'Создание нового приказа' ?></div>
                 <div class='button icon close'><span class='material-icons'>close</span></div>
             </div>
             <div class='pop_up_body'>
@@ -233,9 +233,9 @@ if ($auth->isLogin()) {
                     <input type='hidden' name='path' value="calendar">
                     <input type='hidden' name='documentacial' value='1'>
                     <input type='hidden' name='approved' value='0'>
-                    <input type="hidden" name="actionPeriod" value="<?=$actionPeriod?>">
+                    <input type="hidden" name="actionPeriod" value="<?= $actionPeriod ?>">
                     <input type='hidden' name='checkPeriod' value="<?= $checkPeriod ?>">
-                    <input type="hidden" name="doc_status" value="<?=$doc_status?>">
+                    <input type="hidden" name="doc_status" value="<?= $doc_status ?>">
 
                     <ul class='tab-pane' style=''>
                         <li id='tab_order' class='active'>Приказ</li>
@@ -271,7 +271,7 @@ if ($auth->isLogin()) {
                                 <input type='hidden' name='uid' value="<?= $plan_uid ?>">
                                 <input type='hidden' name='task_id' value="<?= $taskId ?>">
 
-                                <input type="hidden" name="plan" value="<?=$plan_id?>">
+                                <input type="hidden" name="plan" value="<?= $plan_id ?>">
                                 <div class='item w_50'>
                                     <div class='el_data'>
                                         <label>План:</label>
@@ -289,11 +289,11 @@ if ($auth->isLogin()) {
                                 }*/
                             }
                             ?>
-                            <?/*div class='item w_50 required' style='display: none'>
+                            <? /*div class='item w_50 required' style='display: none'>
                                 <select data-label='Объект проверки' name='ins' required>
                                 </select>
 
-                            </div*/?>
+                            </div*/ ?>
                             <?
                             $i = [
                                 'type' => 'select',
@@ -332,13 +332,13 @@ if ($auth->isLogin()) {
                                 </div>
                             </div>
                             <?
-                            if(strlen($actionPeriod) > 0) {
+                            if (strlen($actionPeriod) > 0) {
                                 $actionPeriodArr = explode(' - ', $actionPeriod);
                                 $actionPeriodStart = $date->correctDateFormatToMysql($actionPeriodArr[0]);
                                 $actionPeriodEnd = $date->correctDateFormatToMysql($actionPeriodArr[1]);
                             }
-                            $action_period = $agreement_data->action_period ?? $actionPeriodStart.' - '.$actionPeriodEnd;
-                            if(substr_count($agreement_data->action_period, '[') > 0) {
+                            $action_period = $agreement_data->action_period ?? $actionPeriodStart . ' - ' . $actionPeriodEnd;
+                            if (substr_count($agreement_data->action_period, '[') > 0) {
                                 $action_period = $date->getMonthDateRange(json_decode($agreement_data->action_period), $plan->year);
                             }
                             ?>
@@ -358,12 +358,12 @@ if ($auth->isLogin()) {
                                 'required' => '1'
                             ];
                             echo $reg->renderQuarter($p, []);
-                            */?>
+                            */ ?>
                             <div class='item w_50 required'>
                                 <div class='el_data'>
                                     <label>Проверяемый период</label>
                                     <input class='el_input date_range' type='date' name='check_period' required
-                                           value="<?= $agreement_data->check_period ?? $checkPeriodStart.' - '.$checkPeriodEnd ?>">
+                                           value="<?= $agreement_data->check_period ?? $checkPeriodStart . ' - ' . $checkPeriodEnd ?>">
                                 </div>
                             </div>
                             <div class='item w_50 required'>
@@ -417,17 +417,19 @@ if ($auth->isLogin()) {
                         <!--<button class='button icon text' id="save_doc"><span class='material-icons'>save</span>Сохранить
                         </button>-->
                         <?
-                        if($in_calendar && intval($perms['delete']) == 1){
+                        if ($in_calendar && intval($perms['delete']) == 1) {
                             ?>
-                            <button class='button icon text red' id='remove_event'><span class='material-icons'>delete</span>Удалить
+                            <button class='button icon text red' id='remove_event'><span
+                                        class='material-icons'>delete</span>Удалить
                             </button>
                             <?
                         }
-                        if(intval($perms['edit']) == 1){
+                        if (intval($perms['edit']) == 1) {
                             ?>
-                            <button class='button icon text' id="save_doc"><span class='material-icons'>save</span>Сохранить</button>
+                            <button class='button icon text' id="save_doc"><span class='material-icons'>save</span>Сохранить
+                            </button>
                             <?
-                        }else{
+                        } else {
                             ?>
                             <button class='button icon text' id='close'><span class='material-icons'>close</span>Закрыть
                             </button>
@@ -438,11 +440,10 @@ if ($auth->isLogin()) {
                 </form>
             </div>
         </div>
-        <?/*script src="/modules/calendar/js/registry.js"></script*/?>
+        <? /*script src="/modules/calendar/js/registry.js"></script*/ ?>
         <script src='/js/assets/agreement_list.js'></script>
         <script>
-            function bindOrderCalendar()
-            {
+            function bindOrderCalendar() {
                 let minDate = $('[name=minDate]').val(),
                     maxDate = $('[name=maxDate]').val(),
                     checkMinDate = $('[name=checkMinDate]').val(),
@@ -451,24 +452,24 @@ if ($auth->isLogin()) {
                     $range_action = $('[name=action_period]');
 //console.log(minDate, maxDate, checkMinDate, checkMaxDate);
                 let cal = $range_date.flatpickr({
-                        locale: 'ru',
-                        mode: 'range',
-                        time_24hr: true,
-                        dateFormat: 'Y-m-d',
-                        altFormat: 'd.m.Y',
-                        altInput: true,
-                        allowInput: true,
-                        defaultDate: '',
-                        minDate: checkMinDate,
-                        maxDate: checkMaxDate,
-                        altInputClass: 'el_input',
-                        firstDayOfWeek: 1,
-                    });
+                    locale: 'ru',
+                    mode: 'range',
+                    time_24hr: true,
+                    dateFormat: 'Y-m-d - Y-m-d',
+                    altFormat: 'd.m.Y',
+                    altInput: true,
+                    allowInput: true,
+                    defaultDate: '',
+                    minDate: checkMinDate,
+                    maxDate: checkMaxDate,
+                    altInputClass: 'el_input',
+                    firstDayOfWeek: 1,
+                });
                 let cal2 = $range_action.flatpickr({
                     locale: 'ru',
                     mode: 'range',
                     time_24hr: true,
-                    dateFormat: 'Y-m-d',
+                    dateFormat: 'Y-m-d - Y-m-d',
                     altFormat: 'd.m.Y',
                     altInput: true,
                     allowInput: true,
@@ -487,6 +488,7 @@ if ($auth->isLogin()) {
                     el_app.calendars.popup_calendar.push(cal2);
                 }
             }
+
             $(document).ready(function () {
                 el_app.initTabs();
                 $('[name=order_number]').attr('readonly', true);
@@ -501,13 +503,13 @@ if ($auth->isLogin()) {
                         conjunction: '-',
                         altInput: true,
                         allowInput: true,
-                    <?php
-                    if($dates != ''){
-                    ?>
+                        <?php
+                        if($dates != ''){
+                        ?>
                         defaultDate: ["<?= implode('", "', explode(' - ', $dates)) ?>"],
-                    <?php
-                    }
-                    ?>
+                        <?php
+                        }
+                        ?>
                         minDate: "<?=$minDate?>",
                         maxDate: "<?=$maxDate?>",
                         altInputClass: 'el_input',
@@ -540,14 +542,16 @@ if ($auth->isLogin()) {
                             $uid = $("[name='uid']"),
                             $order = $("[name='document']");
                         //$('.datesInputWrapper').hide();
-                        if(data.length > 0){
+                        if (data.length > 0) {
                             let answer = JSON.parse(data);
                             $ins.html(answer.ins).trigger("chosen:updated").closest(".item").show();
                             $order.html(answer.order).trigger('chosen:updated')
-                            setTimeout(function(){$ins.trigger("change")}, 500, $ins);
+                            setTimeout(function () {
+                                $ins.trigger("change")
+                            }, 500, $ins);
                             $uid.val(answer.uid);
 
-                        }else{
+                        } else {
                             $ins.html("").trigger('chosen:updated').closest('.item').hide();
                             //$uid.val("0");
                         }
@@ -556,7 +560,7 @@ if ($auth->isLogin()) {
                 }).trigger("change");
 
 
-                $("[name=ins]").on("change", function(){
+                $("[name=ins]").on("change", function () {
                     let $self = $(this),
                         $minDate = $("[name='minDate']"),
                         $maxDate = $("[name='maxDate']"),
@@ -571,12 +575,12 @@ if ($auth->isLogin()) {
                             unit_selected: $('[name=unit_hidden]').val()
                         },
                         function (data) {
-                            if(data.length > 0) {
+                            if (data.length > 0) {
                                 let answer = JSON.parse(data);
 
                                 $(".datesInputWrapper").show();
                                 // Находим ВСЕ элементы с flatpickr и обновляем каждый
-                                $("#check_staff [name='dates[]']").each(function() {
+                                $("#check_staff [name='dates[]']").each(function () {
                                     // Получаем объект flatpickr из элемента
                                     let fpInstance = this._flatpickr;
 
@@ -588,9 +592,33 @@ if ($auth->isLogin()) {
                                 $minDate.val(answer.minDate);
                                 $maxDate.val(answer.maxDate);
                                 $actionPeriod.val(answer.actionPeriod);
-                                $checkPeriod.val(answer.checkPeriod);
+                                $checkPeriod.val(answer.checkPeriod); console.log(answer.units);
                                 $unit.html(answer.units).trigger("chosen:updated").trigger("change");
                                 bindOrderCalendar();
+
+                                // Подставляем даты из плана в поля flatpickr
+                                // actionPeriod приходит в формате dd.mm.yyyy - dd.mm.yyyy
+                                // checkPeriod приходит в формате yyyy-mm-dd - yyyy-mm-dd
+                                function dmyToYmd(dmy) {
+                                    if (!dmy) return '';
+                                    let parts = dmy.split('.');
+                                    if (parts.length !== 3) return dmy; // уже yyyy-mm-dd
+                                    return parts[2] + '-' + parts[1] + '-' + parts[0];
+                                }
+
+                                function setFlatpickrRange(fieldName, rangeStr) {
+                                    if (!rangeStr) return;
+                                    let parts = rangeStr.split(' - ');
+                                    if (parts.length !== 2) return;
+                                    if (!parts[0].trim() || !parts[1].trim()) return;
+                                    let fp = $('[name=' + fieldName + ']')[0]._flatpickr;
+                                    if (fp) {
+                                        fp.setDate([dmyToYmd(parts[0].trim()), dmyToYmd(parts[1].trim())]);
+                                    }
+                                }
+
+                                setFlatpickrRange('action_period', answer.actionPeriod);
+                                setFlatpickrRange('check_period', answer.checkPeriod);
                             }
                         });
 
@@ -602,21 +630,21 @@ if ($auth->isLogin()) {
                 });
 
                 $('#tab_order-panel .item.required input:not([type="hidden"]):not(.chosen-search-input), #tab_order-panel .item.required select')
-                    .on("change input", function(){
-                    let $required = $('#tab_order-panel .item.required input:not([type="hidden"]):not(.chosen-search-input), #tab_order-panel .item.required select'),
-                        empty = 0;
-                    for(let i = 0; i < $required.length; i++){
-                        let val = $($required[i]).val();
-                        if(val === ""){
-                            empty++;
+                    .on("change input", function () {
+                        let $required = $('#tab_order-panel .item.required input:not([type="hidden"]):not(.chosen-search-input), #tab_order-panel .item.required select'),
+                            empty = 0;
+                        for (let i = 0; i < $required.length; i++) {
+                            let val = $($required[i]).val();
+                            if (val === "") {
+                                empty++;
+                            }
                         }
-                    }
-                    if(empty === 0){
-                        $("#tab_preview").show();
-                    }else{
-                        $('#tab_preview').hide();
-                    }
-                });
+                        if (empty === 0) {
+                            $("#tab_preview").show();
+                        } else {
+                            $('#tab_preview').hide();
+                        }
+                    });
 
                 $("[name='allowremind[]']").off('change').on('change', function () {
                     let $reminder = $(this).closest('.group').find('.reminder');
@@ -648,7 +676,7 @@ if ($auth->isLogin()) {
                 });
                 <?
                 if($taskStr > 0){
-                    ?>
+                ?>
                 $('#save_doc').on('mousedown keypress', function () {
                     let calEvent = calendarGrid.getEventById('<?=$taskStr?>'),
                         datesArr = $("[name='dates[]']").val().split(' - ');
@@ -659,7 +687,7 @@ if ($auth->isLogin()) {
                 }
                 ?>
 
-                $("[name=executors_head]").on("change", function(){
+                $("[name=executors_head]").on("change", function () {
                     let user_head = $(this).val(),
                         $executor_list = $("[name='executors_list[]']"),
                         currentValues = $executor_list.val();
@@ -667,7 +695,7 @@ if ($auth->isLogin()) {
                         .prop("disabled", false).attr('title', '');
                     $("[name='executors_list[]'] option[value='" + String(user_head) + "']")
                         .prop('disabled', true).attr("title", "Назначен руководителем проверки");
-                    if(currentValues) {
+                    if (currentValues) {
                         let newValues = $.grep(currentValues, function (value) {
                             return value != user_head;
                         });
@@ -679,8 +707,10 @@ if ($auth->isLogin()) {
                 $('#order_staff #close, #order_staff .close').off('click').on('click', function (e) {
                     e.preventDefault();
                     el_app.dialog_close('order_staff');
-                    $.post('/', {ajax: 1, action: 'task_close', task_id: <?=$doc_id?>,
-                        module: 'calendar', form_id: 'order_staff', log_action: 'Закрытие окна приказа'});
+                    $.post('/', {
+                        ajax: 1, action: 'task_close', task_id: <?=$doc_id?>,
+                        module: 'calendar', form_id: 'order_staff', log_action: 'Закрытие окна приказа'
+                    });
                 });
 
                 $("input[name='dates[]'] ~ input").mask('99.99.9999 - 99.99.9999');
@@ -690,7 +720,7 @@ if ($auth->isLogin()) {
 
                 $('select[name=agreementtemplate]').off('change').on('change', function () {
                     $.post('/', {ajax: 1, action: 'getDocTemplate', temp_id: $(this).val()}, function (data) {
-                        if(data.length > 0) {
+                        if (data.length > 0) {
                             let answer = JSON.parse(data),
                                 agreementlist = JSON.parse(answer.agreementlist);
                             $('[name=brief]').val(answer.brief);
@@ -739,7 +769,8 @@ if ($auth->isLogin()) {
                 agreement_list.agreement_list_init();
                 $('.staff').show();
 
-                $('.group.signers .new_signer').on('click', function () { console.log("new_signer");
+                $('.group.signers .new_signer').on('click', function () {
+                    console.log("new_signer");
                     $(".group.signers .role").html("<option value='1' selected='selected'>Подписывает</option>");
                 });
             });

@@ -45,6 +45,9 @@ $plan_uid = [];
 $tasks_info = [];
 $taskTemplates = [];
 $planInspectionNames = [];
+$acts = [];
+$reports = [];
+$roadmaps = [];
 
 
 if ($auth->isLogin()) {
@@ -116,6 +119,20 @@ if ($auth->isLogin()) {
                                 trim($users['array'][$ex][1]) . ' ' .
                                 trim($users['array'][$ex][2]);
                         }
+
+                        // Загружаем акты, доклады и графики устранений
+                        $acts[$plan->id] = $db->select('agreement',
+                            ' WHERE documentacial = 2 AND plan_id = ? AND ins_id = ?',
+                            [$plan->id, $insId]
+                        );
+                        $reports[$plan->id] = $db->select('agreement',
+                            ' WHERE documentacial = 8 AND plan_id = ? AND ins_id = ?',
+                            [$plan->id, $insId]
+                        );
+                        $roadmaps[$plan->id] = $db->select('agreement',
+                            ' WHERE documentacial = 5 AND plan_id = ? AND ins_id = ?',
+                            [$plan->id, $insId]
+                        );
                     }
                 } else {
                     // Приказ не оформлен — загружаем проверяющих напрямую из checkstaff по check_uid
@@ -206,6 +223,54 @@ if ($auth->isLogin()) {
                                                 <?php if (isset($executors[$id]) && count($executors[$id]) > 0): ?>
                                                     <!-- Уровень 3: Проверяющие (при наличии приказа) -->
                                                     <?php include __DIR__ . '/_ins_tree_staff.php' ?>
+                                                <?php endif; ?>
+
+                                                <?php if (!empty($acts[$id])): ?>
+                                                    <?php foreach ($acts[$id] as $act): ?>
+                                                        <div class="ins-tree__branch">
+                                                            <div class="ins-tree__node ins-tree__node--act">
+                                                                <span class="material-icons">description</span>
+                                                                <div class="ins-tree__content">
+                                                                    <div class="ins-tree__label">Акт проверки</div>
+                                                                    <a href="" class="viewDocument ins-tree__title"
+                                                                       data-id="<?= $act->id ?>"
+                                                                       data-type="2"><?= $act->name . (strlen($act->doc_number) > 0 ? ' № ' . $act->doc_number . ' от ' . $date->dateToString($act->docdate) : '') ?></a>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    <?php endforeach; ?>
+                                                <?php endif; ?>
+
+                                                <?php if (!empty($reports[$id])): ?>
+                                                    <?php foreach ($reports[$id] as $report): ?>
+                                                        <div class="ins-tree__branch">
+                                                            <div class="ins-tree__node ins-tree__node--report">
+                                                                <span class="material-icons">summarize</span>
+                                                                <div class="ins-tree__content">
+                                                                    <div class="ins-tree__label">Доклад министру</div>
+                                                                    <a href="" class="viewDocument ins-tree__title"
+                                                                       data-id="<?= $report->id ?>"
+                                                                       data-type="8"><?= $report->name . (strlen($report->doc_number) > 0 ? ' № ' . $report->doc_number . ' от ' . $date->dateToString($report->docdate) : '') ?></a>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    <?php endforeach; ?>
+                                                <?php endif; ?>
+
+                                                <?php if (!empty($roadmaps[$id])): ?>
+                                                    <?php foreach ($roadmaps[$id] as $roadmap): ?>
+                                                        <div class="ins-tree__branch">
+                                                            <div class="ins-tree__node ins-tree__node--roadmap">
+                                                                <span class="material-icons">route</span>
+                                                                <div class="ins-tree__content">
+                                                                    <div class="ins-tree__label">График устранений</div>
+                                                                    <a href="" class="viewDocument ins-tree__title"
+                                                                       data-id="<?= $roadmap->id ?>"
+                                                                       data-type="5"><?= $roadmap->name . (strlen($roadmap->doc_number) > 0 ? ' № ' . $roadmap->doc_number . ' от ' . $date->dateToString($roadmap->docdate) : '') ?></a>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    <?php endforeach; ?>
                                                 <?php endif; ?>
                                             </div>
 
@@ -334,6 +399,18 @@ if ($auth->isLogin()) {
 
         .ins-tree__node--staff > .material-icons {
             color: var(--green);
+        }
+
+        .ins-tree__node--act > .material-icons {
+            color: var(--color_03);
+        }
+
+        .ins-tree__node--report > .material-icons {
+            color: var(--blue);
+        }
+
+        .ins-tree__node--roadmap > .material-icons {
+            color: #e67e22;
         }
 
         .ins-tree__content {
