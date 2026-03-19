@@ -381,6 +381,8 @@ if ($auth->isLogin()) {
                 $("#check_staff [name='dates[]']").each(function () {
                     let inputEl = this;
                     let rawVal = inputEl.value;
+                    console.log('dates value:', rawVal);
+                    console.log('minDate:', "<?=$minDate?>", 'maxDate:', "<?=$maxDate?>");
                     let defaultDates = rawVal.length > 0 ? rawVal.split(' - ') : [];
                     flatpickr(inputEl, {
                         locale: 'ru',
