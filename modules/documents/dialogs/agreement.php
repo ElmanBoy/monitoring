@@ -36,9 +36,20 @@ $docs = $db->selectOne('agreement', ' WHERE id = ?', [$tmpl->consultation]);
 $users = $db->getRegistry('users', '', [],
     ['surname', 'name', 'middle_name', 'institution', 'ministries', 'division', 'position']
 );
-$initiator_fio = $users['array'][$tmpl->initiator][0] . ' ' . $users['array'][$tmpl->initiator][1] . ' ' .
-    $users['array'][$tmpl->initiator][2];
-$initiator_position = $users['array'][$tmpl->initiator][6];
+$initiatorUserId = !empty($tmpl->initiator) ? $tmpl->initiator : $tmpl->author;
+$initiator_fio = trim($users['array'][$initiatorUserId][0]) . ' ' .
+    trim($users['array'][$initiatorUserId][1]) . ' ' .
+    trim($users['array'][$initiatorUserId][2]);
+$initiator_position = $users['array'][$initiatorUserId][6] ?? '';
+
+$initiationFormatted = '';
+if (!empty($tmpl->initiation)) {
+    try {
+        $initiationFormatted = (new DateTime($tmpl->initiation))->format('d.m.Y H:i');
+    } catch (Exception $e) {
+        $initiationFormatted = $tmpl->initiation;
+    }
+}
 
 $urgent_types = [
     1 => 'Обычный',
@@ -47,19 +58,11 @@ $urgent_types = [
 ];
 
 // Формируем шапку листа согласования
-$headerHtml = '';
-if ($tmpl->documentacial == 6) {
-    $headerHtml = '<div id="agreement_block">Лист согласования к документу &laquo;' . htmlspecialchars($docs->name) .
-        (strlen($docs->doc_number) > 0 ? ' № ' . htmlspecialchars($docs->doc_number) : '') . '&raquo;<br>' .
-        'Инициатор согласования: ' . htmlspecialchars($initiator_fio) . ' ' . htmlspecialchars($initiator_position) . '<br>' .
-        'Согласование инициировано: ' . htmlspecialchars($tmpl->initiation) . '</div>';
-} elseif ($tmpl->documentacial == 3) {
-    // Зарезервировано
-} else {
-    $headerHtml = '<div id="agreement_block">Лист согласования к документу &laquo;' . htmlspecialchars($tmpl->name) . '&raquo;<br>' .
-        'Инициатор согласования: ' . htmlspecialchars($initiator_fio) . ' ' . htmlspecialchars($initiator_position) . '<br>' .
-        'Согласование инициировано: ' . htmlspecialchars($tmpl->initiation) . '</div>';
-}
+$docName = $tmpl->documentacial == 6 ? ($docs->name ?? $tmpl->name) : $tmpl->name;
+$docNumber = strlen($tmpl->doc_number) > 0 ? ' № ' . htmlspecialchars($tmpl->doc_number) : '';
+$headerHtml = '<div id="agreement_block">Лист согласования к документу &laquo;' . htmlspecialchars($docName) . $docNumber . '&raquo;<br>' .
+    'Инициатор согласования: ' . htmlspecialchars($initiator_fio) . ' ' . htmlspecialchars($initiator_position) . '<br>' .
+    'Согласование инициировано: ' . htmlspecialchars($initiationFormatted) . '</div>';
 
 // Начальный agreementList для первичной загрузки таблицы
 $initialAgreementList = json_decode($tmpl->agreementlist, true) ?? [];
@@ -242,14 +245,43 @@ $initialAgreementList = json_decode($tmpl->agreementlist, true) ?? [];
             // БАГ #3 ИСПРАВЛЕН: intval на сервере гарантирует корректное число
             const DOC_ID = <?= $docId ?>;
             const CURRENT_USER_ID = <?= $currentUserId ?>;
+            const INITIATOR_ID = <?= intval($tmpl->initiator) ?>;
+            // Список пользователей для формы редактирования
+            const AG_USERS_OPTIONS = <?= (function() use ($users) {
+                $opts = '<option value=""></option>';
+                foreach ($users['result'] as $u) {
+                    $fio = trim($u->surname) . ' ' . mb_substr(trim($u->name), 0, 1) . '. ' .
+                        mb_substr(trim($u->middle_name), 0, 1) . '.';
+                    $opts .= '<option value="' . $u->id . '">' . htmlspecialchars($fio) . '</option>';
+                }
+                return json_encode($opts, JSON_UNESCAPED_UNICODE);
+            })() ?>;
 
             function dateNow() {
+                // Fallback на клиентское время если серверное недоступно
                 const now = new Date();
                 return `${String(now.getDate()).padStart(2, '0')}.` +
                     `${String(now.getMonth() + 1).padStart(2, '0')}.` +
                     `${now.getFullYear()} ` +
                     `${String(now.getHours()).padStart(2, '0')}:` +
                     `${String(now.getMinutes()).padStart(2, '0')}`;
+            }
+
+            // Серверное время — обновляется при каждом ответе updateAgreement
+            let _serverTime = null;
+            function getActionTime() {
+                return _serverTime || dateNow();
+            }
+
+            // Рекурсивная проверка: есть ли в redirect-цепочке возвращённый элемент (result.id=6)
+            function hasReturnedInRedirect(redirectArr) {
+                if (!Array.isArray(redirectArr)) return false;
+                for (let r of redirectArr) {
+                    if (!r.id) continue;
+                    if (r.result && parseInt(r.result.id) === 6) return true;
+                    if (r.redirect && hasReturnedInRedirect(r.redirect)) return true;
+                }
+                return false;
             }
 
             /**
@@ -264,71 +296,79 @@ $initialAgreementList = json_decode($tmpl->agreementlist, true) ?? [];
                 const $actions = $('.actions[data-section=' + section + ']');
                 const $comment = $actions.closest('td').next('td').find('[name=comment]');
                 const $redirect = $actions.find('[name="redirect[]"]');
-                const currentDateTime = dateNow();
+                const currentDateTime = getActionTime();
 
                 // Флаг: действие уже применено через redirect[] на этом уровне
                 let appliedViaRedirect = false;
 
                 for (let i = 0; i < agj.length; i++) {
-                    if (parseInt(agj[i].id) === CURRENT_USER_ID) {
-                        // Не трогаем повторную запись перенаправившего
-                        if (agj[i]._is_redirector_repeat) continue;
+                    const isCurrentUser = parseInt(agj[i].id) === CURRENT_USER_ID;
+                    const hasResult = agj[i].result && agj[i].result !== '';
+                    const isRepeat = agj[i]._is_redirector_repeat;
 
-                        // Если действие уже применено через redirect — пропускаем обычную запись
-                        if (appliedViaRedirect) continue;
+                    // Обрабатываем действие текущего пользователя
+                    // _is_redirector_repeat строки пропускаем только при перенаправлении (result_type=4)
+                    // При подписании/согласовании они должны обрабатываться
+                    const skipRepeat = isRepeat && parseInt(result_type) === 4;
 
-                        if (parseInt(result_type) === 0) {
-                            // Только комментарий — не трогаем result
-                            agj[i].comment = (agj[i].comment || '') +
-                                '<p class="agreementComment"><small>' + dateNow() + '</small><br>' +
-                                $comment.val() + '</p>';
+                    if (isCurrentUser && !skipRepeat && !appliedViaRedirect) {
+                        // Для result_type=6 (возврат) — только если у строки НЕТ result
+                        const skipForReturn = (parseInt(result_type) === 6 && hasResult);
+                        // Не трогаем не-repeat строки если уже есть result (кроме возврата)
+                        // Но для repeat строк — применяем даже если hasResult=false (они pending)
+                        const skipNonRepeat = (!isRepeat && hasResult && parseInt(result_type) !== 6);
 
-                        } else if (parseInt(result_type) === 4) {
-                            // Перенаправление
-                            const vals = $redirect.val() || [];
-                            if (vals.length > 0) {
-                                const originalData = {
-                                    id: agj[i].id,
-                                    type: agj[i].type,
-                                    vrio: agj[i].vrio || '0',
-                                    urgent: agj[i].urgent || '0',
-                                    role: agj[i].role || '0'
-                                };
+                        if (!skipForReturn && !skipNonRepeat) {
+                            if (parseInt(result_type) === 0) {
+                                agj[i].comment = (agj[i].comment || '') +
+                                    '<p class="agreementComment"><small>' + getActionTime() + '</small><br>' +
+                                    $comment.val() + '</p>';
 
-                                agj[i].result = {id: 4, date: currentDateTime};
-
-                                if (!agj[i].redirect) {
-                                    agj[i].redirect = [];
-                                }
-                                for (let v = 0; v < vals.length; v++) {
-                                    const exists = agj[i].redirect.some(
-                                        item => parseInt(item.id) === parseInt(vals[v])
-                                    );
-                                    if (!exists) {
-                                        agj[i].redirect.push({id: parseInt(vals[v]), type: agj[i].type});
+                            } else if (parseInt(result_type) === 4) {
+                                const vals = $redirect.val() || [];
+                                if (vals.length > 0) {
+                                    const originalData = {
+                                        id: agj[i].id, type: agj[i].type,
+                                        vrio: agj[i].vrio || '0', urgent: agj[i].urgent || '0',
+                                        role: agj[i].role || '0'
+                                    };
+                                    agj[i].result = {id: 4, date: currentDateTime};
+                                    if (!agj[i].redirect) agj[i].redirect = [];
+                                    for (let v = 0; v < vals.length; v++) {
+                                        const exists = agj[i].redirect.some(
+                                            item => parseInt(item.id) === parseInt(vals[v])
+                                        );
+                                        if (!exists) agj[i].redirect.push({id: parseInt(vals[v]), type: agj[i].type});
                                     }
+                                    if (level === 0) pendingRepeats.push({index: i, data: originalData});
                                 }
+                            } else if (parseInt(result_type) === 6) {
+                                // Возврат — применяем к pending-строке
+                                agj[i].result = {id: 6, date: currentDateTime};
+                            } else {
+                                agj[i].result = {id: parseInt(result_type), date: currentDateTime};
+                                if (parseInt(result_type) === 5 && agj[i].redirect) delete agj[i].redirect;
+                            }
+                        } // end if (!skipForReturn && !skipNonRepeat)
+                    } // end if (isCurrentUser)
 
-                                // Запоминаем для вставки повторной записи (только на верхнем уровне)
-                                if (level === 0) {
-                                    pendingRepeats.push({index: i, data: originalData});
-                                }
-                            }
-                        } else {
-                            // Согласование / подписание / отклонение
-                            agj[i].result = {id: parseInt(result_type), date: currentDateTime};
-                            if (parseInt(result_type) === 5 && agj[i].redirect) {
-                                delete agj[i].redirect;
-                            }
-                        }
-                    } else if (agj[i].redirect && Array.isArray(agj[i].redirect)) {
-                        // Проверяем есть ли текущий пользователь в redirect[]
-                        const userInRedirect = agj[i].redirect.some(
+                    // ВСЕГДА обрабатываем redirect[] — независимо от того наш ли это элемент
+                    // Это критично для многоуровневых перенаправлений
+                    if (agj[i].redirect && Array.isArray(agj[i].redirect)) {
+                        const userPendingInRedirect = agj[i].redirect.some(
                             r => parseInt(r.id) === CURRENT_USER_ID && !r._is_redirector_repeat
+                                && (r.result === null || r.result === undefined || r.result === '')
                         );
+
                         applyUserAction(agj[i].redirect, section, result_type, pendingRepeats, level + 1);
-                        // Если пользователь был в redirect и действие не перенаправление — ставим флаг
-                        if (userInRedirect && parseInt(result_type) !== 4) {
+
+                        if (parseInt(result_type) === 6) {
+                            // После рекурсии проверяем: появился ли result.id=6 где-то в цепочке
+                            // Если да — сбрасываем result текущего элемента (перенаправившего)
+                            if (hasResult && hasReturnedInRedirect(agj[i].redirect)) {
+                                agj[i].result = null;
+                            }
+                        } else if (userPendingInRedirect && parseInt(result_type) !== 4) {
                             appliedViaRedirect = true;
                         }
                     }
@@ -339,18 +379,14 @@ $initialAgreementList = json_decode($tmpl->agreementlist, true) ?? [];
                     pendingRepeats.sort((a, b) => b.index - a.index);
                     for (let f = 0; f < pendingRepeats.length; f++) {
                         const pr = pendingRepeats[f];
-                        // Проверяем, нет ли уже повторной записи (защита от двойного клика)
                         const alreadyExists = agj.some(
                             (item, idx) => idx > pr.index && parseInt(item.id) === parseInt(pr.data.id) && item._is_redirector_repeat
                         );
                         if (!alreadyExists) {
                             agj.splice(pr.index + 1 + f, 0, {
-                                id: pr.data.id,
-                                type: pr.data.type,
-                                vrio: pr.data.vrio,
-                                urgent: pr.data.urgent,
-                                role: pr.data.role,
-                                result: null,
+                                id: pr.data.id, type: pr.data.type,
+                                vrio: pr.data.vrio, urgent: pr.data.urgent,
+                                role: pr.data.role, result: null,
                                 _is_redirector_repeat: true
                             });
                         }
@@ -396,6 +432,8 @@ $initialAgreementList = json_decode($tmpl->agreementlist, true) ?? [];
                     }
                     if (answer.result) {
                         inform('Отлично!', answer.resultText);
+                        // Обновляем серверное время
+                        if (answer.serverTime) { _serverTime = answer.serverTime; }
                         // Обновляем значение скрытого поля актуальными данными с сервера
                         $ag.val(JSON.stringify(answer.resultAgreement[section]));
                         refreshAgreementTable(answer.resultAgreement);
@@ -450,16 +488,16 @@ $initialAgreementList = json_decode($tmpl->agreementlist, true) ?? [];
              * $(document).ready вызывает только её.
              */
             function reinitEvents() {
-                $('.setAgree').off('click').on('click', function (e) {
+                $(document).off('click', '.setAgree').on('click', '.setAgree', function (e) {
                     e.preventDefault();
                     const section = $(this).closest('.actions').data('section');
-                    const currentDateTime = dateNow();
+                    const currentDateTime = getActionTime();
                     getAgreementData(section, 3);
                     $('.actions[data-section=' + section + ']').hide();
                     $('#agResult' + section).html("<span style='color: #086a9b'>Согласовано<br>" + currentDateTime + '</span>');
                 });
 
-                $('.setReject').off('mousedown keydown').on('mousedown keydown', function (e) {
+                $(document).off('mousedown keydown', '.setReject').on('mousedown keydown', '.setReject', function (e) {
                     e.preventDefault();
                     const $comment = $(this).closest('td').next('td').find('[name=comment]');
                     const comment = $comment.val();
@@ -468,7 +506,7 @@ $initialAgreementList = json_decode($tmpl->agreementlist, true) ?? [];
                         $comment.trigger('focus');
                     } else {
                         const section = $(this).closest('.actions').data('section');
-                        const currentDateTime = dateNow();
+                        const currentDateTime = getActionTime();
                         getAgreementData(section, 5);
                         $('.actions[data-section=' + section + ']').hide();
                         $('#agResult' + section).html("<span style='color: var(--red)'>Отклонено<br>" + currentDateTime + '</span>');
@@ -486,11 +524,326 @@ $initialAgreementList = json_decode($tmpl->agreementlist, true) ?? [];
                     }
                 });
 
-                $('[name=redirect], [name="redirect[]"]').off('change').on('change', function () {
-                    const section = $(this).closest('.actions').data('section');
+                $('[name=redirect], [name="redirect[]"]').off('change');
+
+                $(document).off('click', '.doRedirect').on('click', '.doRedirect', function (e) {
+                    e.preventDefault();
+                    const $actions = $(this).closest('.actions');
+                    const section = $actions.data('section');
+                    const vals = $actions.find('[name="redirect[]"]').val() || [];
+                    if (!vals || vals.length === 0) {
+                        el_tools.notify('error', 'Ошибка', 'Выберите сотрудника для перенаправления');
+                        return;
+                    }
                     getAgreementData(section, 4);
-                    $('#agResult' + section).html("<span style='color: #086a9b'>Перенаправлено<br>" + dateNow() + '</span>');
+                    $('#agResult' + section).html("<span style='color: #086a9b'>Перенаправлено<br>" + getActionTime() + '</span>');
                     inform('Перенаправление', 'Документ перенаправлен. Повторная запись появится после согласования цепочки.');
+                });
+
+                $(document).off('click', '.setReturn').on('click', '.setReturn', function (e) {
+                    e.preventDefault();
+                    const section = $(this).closest('.actions').data('section');
+                    getAgreementData(section, 6);
+                    $('.actions[data-section=' + section + ']').hide();
+                    $('#agResult' + section).html("<span style='color: #e67e22'>Возвращено на доработку<br>" + getActionTime() + '</span>');
+                    inform('Возврат', 'Документ возвращён на доработку перенаправившему сотруднику.');
+                });
+
+                // Удаление сотрудника инициатором
+                $(document).off('click', '.ag-delete-btn').on('click', '.ag-delete-btn', function (e) {
+                    e.preventDefault();
+                    const section = $(this).data('section');
+                    const index   = $(this).data('index');
+                    const $ag = $('#ag' + section);
+                    let agj = JSON.parse($ag.val());
+                    agj.splice(index, 1);
+                    $ag.val(JSON.stringify(agj));
+                    saveAgreementList();
+                });
+
+                // Вспомогательная функция сохранения agreementList на сервер
+                // Проверяет порядок в секции подписантов:
+                // role=1 (подписывает) должен быть перед role=0 (утверждает)
+                function checkSignersOrder(agj) {
+                    // Определяем секцию подписантов по stage=""
+                    if (!agj[0] || agj[0].stage === undefined) return true;
+                    const isSigners = (agj[0].stage === '' || agj[0].stage === null);
+                    if (!isSigners) return true;
+
+                    let lastSignerIdx = -1; // последний role=1
+                    let firstApproverIdx = -1; // первый role=0
+
+                    for (let i = 1; i < agj.length; i++) {
+                        if (!agj[i].id || agj[i]._is_redirector_repeat || agj[i].stage !== undefined) continue;
+                        const role = parseInt(agj[i].role ?? 0);
+                        if (role === 1 && lastSignerIdx < i) lastSignerIdx = i;
+                        if (role === 0 && firstApproverIdx === -1) firstApproverIdx = i;
+                    }
+
+                    // Если есть и подписывающий и утверждающий — подписывающий должен быть раньше
+                    if (lastSignerIdx > -1 && firstApproverIdx > -1) {
+                        if (lastSignerIdx > firstApproverIdx) {
+                            return false;
+                        }
+                    }
+                    return true;
+                }
+
+                function saveAgreementList(onSuccess) {
+                    const agList = [];
+                    $('[name=addAgreement]').each(function () {
+                        try { agList.push(JSON.parse($(this).val())); }
+                        catch (e2) { agList.push($(this).val()); }
+                    });
+                    $.post('/', {
+                        ajax: 1, action: 'updateAgreement', path: 'documents',
+                        agreementList: agList, docId: DOC_ID
+                    }, function (data) {
+                        const answer = JSON.parse(data);
+                        if (answer.result) {
+                            if (answer.serverTime) _serverTime = answer.serverTime;
+                            refreshAgreementTable(answer.resultAgreement);
+                            if (onSuccess) onSuccess();
+                        } else {
+                            el_tools.notify('error', 'Ошибка', answer.resultText);
+                        }
+                    });
+                }
+
+                // Добавление нового сотрудника инициатором (после выбранной строки)
+                $(document).off('click', '.ag-add-btn').on('click', '.ag-add-btn', function (e) {
+                    e.preventDefault();
+                    const $btn      = $(this);
+                    const section   = $btn.data('section');
+                    const afterIndex = parseInt($btn.data('index')); // -1 = в конец
+                    const isSigners  = $btn.data('is-signers') == 1;
+                    const $tr = $btn.closest('tr');
+
+                    if ($tr.next('.ag-add-form-row').length) {
+                        $tr.next('.ag-add-form-row').remove();
+                        return;
+                    }
+                    $('.ag-add-form-row, .ag-edit-row').remove();
+
+                    const urgentOptions = '<option value="1">Обычный</option>' +
+                        '<option value="2">Срочный</option>' +
+                        '<option value="3">Незамедлительно</option>';
+                    const typeOptions = isSigners
+                        ? '<option value="1">Подписание</option>'
+                        : '<option value="2" selected>Согласование</option><option value="1">Подписание</option>';
+
+                    const addRow = $('<tr class="ag-add-form-row"><td colspan="5">' +
+                        '<div style="padding:10px;background:#f0f8ff;border:1px solid #b3d9ff;border-radius:4px;display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">' +
+                        '<div><label style="display:block;font-size:11px;color:#666;margin-bottom:3px">Сотрудник</label>' +
+                        '<select class="ag-add-user chosen-select" style="min-width:200px" data-placeholder="Выберите сотрудника"></select></div>' +
+                        '<div><label style="display:block;font-size:11px;color:#666;margin-bottom:3px">Тип</label>' +
+                        '<select class="ag-add-type">' + typeOptions + '</select></div>' +
+                        '<div><label style="display:block;font-size:11px;color:#666;margin-bottom:3px">Срочность</label>' +
+                        '<select class="ag-add-urgent">' + urgentOptions + '</select></div>' +
+                        '<div><label style="display:block;font-size:11px;color:#666;margin-bottom:3px">ВРИО</label>' +
+                        '<select class="ag-add-vrio chosen-select" style="min-width:150px" data-placeholder="Нет"></select></div>' +
+                        '<button class="button icon text green ag-add-save" style="margin-bottom:0"><span class="material-icons">save</span>Добавить</button>' +
+                        '<button class="button icon text ag-add-cancel" style="margin-bottom:0"><span class="material-icons">close</span>Отмена</button>' +
+                        '</div></td></tr>');
+
+                    $tr.after(addRow);
+                    addRow.find('.ag-add-user').html(AG_USERS_OPTIONS);
+                    addRow.find('.ag-add-vrio').html('<option value="0">Нет</option>' + AG_USERS_OPTIONS);
+                    addRow.find('.ag-add-user, .ag-add-vrio').chosen({width: '100%'});
+
+                    addRow.find('.ag-add-save').on('click', function () {
+                        const newItem = {
+                            id:     addRow.find('.ag-add-user').val(),
+                            type:   addRow.find('.ag-add-type').val(),
+                            urgent: addRow.find('.ag-add-urgent').val(),
+                            vrio:   addRow.find('.ag-add-vrio').val() || '0',
+                            role:   '0',
+                            result: null
+                        };
+                        if (!newItem.id) { el_tools.notify('error', 'Ошибка', 'Выберите сотрудника'); return; }
+                        const $ag = $('#ag' + section);
+                        let agj = JSON.parse($ag.val());
+                        // Вставляем после afterIndex (или в конец если -1)
+                        if (afterIndex < 0) {
+                            agj.push(newItem);
+                        } else {
+                            agj.splice(afterIndex + 1, 0, newItem);
+                        }
+                        $ag.val(JSON.stringify(agj));
+                        addRow.remove();
+                        saveAgreementList(function() { inform('Готово', 'Сотрудник добавлен.'); });
+                    });
+                    addRow.find('.ag-add-cancel').on('click', function () { addRow.remove(); });
+                });
+
+                // Перемещение строки вверх
+                $(document).off('click', '.ag-move-up-btn').on('click', '.ag-move-up-btn', function (e) {
+                    e.preventDefault();
+                    const section = $(this).data('section');
+                    const index   = parseInt($(this).data('index'));
+                    const $ag = $('#ag' + section);
+                    let agj = JSON.parse($ag.val());
+                    // Ищем предыдущий pending-элемент (не _is_redirector_repeat)
+                    let prevIdx = -1;
+                    for (let k = index - 1; k >= 0; k--) {
+                        if (agj[k].id !== undefined && !agj[k]._is_redirector_repeat && !agj[k].stage) {
+                            prevIdx = k; break;
+                        }
+                    }
+                    if (prevIdx >= 0) {
+                        [agj[prevIdx], agj[index]] = [agj[index], agj[prevIdx]];
+                        if (!checkSignersOrder(agj)) {
+                            // Откатываем
+                            [agj[prevIdx], agj[index]] = [agj[index], agj[prevIdx]];
+                            el_tools.notify('error', 'Ошибка', 'Утверждающий (role=0) должен быть после подписывающего (role=1)');
+                            return;
+                        }
+                        $ag.val(JSON.stringify(agj));
+                        saveAgreementList();
+                    }
+                });
+
+                // Перемещение строки вниз
+                $(document).off('click', '.ag-move-down-btn').on('click', '.ag-move-down-btn', function (e) {
+                    e.preventDefault();
+                    const section = $(this).data('section');
+                    const index   = parseInt($(this).data('index'));
+                    const $ag = $('#ag' + section);
+                    let agj = JSON.parse($ag.val());
+                    // Ищем следующий pending-элемент (не _is_redirector_repeat)
+                    let nextIdx = -1;
+                    for (let k = index + 1; k < agj.length; k++) {
+                        if (agj[k].id !== undefined && !agj[k]._is_redirector_repeat && !agj[k].stage) {
+                            nextIdx = k; break;
+                        }
+                    }
+                    if (nextIdx >= 0) {
+                        [agj[nextIdx], agj[index]] = [agj[index], agj[nextIdx]];
+                        if (!checkSignersOrder(agj)) {
+                            [agj[nextIdx], agj[index]] = [agj[index], agj[nextIdx]];
+                            el_tools.notify('error', 'Ошибка', 'Утверждающий (role=0) должен быть после подписывающего (role=1)');
+                            return;
+                        }
+                        $ag.val(JSON.stringify(agj));
+                        saveAgreementList();
+                    }
+                });
+                $(document).off('click', '.ag-edit-btn').on('click', '.ag-edit-btn', function (e) {
+                    e.preventDefault();
+                    const $btn    = $(this);
+                    const $tr     = $btn.closest('tr');
+                    const section = $btn.data('section');
+                    const index   = $btn.data('index');
+                    const level   = $btn.data('level') || 0;
+                    const item    = $btn.data('item');
+
+                    // Если уже открыта форма — закрываем
+                    if ($tr.next('.ag-edit-row').length) {
+                        $tr.next('.ag-edit-row').remove();
+                        return;
+                    }
+                    // Закрываем другие открытые формы
+                    $('.ag-edit-row').remove();
+
+                    const urgentOptions = [
+                        '<option value="1"' + (item.urgent == 1 ? ' selected' : '') + '>Обычный</option>',
+                        '<option value="2"' + (item.urgent == 2 ? ' selected' : '') + '>Срочный</option>',
+                        '<option value="3"' + (item.urgent == 3 ? ' selected' : '') + '>Незамедлительно</option>'
+                    ].join('');
+
+                    const typeOptions = [
+                        '<option value="1"' + (item.type == 1 ? ' selected' : '') + '>Подписание</option>',
+                        '<option value="2"' + (item.type == 2 ? ' selected' : '') + '>Согласование</option>'
+                    ].join('');
+
+                    const colCount = $tr.find('td').length;
+                    const editRow = $('<tr class="ag-edit-row"><td colspan="' + colCount + '">' +
+                        '<div style="padding:10px;background:#f8f9fa;border:1px solid #dee2e6;border-radius:4px;display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">' +
+                        '<div><label style="display:block;font-size:11px;color:#666;margin-bottom:3px">Сотрудник</label>' +
+                        '<select class="ag-edit-user chosen-select" style="min-width:200px" data-placeholder="Выберите сотрудника"></select></div>' +
+                        '<div><label style="display:block;font-size:11px;color:#666;margin-bottom:3px">Тип</label>' +
+                        '<select class="ag-edit-type">' + typeOptions + '</select></div>' +
+                        '<div><label style="display:block;font-size:11px;color:#666;margin-bottom:3px">Срочность</label>' +
+                        '<select class="ag-edit-urgent">' + urgentOptions + '</select></div>' +
+                        '<div><label style="display:block;font-size:11px;color:#666;margin-bottom:3px">ВРИО</label>' +
+                        '<select class="ag-edit-vrio chosen-select" style="min-width:150px" data-placeholder="Нет"></select></div>' +
+                        '<button class="button icon text green ag-edit-save" style="margin-bottom:0"><span class="material-icons">save</span>Сохранить</button>' +
+                        '<button class="button icon text ag-edit-cancel" style="margin-bottom:0"><span class="material-icons">close</span>Отмена</button>' +
+                        '</div></td></tr>');
+
+                    $tr.after(editRow);
+
+                    // Подставляем список пользователей из PHP
+                    editRow.find('.ag-edit-user').html(AG_USERS_OPTIONS).val(item.id);
+                    editRow.find('.ag-edit-vrio').html('<option value="0">Нет</option>' + AG_USERS_OPTIONS).val(item.vrio || '0');
+                    editRow.find('.ag-edit-user, .ag-edit-vrio').chosen({width: '100%'});
+
+                    // Сохранение
+                    editRow.find('.ag-edit-save').on('click', function () {
+                        const newItem = {
+                            id:     editRow.find('.ag-edit-user').val(),
+                            type:   editRow.find('.ag-edit-type').val(),
+                            urgent: editRow.find('.ag-edit-urgent').val(),
+                            vrio:   editRow.find('.ag-edit-vrio').val() || '0',
+                            role:   item.role || '0',
+                            result: null
+                        };
+                        if (!newItem.id) {
+                            el_tools.notify('error', 'Ошибка', 'Выберите сотрудника');
+                            return;
+                        }
+                        // Применяем изменение к agreementList
+                        const $ag = $('#ag' + section);
+                        let agj = JSON.parse($ag.val());
+
+                        if (level === 0) {
+                            // Верхний уровень — прямая замена
+                            agj[index] = newItem;
+                        } else {
+                            // Вложенный уровень — ищем элемент рекурсивно по id и index
+                            function updateNestedItem(arr, targetId, targetIndex, lv, currentLv) {
+                                for (let i = 0; i < arr.length; i++) {
+                                    if (arr[i].redirect && Array.isArray(arr[i].redirect)) {
+                                        if (currentLv + 1 === lv) {
+                                            // Следующий уровень — это целевой
+                                            if (i === targetIndex || arr[i].redirect.some(
+                                                r => parseInt(r.id) === parseInt(targetId)
+                                            )) {
+                                                for (let j = 0; j < arr[i].redirect.length; j++) {
+                                                    if (parseInt(arr[i].redirect[j].id) === parseInt(targetId)
+                                                        && !arr[i].redirect[j]._is_redirector_repeat) {
+                                                        arr[i].redirect[j] = newItem;
+                                                        return true;
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        if (updateNestedItem(arr[i].redirect, targetId, targetIndex, lv, currentLv + 1)) {
+                                            return true;
+                                        }
+                                    }
+                                }
+                                return false;
+                            }
+                            updateNestedItem(agj, item.id, index, level, 0);
+                        }
+                        $ag.val(JSON.stringify(agj));
+                        editRow.remove();
+                        saveAgreementList(function() { inform('Готово', 'Согласующий обновлён.'); });
+                    });
+
+                    // Отмена
+                    editRow.find('.ag-edit-cancel').on('click', function () {
+                        editRow.remove();
+                    });
+                });
+
+                // Раскрытие/скрытие длинных комментариев
+                $(document).off('click', '.ag-comment-toggle').on('click', '.ag-comment-toggle', function (e) {
+                    e.preventDefault();
+                    const uid = $(this).data('target');
+                    $('#' + uid + '_short').toggle();
+                    $('#' + uid + '_full').toggle();
                 });
 
                 bindSign('agreement', DOC_ID, CURRENT_USER_ID);

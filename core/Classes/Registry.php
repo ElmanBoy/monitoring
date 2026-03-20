@@ -1362,12 +1362,19 @@ class Registry
     0,                  // уровень (0 - первый)
     $agreementList      // ВЕСЬ МАССИВ ВСЕХ СЕКЦИЙ - ЭТО $allSections!
     */
-    public function buildAgreementList($itemArr, $section, $users, $urgent_types, $user_signs, $reg, $level = 0, $allSections = null): string
+    public function buildAgreementList($itemArr, $section, $users, $urgent_types, $user_signs, $reg, $level = 0, $allSections = null, $initiatorId = 0): string
     {
         $html = '';
         static $rowNumber = 1;
         $processedUsers = [];
         $level = intval($level);
+        // Длина превью комментария — инициатор может подобрать под себя
+        $commentPreviewLen = 50;
+
+        // Хелпер логирования
+        $log = function (string $msg) {
+            error_log(date('Y-m-d H:i:s') . ' [buildAgreementList] ' . $msg . "\n", 3, $_SERVER['DOCUMENT_ROOT'] . '/logs/PHP_errors.log');
+        };
         $section = intval($section);
         global $ins, $mins, $units;
 
@@ -1399,6 +1406,8 @@ class Registry
                     return ['status' => 'redirected', 'result_id' => 4, 'date' => $result['date'] ?? ''];
                 case 5:
                     return ['status' => 'rejected', 'result_id' => 5, 'date' => $result['date'] ?? ''];
+                case 6:
+                    return ['status' => 'returned', 'result_id' => 6, 'date' => $result['date'] ?? ''];
                 default:
                     return ['status' => 'pending', 'result_id' => 0];
             }
@@ -1436,6 +1445,11 @@ class Registry
                 if ($resultId === 5) {
                     // Отклонение - считаем завершённым
                     continue;
+                }
+
+                if ($resultId === 6) {
+                    // Возврат на доработку — цепочка не завершена
+                    return false;
                 }
 
                 if (!in_array($resultId, [1, 2, 3])) {
@@ -1609,9 +1623,30 @@ class Registry
                             $isMyTurn = true;
                             for ($j = $startIndex; $j < $i; $j++) {
                                 if (!isset($itemArr[$j]['id'])) continue;
-                                if ($getApproverStatus($itemArr[$j])['status'] !== 'approved') {
+                                // Для повторной записи (_is_redirector_repeat) пропускаем
+                                // оригинальную строку того же пользователя с redirected
+                                if (!empty($item['_is_redirector_repeat'])
+                                    && $itemArr[$j]['id'] == $userId
+                                    && empty($itemArr[$j]['_is_redirector_repeat'])) {
+                                    $pst = $getApproverStatus($itemArr[$j])['status'];
+                                    if ($pst === 'redirected') {
+                                        if (!$isRedirectCompleted($itemArr[$j]['redirect'] ?? [])) {
+                                            $isMyTurn = false;
+                                        }
+                                        continue;
+                                    }
+                                }
+                                $pst = $getApproverStatus($itemArr[$j])['status'];
+                                if ($pst !== 'approved' && $pst !== 'redirected') {
                                     $isMyTurn = false;
                                     break;
+                                }
+                                // redirected — проверяем завершена ли цепочка
+                                if ($pst === 'redirected') {
+                                    if (!$isRedirectCompleted($itemArr[$j]['redirect'] ?? [])) {
+                                        $isMyTurn = false;
+                                        break;
+                                    }
                                 }
                             }
                         } else {
@@ -1685,7 +1720,46 @@ class Registry
                 }
             }
 
-            $html .= '<td' . $padding . $userTitle . ' data-user-id="' . $userId . '">' . $userIcon . $userFio . '</td>';
+            // Кнопки «Редактировать» и «Удалить» для инициатора — pending-строки уровня 0
+            $editBtn = '';
+            $isInitiator = ($initiatorId > 0 && intval($_SESSION['user_id']) == intval($initiatorId));
+            $canEdit = $isInitiator
+                && $statusInfo['status'] === 'pending'
+                && empty($item['_is_redirector_repeat'])
+                && $level == 0;
+            if ($canEdit) {
+                $itemJson = htmlspecialchars(json_encode($item, JSON_UNESCAPED_UNICODE));
+                $bs = 'background:none;border:none;cursor:pointer;vertical-align:middle;padding:0 2px';
+                // Считаем количество pending-строк в секции для кнопок ↑↓
+                $pendingCount = 0;
+                $pendingIndexes = [];
+                $si = isset($itemArr[0]['stage']) ? 1 : 0;
+                for ($pi = $si; $pi < count($itemArr); $pi++) {
+                    if (isset($itemArr[$pi]['id']) && empty($itemArr[$pi]['_is_redirector_repeat'])) {
+                        $pst = $getApproverStatus($itemArr[$pi]);
+                        if ($pst['status'] === 'pending') {
+                            $pendingIndexes[] = $pi;
+                            $pendingCount++;
+                        }
+                    }
+                }
+                $posInPending = array_search($i, $pendingIndexes);
+                $isFirst = ($posInPending === 0);
+                $isLast = ($posInPending === $pendingCount - 1);
+                $isSignersSectionStr = $isSignersSection ? '1' : '0';
+
+                $editBtn = "<button class='ag-edit-btn' data-section='$section' data-index='$i' data-item='$itemJson' title='Редактировать' style='$bs;color:var(--color_03);margin-left:4px'><span class='material-icons' style='font-size:15px'>edit</span></button>";
+                $editBtn .= "<button class='ag-delete-btn' data-section='$section' data-index='$i' title='Удалить' style='$bs;color:var(--red)'><span class='material-icons' style='font-size:15px'>delete</span></button>";
+                $editBtn .= "<button class='ag-add-btn' data-section='$section' data-index='$i' data-is-signers='$isSignersSectionStr' title='Добавить после' style='$bs;color:var(--green)'><span class='material-icons' style='font-size:15px'>person_add</span></button>";
+                if (!$isFirst) {
+                    $editBtn .= "<button class='ag-move-up-btn' data-section='$section' data-index='$i' title='Переместить вверх' style='$bs;color:var(--color_03)'><span class='material-icons' style='font-size:15px'>arrow_upward</span></button>";
+                }
+                if (!$isLast) {
+                    $editBtn .= "<button class='ag-move-down-btn' data-section='$section' data-index='$i' title='Переместить вниз' style='$bs;color:var(--color_03)'><span class='material-icons' style='font-size:15px'>arrow_downward</span></button>";
+                }
+            }
+
+            $html .= '<td' . $padding . $userTitle . ' data-user-id="' . $userId . '">' . $userIcon . $userFio . $editBtn . '</td>';
             $html .= '<td>' . ($urgent_types[$urgent] ?? 'Обычная') . '</td>';
             $html .= '<td>';
 
@@ -1694,6 +1768,8 @@ class Registry
                 $html .= "<span style='color: #9e9e9e'>Согласование прервано</span>";
             } elseif ($statusInfo['status'] === 'rejected') {
                 $html .= "<span style='color: var(--red)'>Отклонено<br>" . $resultDate . '</span>';
+            } elseif ($statusInfo['status'] === 'returned') {
+                $html .= "<span style='color: #e67e22'>Возвращено на доработку<br>" . $resultDate . '</span>';
             } elseif ($statusInfo['status'] === 'redirected') {
                 $html .= "<span style='color: #ff9800'>Перенаправлено<br>" . $resultDate . '</span>';
             } elseif ($statusInfo['status'] === 'approved') {
@@ -1742,10 +1818,29 @@ class Registry
                                 if ($i > $startIndex) {
                                     for ($j = $startIndex; $j < $i; $j++) {
                                         if (isset($itemArr[$j]['id'])) {
+                                            // Пропускаем оригинальную строку перенаправившего
+                                            // (для повторной записи _is_redirector_repeat)
+                                            if (!empty($item['_is_redirector_repeat'])
+                                                && $itemArr[$j]['id'] == $userId
+                                                && empty($itemArr[$j]['_is_redirector_repeat'])) {
+                                                $prevStatus = $getApproverStatus($itemArr[$j]);
+                                                if ($prevStatus['status'] === 'redirected') {
+                                                    if (!$isRedirectCompleted($itemArr[$j]['redirect'] ?? [])) {
+                                                        $canSign = false;
+                                                    }
+                                                    continue;
+                                                }
+                                            }
                                             $prevStatus = $getApproverStatus($itemArr[$j]);
-                                            if ($prevStatus['status'] !== 'approved') {
+                                            if ($prevStatus['status'] !== 'approved' && $prevStatus['status'] !== 'redirected') {
                                                 $canSign = false;
                                                 break;
+                                            }
+                                            if ($prevStatus['status'] === 'redirected') {
+                                                if (!$isRedirectCompleted($itemArr[$j]['redirect'] ?? [])) {
+                                                    $canSign = false;
+                                                    break;
+                                                }
                                             }
                                             if ($isAfterRedirect && !$redirectCompleted) {
                                                 $canSign = false;
@@ -1760,8 +1855,16 @@ class Registry
                                     $html .= "<div class='actions' data-section='" . $section . "'>";
                                     $html .= "<button class='button icon text green setSign'>" .
                                         "<span class='material-icons'>verified</span>Подписать</button>";
+                                    $html .= "<button class='button icon text blue setAgree'>" .
+                                        "<span class='material-icons'>task_alt</span>Утвердить</button>";
+                                    $html .= "<button class='button icon text green setAgreeSign'>" .
+                                        "<span class='material-icons'>verified</span>Утвердить с ЭП</button>";
                                     $html .= "<button class='button icon text red setReject'>" .
                                         "<span class='material-icons'>cancel</span>Отклонить</button>";
+                                    if ($level > 0) {
+                                        $html .= "<button class='button icon text setReturn' style='color: #e67e22'>" .
+                                            "<span class='material-icons'>undo</span>Вернуть</button>";
+                                    }
                                     $html .= '<div class="redirect-field" style="margin-top: 10px;">';
                                     $f = [
                                         'type' => 'list_fromdb_multi',
@@ -1774,6 +1877,8 @@ class Registry
                                         'label' => 'Перенаправить на:'
                                     ];
                                     $html .= $reg->renderListFromDB($f, [], '');
+                                    $html .= '<button class="button icon text doRedirect" style="margin-top:6px">' .
+                                        '<span class="material-icons">forward</span>Перенаправить</button>';
                                     $html .= '</div></div><div class="action_result" id="agResult' . $section . '"></div>';
                                 } else {
                                     $html .= "<span style='color: #9e9e9e'>Ожидание предыдущего подписанта</span>";
@@ -1784,8 +1889,16 @@ class Registry
                                 $html .= "<div class='actions' data-section='" . $section . "'>";
                                 $html .= "<button class='button icon text green setSign'>" .
                                     "<span class='material-icons'>verified</span>Подписать</button>";
+                                $html .= "<button class='button icon text blue setAgree'>" .
+                                    "<span class='material-icons'>task_alt</span>Утвердить</button>";
+                                $html .= "<button class='button icon text green setAgreeSign'>" .
+                                    "<span class='material-icons'>verified</span>Утвердить с ЭП</button>";
                                 $html .= "<button class='button icon text red setReject'>" .
                                     "<span class='material-icons'>cancel</span>Отклонить</button>";
+                                if ($level > 0) {
+                                    $html .= "<button class='button icon text setReturn' style='color: #e67e22'>" .
+                                        "<span class='material-icons'>undo</span>Вернуть</button>";
+                                }
                                 $html .= '<div class="redirect-field" style="margin-top: 10px;">';
                                 $f = [
                                     'type' => 'list_fromdb_multi',
@@ -1798,6 +1911,8 @@ class Registry
                                     'label' => 'Перенаправить на:'
                                 ];
                                 $html .= $reg->renderListFromDB($f, [], '');
+                                $html .= '<button class="button icon text doRedirect" style="margin-top:6px">' .
+                                    '<span class="material-icons">forward</span>Перенаправить</button>';
                                 $html .= '</div></div><div class="action_result" id="agResult' . $section . '"></div>';
                             }
                         } else {
@@ -1854,6 +1969,12 @@ class Registry
                             $html .= "<button class='button icon text red setReject'>" .
                                 "<span class='material-icons'>cancel</span>Отклонить</button>";
 
+                            // Кнопка «Вернуть» — только для получателя перенаправления (level > 0)
+                            if ($level > 0) {
+                                $html .= "<button class='button icon text setReturn' style='color: #e67e22'>" .
+                                    "<span class='material-icons'>undo</span>Вернуть</button>";
+                            }
+
                             $html .= '<div class="redirect-field" style="margin-top: 10px;">';
                             $f = [
                                 'type' => 'list_fromdb_multi',
@@ -1866,6 +1987,8 @@ class Registry
                                 'label' => 'Перенаправить на:'
                             ];
                             $html .= $reg->renderListFromDB($f, [], '');
+                            $html .= '<button class="button icon text doRedirect" style="margin-top:6px">' .
+                                '<span class="material-icons">forward</span>Перенаправить</button>';
                             $html .= '</div></div><div class="action_result" id="agResult' . $section . '"></div>';
                         }
                     }
@@ -1914,16 +2037,49 @@ class Registry
             // Комментарий
             $html .= '<td>';
             $comment = isset($item['comment']) ? htmlspecialchars(trim($item['comment'])) : '';
+            if (!empty($comment)) {
+            }
 
             if ($isCurrentUser && isset($canAct) && $canAct && !$hasAnyRejection/* && !$isSignersSection*/) {
-                $html .= $item['comment'];
+                if (!empty($item['comment'])) {
+                    $plainText = strip_tags($item['comment']);
+                    if (mb_strlen($plainText) > $commentPreviewLen) {
+                        $preview = nl2br(htmlspecialchars(mb_substr($plainText, 0, $commentPreviewLen)));
+                        $uid = 'cmnt_' . $section . '_' . $i;
+                        $html .= '<span id="' . $uid . '_short">' . $preview .
+                            '<a href="#" class="ag-comment-toggle" data-target="' . $uid . '"' .
+                            ' style="color:var(--color_03);margin-left:3px">...</a></span>' .
+                            '<span id="' . $uid . '_full" style="display:none">' . nl2br($item['comment']) .
+                            ' <a href="#" class="ag-comment-toggle" data-target="' . $uid . '"' .
+                            ' style="color:var(--color_03);font-size:11px">[скрыть]</a></span>';
+                    } else {
+                        $html .= $item['comment'];
+                    }
+                }
                 $html .= '<div class="item w_100">
                 <div class="el_data">
                     <textarea class="el_textarea" name="comment" rows="3" placeholder="Комментарий"></textarea>
                 </div>
             </div>';
             } else {
-                $html .= (!empty($comment) ? nl2br($item['comment']) : '-');
+                if (!empty($comment)) {
+                    $fullComment = nl2br($item['comment']);
+                    $plainText = strip_tags($item['comment']);
+                    if (mb_strlen($plainText) > $commentPreviewLen) {
+                        $preview = nl2br(htmlspecialchars(mb_substr($plainText, 0, $commentPreviewLen)));
+                        $uid = 'cmnt_' . $section . '_' . $i;
+                        $html .= '<span id="' . $uid . '_short">' . $preview .
+                            '<a href="#" class="ag-comment-toggle" data-target="' . $uid . '"' .
+                            ' style="color:var(--color_03);margin-left:3px">...</a></span>' .
+                            '<span id="' . $uid . '_full" style="display:none">' . $fullComment .
+                            ' <a href="#" class="ag-comment-toggle" data-target="' . $uid . '"' .
+                            ' style="color:var(--color_03);font-size:11px">[скрыть]</a></span>';
+                    } else {
+                        $html .= $fullComment;
+                    }
+                } else {
+                    $html .= '-';
+                }
             }
             $html .= '</td></tr>';
 
@@ -1937,7 +2093,8 @@ class Registry
                     $user_signs,
                     $reg,
                     $level + 1,
-                    $allSections
+                    $allSections,
+                    $initiatorId
                 );
             }
 
@@ -1945,6 +2102,30 @@ class Registry
             if ($level == 0 && isset($processedUsers[$userId]) && !$processedUsers[$userId]['incremented']) {
                 $processedUsers[$userId]['incremented'] = true;
                 $rowNumber++;
+            }
+        }
+
+        // Если секция пустая (нет сотрудников) — показываем кнопку добавления
+        $isInitiator = ($initiatorId > 0 && intval($_SESSION['user_id']) === $initiatorId);
+        if ($isInitiator && $level == 0) {
+            $si2 = isset($itemArr[0]['stage']) ? 1 : 0;
+            $hasItems = false;
+            for ($pi = $si2; $pi < count($itemArr); $pi++) {
+                if (isset($itemArr[$pi]['id']) && empty($itemArr[$pi]['_is_redirector_repeat'])) {
+                    $hasItems = true;
+                    break;
+                }
+            }
+            if (!$hasItems) {
+                $html .= '<tr class="ag-add-row">' .
+                    '<td colspan="5" style="padding:4px 8px">' .
+                    '<button class="ag-add-btn button icon text"' .
+                    ' data-section="' . $section . '"' .
+                    ' data-index="-1"' .
+                    ' data-is-signers="' . ($isSignersSection ? '1' : '0') . '"' .
+                    ' style="font-size:12px;padding:3px 8px">' .
+                    '<span class="material-icons" style="font-size:14px">person_add</span>Добавить сотрудника' .
+                    '</button></td></tr>';
             }
         }
 
@@ -2039,7 +2220,7 @@ class Registry
     public function renderFileInput(?array $f, ?array $editData, string $mode): string
     {
         $html = '';
-        $gui  = new \Core\Gui();
+        $gui = new \Core\Gui();
         $files = new Files();
 
         // file_ids может прийти не всегда; пытаемся подтянуть их по document_id из cam_agreement
@@ -2510,8 +2691,8 @@ class Registry
      *   $check = $reg->checkAgreementList($_POST['agreementlist'] ?? [], 'плана проверок');
      *   if (!$check['result']) { $err++; $errStr[] = $check['message']; $errorFields[] = $check['errField']; }
      *
-     * @param array  $agreementList Массив секций (каждая — JSON-строка или уже массив)
-     * @param string $docLabel      Название документа для текста ошибки
+     * @param array $agreementList Массив секций (каждая — JSON-строка или уже массив)
+     * @param string $docLabel Название документа для текста ошибки
      * @return array ['result' => bool, 'message' => string, 'errField' => string]
      */
     public function checkAgreementList(array $agreementList, string $docLabel = 'документа'): array
@@ -2519,18 +2700,19 @@ class Registry
         $filtered = array_filter($agreementList, function ($section) {
             $raw = is_array($section) ? json_encode($section) : $section;
             return strlen(trim((string)$raw)) > 0;
-        });
+        }
+        );
 
         if (count($filtered) === 0) {
             return [
-                'result'   => false,
-                'message'  => 'Укажите список согласовантов и подписантов для ' . $docLabel . '.',
+                'result' => false,
+                'message' => 'Укажите список согласовантов и подписантов для ' . $docLabel . '.',
                 'errField' => 'agreementlist',
             ];
         }
 
         $totalParticipants = 0;
-        $hasSigners        = false;
+        $hasSigners = false;
 
         foreach ($filtered as $section) {
             if (is_string($section)) {
@@ -2552,16 +2734,16 @@ class Registry
 
         if ($totalParticipants === 0) {
             return [
-                'result'   => false,
-                'message'  => 'В листе согласования нет ни одного участника для ' . $docLabel . '.',
+                'result' => false,
+                'message' => 'В листе согласования нет ни одного участника для ' . $docLabel . '.',
                 'errField' => 'agreementlist',
             ];
         }
 
         if (!$hasSigners) {
             return [
-                'result'   => false,
-                'message'  => 'В листе согласования не указан ни один подписант для ' . $docLabel . '.',
+                'result' => false,
+                'message' => 'В листе согласования не указан ни один подписант для ' . $docLabel . '.',
                 'errField' => 'agreementlist',
             ];
         }

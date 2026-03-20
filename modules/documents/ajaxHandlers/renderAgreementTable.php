@@ -12,6 +12,11 @@ $alert = new Notifications();
 $user_signs = [];
 
 $docId = intval($_POST['docId']);
+$agr = $db->selectOne('agreement', ' WHERE id = ?', [$docId]);
+$initiatorId = intval($agr->initiator ?? 0);
+if ($initiatorId === 0) {
+    $initiatorId = intval($agr->author ?? 0);
+}
 $agreementList = $_POST['agreementList'];
 
 // ============ Декодируем JSON и преобразуем в правильную структуру ============
@@ -115,6 +120,37 @@ foreach ($agreementList as $item) {
 }
 $agreementList = $decodedAgreementList;
 
+// Нормализуем булевые значения и пустые result
+function normalizeAgreementSection(array $section): array
+{
+    foreach ($section as $k => &$item) {
+        if (!is_array($item)) continue;
+        // Нормализуем _is_redirector_repeat
+        if (isset($item['_is_redirector_repeat'])) {
+            $item['_is_redirector_repeat'] = ($item['_is_redirector_repeat'] === true
+                || $item['_is_redirector_repeat'] === 'true'
+                || $item['_is_redirector_repeat'] === 1);
+        }
+        // Нормализуем result
+        if (array_key_exists('result', $item)) {
+            if ($item['result'] === '' || $item['result'] === 'null') {
+                $item['result'] = null;
+            } elseif (is_array($item['result']) && isset($item['result']['id'])) {
+                $item['result']['id'] = intval($item['result']['id']);
+            }
+        }
+        // Рекурсивно обрабатываем redirect
+        if (isset($item['redirect']) && is_array($item['redirect'])) {
+            $item['redirect'] = normalizeAgreementSection($item['redirect']);
+        }
+    }
+    return $section;
+}
+foreach ($agreementList as &$section) {
+    $section = normalizeAgreementSection($section);
+}
+unset($section);
+
 // Получаем все необходимые данные
 $users = $db->getRegistry('users', '', [], ['surname', 'name', 'middle_name', 'institution', 'ministries', 'division', 'position']);
 $urgent_types = [
@@ -146,7 +182,7 @@ function checkStageComplete(array $itemArr): bool
             $itemUsers[] = $item['id'];
             if (isset($item['result']) && is_array($item['result']) && isset($item['result']['id'])) {
                 $resultId = intval($item['result']['id']);
-                if (!in_array($resultId, [4, 5])) {
+                if (!in_array($resultId, [4, 5, 6])) {
                     $itemResults[] = $item['result'];
                 }
             }
@@ -232,7 +268,7 @@ for ($i = 0; $i < count($agreementList); $i++) {
     $html .= '</td></tr>';
 
     // Генерируем строки согласования через buildAgreementList
-    $html .= $reg->buildAgreementList($itemArr, $i, $users, $urgent_types, $user_signs, $reg, 0,$agreementList);
+    $html .= $reg->buildAgreementList($itemArr, $i, $users, $urgent_types, $user_signs, $reg, 0, $agreementList, $initiatorId);
 
     $html .= '</tbody>';
 }

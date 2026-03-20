@@ -43,14 +43,14 @@ var agreement_list = {
 
             $($ins[i]).find("[name='section_types[" + i + "]'], [name='urgent[" + i + "]']")
                 .off("change").on("change", function () {
-                    if ($(this).attr("name").includes("urgent")) {
-                        let this_value = $(this).val(),
-                            $urgent_type_select = $(this).closest(".item").next(".item").find("select.user_urgent"),
-                            $new_signer = $(this).closest(".sections").find(".item.new_signer")
-                                .find("[name='approve_types[]'][value='" + this_value + "']");
-                        $urgent_type_select.val(this_value);
-                        $new_signer.prop("checked", true);
-                    }
+                if ($(this).attr("name").includes("urgent")) {
+                    let this_value = $(this).val(),
+                        $urgent_type_select = $(this).closest(".item").next(".item").find("select.user_urgent"),
+                        $new_signer = $(this).closest(".sections").find(".item.new_signer")
+                            .find("[name='approve_types[]'][value='" + this_value + "']");
+                    $urgent_type_select.val(this_value);
+                    $new_signer.prop("checked", true);
+                }
                 agreement_list.setAgreementList($($ins[i]));
             });
 
@@ -152,7 +152,7 @@ var agreement_list = {
         let $institutions = $(".pop_up_body .sections:not(.signers)");
         for (let i = 0; i < $institutions.length; i++) {
             //if (!$($institutions[i]).hasClass("signers")) {
-                $($institutions[i]).find(".section_number").text("Этап №" + (i + 1));
+            $($institutions[i]).find(".section_number").text("Этап №" + (i + 1));
             //}
         }
 
@@ -185,31 +185,30 @@ var agreement_list = {
     setStageNumber() {
         let $stages = $(".sections:not(.signers) input[name='stages[]']");
         //if ($($stages[0]).val() !== '') {
-            for (let i = 0; i < $stages.length; i++) {
-                if ($($stages[0]).val() !== '') {
-                    $($stages[i]).val(i + 1);
-                    $($stages[i]).closest(".sections").find(".section_number").text("Этап №" + (i + 1));
+        for (let i = 0; i < $stages.length; i++) {
+            if ($($stages[0]).val() !== '') {
+                $($stages[i]).val(i + 1);
+                $($stages[i]).closest(".sections").find(".section_number").text("Этап №" + (i + 1));
 
-                    let st = $($stages[i]).closest(".sections")
-                            .find('input[type="radio"][name="section_types[' + i + ']"]:checked').val(),
+                let st = $($stages[i]).closest(".sections")
+                        .find('input[type="radio"][name="section_types[' + i + ']"]:checked').val(),
                     ur = $($stages[i]).closest(".sections")
                         .find('input[type="radio"][name="urgent[' + i + ']"]:checked').val();
-                    //console.log(i, st,  ur);
-                    /*$($stages[i]).closest(".sections").
-                    find('input[type="radio"][name="section_types[' + (i - 1) + ']"][value="' + st + '"]').prop("checked", true);
-                    $($stages[i]).closest(".sections").
-                    find('input[type="radio"][name="urgent[' + (i - 1) + ']"][value="' + ur +'"]').prop("checked", true);*/
-                    $($stages[i]).closest(".sections").
-                    find('input[type="radio"][name="section_types[' + i + ']"][value="' + st + '"]').prop("checked", true);
-                    $($stages[i]).closest(".sections").
-                    find('input[type="radio"][name="urgent[' + i + ']"][value="' + ur +'"]').prop("checked", true);
+                /*$($stages[i]).closest(".sections").
+                find('input[type="radio"][name="section_types[' + (i - 1) + ']"][value="' + st + '"]').prop("checked", true);
+                $($stages[i]).closest(".sections").
+                find('input[type="radio"][name="urgent[' + (i - 1) + ']"][value="' + ur +'"]').prop("checked", true);*/
+                $($stages[i]).closest(".sections").
+                find('input[type="radio"][name="section_types[' + i + ']"][value="' + st + '"]').prop("checked", true);
+                $($stages[i]).closest(".sections").
+                find('input[type="radio"][name="urgent[' + i + ']"][value="' + ur +'"]').prop("checked", true);
 
-                    $($stages[i]).closest(".sections").find('input[type="radio"][name^="section_types["]')
-                        .attr("name", "section_types[" + i + "]");
-                    $($stages[i]).closest(".sections").find('input[type="radio"][name^="urgent["]')
-                        .attr("name", "urgent[" + i + "]");
-                }
+                $($stages[i]).closest(".sections").find('input[type="radio"][name^="section_types["]')
+                    .attr("name", "section_types[" + i + "]");
+                $($stages[i]).closest(".sections").find('input[type="radio"][name^="urgent["]')
+                    .attr("name", "urgent[" + i + "]");
             }
+        }
         //}
     },
 
@@ -254,7 +253,6 @@ var agreement_list = {
                     items: "li",
                     stop: function (event, ui) {
                         agreement_list.setAgreementList(instanceObj);
-                        console.log(event, ui);
                     }
                 });
                 $('.agreement_list [title]').tipsy({
@@ -322,7 +320,7 @@ var agreement_list = {
                 if (stage === "" && oneSignOnly){
                     agreement_list.signersCount++;
                     let ministryHead = "Министр социального развития Московской области",
-                        $last_vrio = $("select.vrio:last"); console.log($last_vrio)
+                        $last_vrio = $("select.vrio:last");
                     if (user_title.indexOf(ministryHead) === -1){
                         $last_vrio.val($last_vrio.find('option[title*="' + ministryHead + '"]').val());
                     }
@@ -349,7 +347,6 @@ var agreement_list = {
                     items: "li",
                     stop: function (event, ui) {
                         agreement_list.setAgreementList(instanceObj);
-                        console.log(event, ui);
                     }
                 });
 
@@ -362,11 +359,15 @@ var agreement_list = {
                 });
 
                 $(".user_urgent, .vrio, .role").off("change").on("change", function (){
-                    let $roles = $(".role"); console.log($roles);
-                    if ($($roles[0]).val() === "0"){
-                        $($roles[1]).val("1");
-                    }else{
-                        $($roles[1]).val("0");
+                    let $changed = $(this);
+                    let $roles = $(".sections.signers .role");
+                    if ($roles.length >= 2 && $changed.hasClass("role")) {
+                        let newVal = $changed.val();
+                        $roles.each(function() {
+                            if (this !== $changed[0]) {
+                                $(this).val(newVal === "0" ? "1" : "0");
+                            }
+                        });
                     }
                     agreement_list.setAgreementList(instanceObj);
                 });
@@ -376,7 +377,7 @@ var agreement_list = {
             if ($agreementlist.val() !== "") {
                 try{
                     agArr = JSON.parse($agreementlist.val());
-                }catch (e){ console.log(e); }
+                }catch (e){ /* ignore */ }
             }
 
             if (parseInt($(this).val()) > 0) {
@@ -404,31 +405,9 @@ var agreement_list = {
         agreement_list.bindRoleChange();
     },
 
-    bindRoleChange: function (){
-        let $roles = $(".role");
-
-        if ($roles.length > 1) {
-            let $select1 = $($roles[0]),
-                $select2 = $($roles[1]);
-            const oppositeValues = {
-                '0': '1',
-                '1': '0'
-            };
-
-            $select1.on('change', function () {
-                const value = $(this).val();
-                if (value === '0' || value === '1') {
-                    $select2.val(oppositeValues[value]);
-                }
-            });
-
-            $select2.on('change', function () {
-                const value = $(this).val();
-                if (value === '0' || value === '1') {
-                    $select1.val(oppositeValues[value]);
-                }
-            });
-        }
+    bindRoleChange: function (instanceObj){
+        // Логика смены ролей перенесена в обработчик .role change в bindUsersChange
+        // Этот метод оставлен для обратной совместимости
     },
 
     bindSetUserByUnit: function (instanceObj) {
@@ -478,7 +457,6 @@ var agreement_list = {
                             items: "li",
                             stop: function (event, ui) {
                                 agreement_list.setAgreementList(instanceObj);
-                                console.log(event, ui);
                             }
                         });
                         $('.agreement_list [title]').tipsy({
@@ -511,8 +489,9 @@ var agreement_list = {
     setAgreementList: function (instanceObj) {
         let $agreementlist = instanceObj.find("[name='agreementlist[]']"),
             $agreement_list = instanceObj.find(".agreement_list li"),
+            stage = instanceObj.find("[name='stages[]'").val(),
             agArr = [{
-                stage: instanceObj.find("[name='stages[]'").val(),
+                stage: stage,
                 list_type: instanceObj.find("[name^='section_types[']:checked").val(),
                 urgent: instanceObj.find("[name^='urgent[']:checked").val()
             }];
@@ -527,6 +506,29 @@ var agreement_list = {
                 role: $($agreement_list[i]).find("select[name=role" + user_id + "]").val()
             });
         }
+
+        // В секции подписантов (stage === ""):
+        // автоматически сортируем — role=1 (подписывает) перед role=0 (утверждает)
+        if (stage === "") {
+            let metaItem = agArr[0];
+            let signers = agArr.slice(1);
+            signers.sort(function(a, b) {
+                let ra = parseInt(a.role ?? 0);
+                let rb = parseInt(b.role ?? 0);
+                return rb - ra;
+            });
+            agArr = [metaItem].concat(signers);
+
+            let $list = instanceObj.find(".agreement_list");
+            let $items = $list.find("li").detach();
+            signers.forEach(function(item) {
+                let $found = $items.filter(function() {
+                    return $(this).data("id") == item.id;
+                }).first();
+                if ($found.length) $list.append($found);
+            });
+        }
+
         $agreementlist.val($agreement_list.length > 0 ? JSON.stringify(agArr) : "");
     },
 

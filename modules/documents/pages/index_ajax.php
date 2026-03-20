@@ -196,6 +196,8 @@ function getDocumentStatusForIcon(int $userId, ?string $agreementListJson, int $
                 return ['status' => 'redirected', 'result_id' => 4];
             case 5: // Отклонение
                 return ['status' => 'rejected', 'result_id' => 5];
+            case 6: // Возврат на доработку
+                return ['status' => 'returned', 'result_id' => 6];
             default:
                 return ['status' => 'pending', 'result_id' => 0];
         }
@@ -291,7 +293,8 @@ function getDocumentStatusForIcon(int $userId, ?string $agreementListJson, int $
             'pending' => 0,
             'approved' => 0,
             'redirected' => 0,
-            'rejected' => 0
+            'rejected' => 0,
+            'returned' => 0
         ];
 
         if (!is_array($section)) return $results;
@@ -375,12 +378,27 @@ function getDocumentStatusForIcon(int $userId, ?string $agreementListJson, int $
 
     if (!empty($allFound)) {
         $userFound = true;
-        // Выбираем запись с наивысшим приоритетом статуса
-        $priority = ['pending' => 0, 'redirected' => 1, 'approved' => 2, 'rejected' => 3];
-        usort($allFound, function($a, $b) use ($getApproverStatus, $priority) {
+        // Выбираем запись с наивысшим приоритетом статуса.
+        // Исключение: redirected с незавершённой цепочкой важнее pending —
+        // пользователь ещё ждёт завершения перенаправления.
+        $isRedirectChainDone = function(array $approver) use ($getApproverStatus): bool {
+            if (empty($approver['redirect']) || !is_array($approver['redirect'])) return true;
+            foreach ($approver['redirect'] as $rd) {
+                if (!isset($rd['id'])) continue;
+                $st = $getApproverStatus($rd)['status'];
+                if ($st !== 'approved' && $st !== 'rejected') return false;
+            }
+            return true;
+        };
+
+        $priority = ['pending' => 0, 'returned' => 0, 'redirected' => 1, 'approved' => 2, 'rejected' => 3];
+        usort($allFound, function($a, $b) use ($getApproverStatus, $priority, $isRedirectChainDone) {
             $sa = $getApproverStatus($a['approver'])['status'];
             $sb = $getApproverStatus($b['approver'])['status'];
-            return ($priority[$sa] ?? 9) <=> ($priority[$sb] ?? 9);
+            // redirected с незавершённой цепочкой получает наивысший приоритет (выше pending)
+            $pa = ($sa === 'redirected' && !$isRedirectChainDone($a['approver'])) ? -1 : ($priority[$sa] ?? 9);
+            $pb = ($sb === 'redirected' && !$isRedirectChainDone($b['approver'])) ? -1 : ($priority[$sb] ?? 9);
+            return $pa <=> $pb;
         });
         $userInfo = $allFound[0];
     }
@@ -438,8 +456,9 @@ function getDocumentStatusForIcon(int $userId, ?string $agreementListJson, int $
                 // Проверяем, завершено ли перенаправление
                 $redirectCompleted = true;
                 if (isset($userInfo['approver']['redirect']) && is_array($userInfo['approver']['redirect'])) {
-                    $redirectApprovers = array_slice($userInfo['approver']['redirect'], 1);
-                    foreach ($redirectApprovers as $redirectApprover) {
+                    // redirect[] не имеет мета-строки — обходим с индекса 0
+                    foreach ($userInfo['approver']['redirect'] as $redirectApprover) {
+                        if (!isset($redirectApprover['id'])) continue;
                         $redirectStatus = $getApproverStatus($redirectApprover);
                         if ($redirectStatus['status'] !== 'approved') {
                             $redirectCompleted = false;
