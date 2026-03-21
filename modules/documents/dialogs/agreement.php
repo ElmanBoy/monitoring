@@ -60,7 +60,20 @@ $urgent_types = [
 // Формируем шапку листа согласования
 $docName = $tmpl->documentacial == 6 ? ($docs->name ?? $tmpl->name) : $tmpl->name;
 $docNumber = strlen($tmpl->doc_number) > 0 ? ' № ' . htmlspecialchars($tmpl->doc_number) : '';
-$headerHtml = '<div id="agreement_block">Лист согласования к документу &laquo;' . htmlspecialchars($docName) . $docNumber . '&raquo;<br>' .
+
+// Подтягиваем учреждение если есть ins_id
+$insLine = '';
+if (intval($tmpl->ins_id) > 0) {
+    $insRecord = $db->selectOne('institutions', ' WHERE id = ?', [intval($tmpl->ins_id)]);
+    if ($insRecord && strlen($insRecord->short) > 0) {
+        $insLine = '<br>Объект проверки: <strong>' .
+            htmlspecialchars(html_entity_decode($insRecord->short, ENT_QUOTES | ENT_HTML5, 'UTF-8')) .
+            '</strong>';
+    }
+}
+
+$headerHtml = '<div id="agreement_block">Лист согласования к документу &laquo;' . htmlspecialchars($docName) . $docNumber . '&raquo;' .
+    $insLine . '<br>' .
     'Инициатор согласования: ' . htmlspecialchars($initiator_fio) . ' ' . htmlspecialchars($initiator_position) . '<br>' .
     'Согласование инициировано: ' . htmlspecialchars($initiationFormatted) . '</div>';
 
@@ -347,7 +360,16 @@ $initialAgreementList = json_decode($tmpl->agreementlist, true) ?? [];
                                 agj[i].result = {id: 6, date: currentDateTime};
                             } else {
                                 agj[i].result = {id: parseInt(result_type), date: currentDateTime};
-                                if (parseInt(result_type) === 5 && agj[i].redirect) delete agj[i].redirect;
+                                // При отклонении (result_type=5) записываем комментарий как причину
+                                if (parseInt(result_type) === 5) {
+                                    const rejectComment = $comment.val ? $comment.val() : '';
+                                    if (rejectComment && $.trim(rejectComment) !== '') {
+                                        agj[i].comment = (agj[i].comment || '') +
+                                            '<p class="agreementComment"><small>' + getActionTime() + '</small><br>' +
+                                            rejectComment + '</p>';
+                                    }
+                                    if (agj[i].redirect) delete agj[i].redirect;
+                                }
                             }
                         } // end if (!skipForReturn && !skipNonRepeat)
                     } // end if (isCurrentUser)

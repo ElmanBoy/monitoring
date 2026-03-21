@@ -30,18 +30,18 @@ if($input == 0){
 if ($input > 0 && isset($result['result']) && $result['result'] == true) {
     $user_fio = $_SESSION['user_surname'] . ' ' . $_SESSION['user_name'] . ' ' . $_SESSION['user_middle_name'];
     echo json_encode(array(
-        'container' => 'message_login',
-        'result' => $result['result'],
-        'resultText' => $result['message'] . '
-            <script>document.location.href = "' . $auth->getDefaultPage() . '"</script>',
-        'errorFields' => [])
+            'container' => 'message_login',
+            'result' => $result['result'],
+            'resultText' => $result['message'] . '
+            <script>sessionStorage.setItem("just_logged_in", "1"); document.location.href = "' . $auth->getDefaultPage() . '"</script>',
+            'errorFields' => [])
     );
 } else {
     echo json_encode(array(
-        'container' => 'message_login',
-        'result' => $result['result'],
-        'resultText' => $result['message'],
-        'errorFields' => [])
+            'container' => 'message_login',
+            'result' => $result['result'],
+            'resultText' => $result['message'],
+            'errorFields' => [])
     );
 }
 ?>

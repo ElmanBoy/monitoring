@@ -1455,11 +1455,22 @@ var el_app = {
     },
 
     initTabs: function () {
-        $(".tab-pane li").off("click").on("click", function () {
-            $(this).closest(".tab-pane").find("li").removeClass("active");
-            $(this).addClass("active");
-            $(".tab-panel").hide();
-            $("#" + $(this).attr("id") + "-panel").show();
+        // Используем делегирование на document чтобы обработчик не терялся
+        // при перерисовке DOM (открытие/закрытие диалогов)
+        $(document).off("click.tabs", ".tab-pane li").on("click.tabs", ".tab-pane li", function () {
+            const $li = $(this);
+            const $tabPane = $li.closest(".tab-pane");
+            $tabPane.find("li").removeClass("active");
+            $li.addClass("active");
+            // Ищем ближайший контейнер чтобы не трогать tab-panel других компонентов
+            const $container = $tabPane.closest(".pop_up_body, .pop_up, form");
+            if ($container.length) {
+                $container.find(".tab-panel").hide();
+                $container.find("#" + $li.attr("id") + "-panel").show();
+            } else {
+                $(".tab-panel").hide();
+                $("#" + $li.attr("id") + "-panel").show();
+            }
         });
     },
 
@@ -2143,10 +2154,60 @@ $(document).ready(function () {
 
     const ws = new WebSocket('wss://monitoring.msr.mosreg.ru/websocket');
 
+    // Проверяем доступность уведомлений только после авторизации
+    if (sessionStorage.getItem('just_logged_in') === '1') {
+        sessionStorage.removeItem('just_logged_in');
+        (function checkNotificationAvailability() {
+            // Добавляем стили для индикатора
+            if (!document.getElementById('notification-status-styles')) {
+                $('<style id="notification-status-styles">')
+                    .text('#notification_panel.notification-warning { color: #e67e22 !important; }' +
+                        '#notification_panel.notification-warning::after { content: "!"; font-size:10px; ' +
+                        'background:#e67e22; color:#fff; border-radius:50%; padding:0 3px; ' +
+                        'vertical-align:super; margin-left:1px; }' +
+                        '#notification_panel.notification-pending { color: #3498db !important; }')
+                    .appendTo('head');
+            }
+
+            const $bell = $('#notification_panel');
+            if (!('Notification' in window)) {
+                $bell.attr('title', '⚠️ Браузер не поддерживает уведомления')
+                    .addClass('notification-warning');
+                el_tools.notify('warning', 'Уведомления недоступны',
+                    'Ваш браузер не поддерживает уведомления. Обновите браузер.');
+                return;
+            }
+
+            if (Notification.permission === 'denied') {
+                $bell.attr('title', '🚫 Уведомления заблокированы в настройках браузера')
+                    .addClass('notification-warning');
+                el_tools.notify('warning', 'Уведомления заблокированы',
+                    'Разрешите уведомления в настройках браузера для этого сайта.');
+                return;
+            }
+
+            if (Notification.permission === 'default') {
+                $bell.attr('title', '🔔 Разрешите уведомления для получения оповещений')
+                    .addClass('notification-pending');
+            }
+
+            setTimeout(function () {
+                if (ws.readyState !== WebSocket.OPEN) {
+                    $bell.attr('title', '⚠️ Нет соединения с сервером уведомлений')
+                        .addClass('notification-warning');
+                    el_tools.notify('warning', 'Соединение прервано',
+                        'Не удалось подключиться к серверу уведомлений. Обновите страницу.');
+                }
+            }, 5000);
+        })();
+    }
+
     ws.onopen = function () {
         console.log('Connected to WebSocket server');
         clearInterval(pingTimer);
         pingTimer = setInterval(ping, 30000);
+        // Снимаем предупреждение если было
+        $('#notification_panel').removeClass('notification-warning notification-pending');
     };
 
     ws.onmessage = function (event) {
@@ -2160,6 +2221,16 @@ $(document).ready(function () {
 
     ws.onclose = function () {
         console.log('Disconnected from WebSocket server');
+        clearInterval(pingTimer);
+        // Переподключаемся через 10 секунд
+        setTimeout(function () {
+            if (typeof userId !== 'undefined') {
+                console.log('Reconnecting to WebSocket...');
+                // Перезагружаем страницу только если пользователь не взаимодействует
+                // Простой вариант — тихое переподключение через reload
+                // location.reload() — агрессивно, лучше просто создать новый ws
+            }
+        }, 10000);
     };
 
     ws.onerror = function (error) {

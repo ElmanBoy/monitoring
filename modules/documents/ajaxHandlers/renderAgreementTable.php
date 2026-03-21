@@ -151,6 +151,45 @@ foreach ($agreementList as &$section) {
 }
 unset($section);
 
+// Автоисправление порядка подписантов: role=1 (подписывает) должен быть перед role=0 (утверждает)
+$agreementListChanged = false;
+foreach ($agreementList as &$section) {
+    if (!is_array($section) || !isset($section[0])) continue;
+    // Только секция подписантов (stage="")
+    if (!array_key_exists('stage', $section[0]) || $section[0]['stage'] !== '') continue;
+
+    $startIdx = 1;
+    $items = array_slice($section, $startIdx);
+
+    // Сортируем: role=1 перед role=0, _is_redirector_repeat в конец
+    usort($items, function($a, $b) {
+        $aRepeat = !empty($a['_is_redirector_repeat']) ? 1 : 0;
+        $bRepeat = !empty($b['_is_redirector_repeat']) ? 1 : 0;
+        if ($aRepeat !== $bRepeat) return $aRepeat - $bRepeat;
+        $ra = intval($a['role'] ?? 0);
+        $rb = intval($b['role'] ?? 0);
+        return $rb - $ra; // role=1 раньше role=0
+    });
+
+    // Проверяем изменился ли порядок
+    $original = array_slice($section, $startIdx);
+    $originalIds = array_column($original, 'id');
+    $sortedIds   = array_column($items, 'id');
+    if ($originalIds !== $sortedIds) {
+        array_splice($section, $startIdx, count($items), $items);
+        $agreementListChanged = true;
+    }
+}
+unset($section);
+
+// Если порядок изменился — сохраняем в БД
+if ($agreementListChanged && $docId > 0) {
+    $options = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT;
+    $db->update('agreement', $docId, [
+        'agreementlist' => json_encode($agreementList, $options)
+    ]);
+}
+
 // Получаем все необходимые данные
 $users = $db->getRegistry('users', '', [], ['surname', 'name', 'middle_name', 'institution', 'ministries', 'division', 'position']);
 $urgent_types = [

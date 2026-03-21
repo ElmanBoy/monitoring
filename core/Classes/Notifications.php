@@ -28,7 +28,6 @@ class Notifications
         }
         file_put_contents($logDir . '/reminders.log', '[' . date('Y-m-d H:i:s') . '] ' . $msg . PHP_EOL, FILE_APPEND);
     }
-
     /**
      * @var array
      */
@@ -420,7 +419,7 @@ class Notifications
             '<p>Ожидается ' . $agreementAction . ' для документа «' . $documentName . '»</p>';
 
         // Панель уведомлений — всегда, task_id=null чтобы не нарушать FK на cam_tasks
-        $this->addRecordToPanel($signerId, $letterText, $documentId, '/documents');
+        $this->addRecordToPanel($signerId, $letterText, 0, '/documents');
 
         if (strlen(trim($executorEmail)) > 0) {
 
@@ -479,7 +478,7 @@ class Notifications
             '<p>Вы назначены руководителем проверки в приказе «' . $documentName . '»</p>';
 
         // Панель уведомлений — всегда
-        $this->addRecordToPanel($signerId, $letterText, $documentId, '/documents');
+        $this->addRecordToPanel($signerId, $letterText, 0, '/documents');
 
         if (strlen(trim($executorEmail)) > 0) {
 
@@ -541,7 +540,7 @@ class Notifications
             '<p>Ожидается ваше согласие или возражения по документу «' . $documentName . '»</p>';
 
         // Панель уведомлений — всегда
-        $this->addRecordToPanel($signerId, $letterText, $documentId, '/documents');
+        $this->addRecordToPanel($signerId, $letterText, 0, '/documents');
 
         if (strlen(trim($executorEmail)) > 0) {
 
