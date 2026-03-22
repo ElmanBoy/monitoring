@@ -21,6 +21,46 @@ $regProps = $db->db::getAll('SELECT
             WHERE ' . TBL_PREFIX . 'regfields.prop_id = ' . TBL_PREFIX . 'regprops.id AND 
             ' . TBL_PREFIX . 'regfields.reg_id = ? ORDER BY ' . TBL_PREFIX . 'regfields.sort', [$regId]
 );
+
+$docType = intval($_POST['documentacial'] ?? 0);
+
+if ($docType == 0) {
+    $err++;
+    $errStr[] = 'Укажите тип документа';
+    $errorFields[] = 'documentacial';
+} elseif ($docType == 6) {
+    if (empty($_POST['agreementlist']) || count($_POST['agreementlist']) == 0) {
+        $err++;
+        $errStr[] = 'Укажите согласующих и подписантов';
+        $errorFields[] = 'users';
+    } else {
+        for ($a = 0; $a < count($_POST['agreementlist']); $a++) {
+            if (strlen(trim($_POST['agreementlist'][$a])) == 0) {
+                $errStr[] = 'Укажите сотрудников для этапа' .
+                    ($a == count($_POST['agreementlist']) - 1 ? ' подписания' : ' №' . ($a + 1));
+                $errorFields[] = 'users[' . [$a] . ']';
+                $err++;
+            }
+        }
+    }
+} else {
+    if (strlen(trim($_POST['header'] ?? '')) == 0) {
+        $err++;
+        $errStr[] = 'Укажите надпись сверху';
+        $errorFields[] = 'header';
+    }
+    if (strlen(trim($_POST['body'] ?? '')) == 0) {
+        $err++;
+        $errStr[] = 'Укажите текст в середине документа';
+        $errorFields[] = 'body';
+    }
+    if (strlen(trim($_POST['bottom'] ?? '')) == 0) {
+        $err++;
+        $errStr[] = 'Укажите надпись внизу';
+        $errorFields[] = 'bottom';
+    }
+}
+
 //Проверяем обязательные поля
 foreach ($regProps as $f) {
     $check = $reg->checkRequiredField($regId, $f, $_POST);
