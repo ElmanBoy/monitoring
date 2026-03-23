@@ -14,6 +14,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $userId = (int)$data['userId'];
     $subscription = $data['subscription'];
 
+    if ($userId <= 0 || empty($subscription['endpoint'])) {
+        echo json_encode(['success' => false, 'error' => 'Invalid user or subscription']);
+        exit;
+    }
+
     // Сохраняем подписку
     $stmt = $db::exec('INSERT INTO cam_subscriptions (user_id, endpoint, p256dh, auth) 
         VALUES (

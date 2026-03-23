@@ -535,15 +535,32 @@ $initialAgreementList = json_decode($tmpl->agreementlist, true) ?? [];
                     }
                 });
 
-                $('[name=comment]').off('blur').on('blur', function () {
+                $('[name=comment]').off('blur').off('input').on('input', function () {
                     const comment = $(this).val();
-                    const section = $(this).closest('td').prev('td').find('.actions').data('section');
-                    getAgreementData(section, 0);
+                    const $td = $(this).closest('td');
+                    const $saveBtn = $td.find('.saveComment');
                     if ($.trim(comment) !== '') {
-                        $(this).closest('td').prev('td').find('.setReject').removeClass('disabled');
+                        $td.prev('td').find('.setReject').removeClass('disabled');
+                        $saveBtn.show();
                     } else {
-                        $(this).closest('td').prev('td').find('.setReject').addClass('disabled');
+                        $td.prev('td').find('.setReject').addClass('disabled');
+                        $saveBtn.hide();
                     }
+                });
+
+                $(document).off('click', '.saveComment').on('click', '.saveComment', function (e) {
+                    e.preventDefault();
+                    const $td = $(this).closest('td');
+                    const section = $td.prev('td').find('.actions').data('section');
+                    const comment = $td.find('[name=comment]').val();
+                    if ($.trim(comment) === '') return;
+                    getAgreementData(section, 0);
+                    $(this).prop('disabled', true)
+                        .html('<span class="material-icons">check</span>Сохранено');
+                    setTimeout(() => {
+                        $(this).prop('disabled', false)
+                            .html('<span class="material-icons">save</span>Сохранить комментарий');
+                    }, 2000);
                 });
 
                 $('[name=redirect], [name="redirect[]"]').off('change');

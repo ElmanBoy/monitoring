@@ -76,13 +76,6 @@ if(!is_array($_POST['institutions']) || count($_POST['institutions']) == 0 || st
             $errStr[] = 'Укажите проверяемый период для учреждения №'.($i + 1);
             $errorFields[] = 'check_periods['.$i.']';
         }
-        // Валидация листа согласования
-        $agCheck = $reg->checkAgreementList($_POST['agreementlist'] ?? [], 'плана проверок');
-        if (!$agCheck['result']) {
-            $err++;
-            $errStr[]      = $agCheck['message'];
-            $errorFields[] = $agCheck['errField'];
-        }
         /*if(intval($_POST['inspections'][$i]) == 0){
             $err++;
             $errStr[] = 'Укажите предмет проверки для учреждения №'.($i + 1);
@@ -101,6 +94,14 @@ if(!is_array($_POST['institutions']) || count($_POST['institutions']) == 0 || st
     $_POST['addinstitution'] = $insArr;
     $_POST['active'] = 0;
     $_POST['uid'] = uniqid();
+
+    // Валидация листа согласования — один раз после цикла
+    $agCheck = $reg->checkAgreementList($_POST['agreementlist'] ?? [], 'плана проверок');
+    if (!$agCheck['result']) {
+        $err++;
+        $errStr[]      = $agCheck['message'];
+        $errorFields[] = $agCheck['errField'];
+    }
 
 }
 
@@ -124,6 +125,13 @@ if($err == 0) {
 
     foreach($insArr as $ins){
         $ch_periods = explode(' - ', $ins['check_periods']);
+        $unitId = intval($ins['units']);
+        if ($unitId > 0) {
+            $unitExists = $db->selectOne('units', ' WHERE id = ?', [$unitId]);
+            if (!$unitExists || !$unitExists->id) {
+                $unitId = 0;
+            }
+        }
         $ai = $reg->addInstitutionToPlan(
             $_POST['uid'],
             $_POST['version'],
@@ -134,7 +142,7 @@ if($err == 0) {
             $ins['inspections'],
             $ch_periods[0],
             $ch_periods[1],
-            intval($ins['units'])
+            $unitId
         );
 
         if(!$ai['result']){
@@ -149,9 +157,15 @@ if($err == 0) {
             $value = $reg->prepareValues($f, $_POST);
             $registry[$f['field_name']] = $value;
         }
+        // planname=0 нарушает FK — заменяем на null если не выбрано
+        if (isset($registry['planname']) && intval($registry['planname']) === 0) {
+            $registry['planname'] = null;
+        }
         try {
             $db->insert('checksplans', $registry);
             $new_plan_id = $db->last_insert_id;
+            // plan_id для cam_agreement должен ссылаться на только что созданный план
+            $_POST['plan'] = $new_plan_id;
             $signer_1 = 0;
             $signer_2 = 0;
             $signer_1_position = '';
@@ -249,6 +263,20 @@ if($err == 0) {
                 } else {
                     echo $fileIds['message'];
                 }
+            }
+
+            // Поля обязательные для cam_agreement но отсутствующие в форме плана
+            $_POST['executors_head'] = $_POST['executors_head'] ?? 0;
+            $_POST['executors_list'] = $_POST['executors_list'] ?? [];
+            $_POST['ins']            = $_POST['ins'] ?? 0;
+            $_POST['unit_id']        = $_POST['unit_id'] ?? 0;
+            $_POST['plan']           = $_POST['plan'] ?? 0;
+            $_POST['check_period']   = $_POST['check_period'] ?? '';
+            $_POST['action_period']  = $_POST['action_period'] ?? '';
+            $_POST['file_ids']       = $_POST['file_ids'] ?? null;
+            // planname=0 нарушает FK — заменяем на null если не выбрано
+            if (intval($_POST['planname'] ?? 0) === 0) {
+                $_POST['planname'] = null;
             }
 
             $docCreateResult = $reg->createDocument($_POST);

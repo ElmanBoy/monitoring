@@ -2291,7 +2291,9 @@ $(document).ready(function () {
 });
 
 document.addEventListener('DOMContentLoaded', async () => {
-    await el_app.initPushNotifications();
+    if (typeof userId !== 'undefined' && parseInt(userId) > 0) {
+        await el_app.initPushNotifications();
+    }
 });
 
 /**

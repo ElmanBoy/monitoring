@@ -2060,6 +2060,9 @@ class Registry
                 <div class="el_data">
                     <textarea class="el_textarea" name="comment" rows="3" placeholder="Комментарий"></textarea>
                 </div>
+                <button class="button icon text saveComment blue" style="margin-top:4px;display:none" type="button">
+                    <span class="material-icons">save</span>Сохранить комментарий
+                </button>
             </div>';
             } else {
                 if (!empty($comment)) {
@@ -2175,12 +2178,12 @@ class Registry
                 'source_id' => intval($_POST['source_id']),
                 'source_table' => $_POST['source_table'],
                 'file_ids' => $_POST['file_ids'],
-                'prev_ins_id' => $_POST['ins'],
+                'prev_ins_id' => intval($_POST['ins']) > 0 ? intval($_POST['ins']) : null,
                 'executors_list' => json_encode($_POST['executors_list']),
-                'executors_head' => intval($_POST['executors_head']),
-                'plan_id' => $_POST['plan'],
-                'ins_id' => $_POST['ins'],
-                'unit_id' => $_POST['unit_id'],
+                'executors_head' => intval($_POST['executors_head']) > 0 ? intval($_POST['executors_head']) : null,
+                'plan_id' => intval($_POST['plan']) > 0 ? intval($_POST['plan']) : null,
+                'ins_id' => intval($_POST['ins']) > 0 ? intval($_POST['ins']) : null,
+                'unit_id' => intval($_POST['unit_id']) > 0 ? intval($_POST['unit_id']) : null,
                 'check_period' => $_POST['check_period'],
                 'action_period' => $_POST['action_period'],//$_POST['action_period_hidden'][0],
                 'action_period_text' => $_POST['action_period']
