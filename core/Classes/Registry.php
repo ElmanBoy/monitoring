@@ -1862,7 +1862,7 @@ class Registry
                                     $html .= "<button class='button icon text red setReject'>" .
                                         "<span class='material-icons'>cancel</span>Отклонить</button>";
                                     if ($level > 0) {
-                                        $html .= "<button class='button icon text setReturn' style='color: #e67e22'>" .
+                                        $html .= "<button class='button icon text setReturn orange'>" .
                                             "<span class='material-icons'>undo</span>Вернуть</button>";
                                     }
                                     $html .= '<div class="redirect-field" style="margin-top: 10px;">';
@@ -1896,7 +1896,7 @@ class Registry
                                 $html .= "<button class='button icon text red setReject'>" .
                                     "<span class='material-icons'>cancel</span>Отклонить</button>";
                                 if ($level > 0) {
-                                    $html .= "<button class='button icon text setReturn' style='color: #e67e22'>" .
+                                    $html .= "<button class='button icon text setReturn orange'>" .
                                         "<span class='material-icons'>undo</span>Вернуть</button>";
                                 }
                                 $html .= '<div class="redirect-field" style="margin-top: 10px;">';
@@ -1971,7 +1971,7 @@ class Registry
 
                             // Кнопка «Вернуть» — только для получателя перенаправления (level > 0)
                             if ($level > 0) {
-                                $html .= "<button class='button icon text setReturn' style='color: #e67e22'>" .
+                                $html .= "<button class='button icon text setReturn orange'>" .
                                     "<span class='material-icons'>undo</span>Вернуть</button>";
                             }
 

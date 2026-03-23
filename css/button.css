@@ -100,3 +100,12 @@ button.green:hover, .button.green:hover{
 button.blue:hover, .button.blue:hover{
     background: var(--dark) !important;
 }
+
+button.orange, .button.orange{
+    background: var(--warning) !important;
+    color: var(--color_01) !important;
+}
+button.orange:hover, .button.orange:hover{
+    background: var(--dark-warning) !important;
+    color: var(--color_01) !important;
+}
