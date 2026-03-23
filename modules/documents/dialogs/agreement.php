@@ -356,8 +356,12 @@ $initialAgreementList = json_decode($tmpl->agreementlist, true) ?? [];
                                     if (level === 0) pendingRepeats.push({index: i, data: originalData});
                                 }
                             } else if (parseInt(result_type) === 6) {
-                                // Возврат — применяем к pending-строке
-                                agj[i].result = {id: 6, date: currentDateTime};
+                                // Возврат — применяем только если это НЕ оригинальная строка
+                                // пользователя который уже подписал через redirect
+                                // (для таких строк возврат применяется внутри redirect-цепочки)
+                                if (!skipNonRepeat) {
+                                    agj[i].result = {id: 6, date: currentDateTime};
+                                }
                             } else {
                                 agj[i].result = {id: parseInt(result_type), date: currentDateTime};
                                 // При отклонении (result_type=5) записываем комментарий как причину
@@ -453,7 +457,6 @@ $initialAgreementList = json_decode($tmpl->agreementlist, true) ?? [];
                         return;
                     }
                     if (answer.result) {
-                        inform('Отлично!', answer.resultText);
                         // Обновляем серверное время
                         if (answer.serverTime) { _serverTime = answer.serverTime; }
                         // Обновляем значение скрытого поля актуальными данными с сервера

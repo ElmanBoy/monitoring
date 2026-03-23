@@ -88,7 +88,7 @@ button.red:hover, .button.red:hover{
     color: var(--color_01) !important;
 }
 
-button.blue, .button.blue{
+button.blue, .button.blue, .doRedirect{
     background: var(--color_04) !important;
     color: var(--color_01) !important;
 }
