@@ -28,6 +28,7 @@ class Notifications
         }
         file_put_contents($logDir . '/reminders.log', '[' . date('Y-m-d H:i:s') . '] ' . $msg . PHP_EOL, FILE_APPEND);
     }
+
     /**
      * @var array
      */
@@ -140,9 +141,94 @@ class Notifications
         try {
             $this->db->insert('notifications', $record);
             $this->deleteOldRecords($user_id);
+            // Отправляем уведомление через WebSocket
+            $this->broadcastNotification($user_id, $message, $path);
         } catch (RedException $e) {
             echo $e->getMessage();
         }
+    }
+
+    /**
+     * Отправляет уведомление на WebSocket сервер через TCP-сокет напрямую
+     */
+    private function broadcastNotification(int $userId, string $message, string $path): void
+    {
+        try {
+            $payload = json_encode([
+                'userId' => $userId,
+                'title' => 'Уведомление системы мониторинга',
+                'body' => strip_tags($message),
+                'url' => $path
+            ]
+            );
+
+            // Подключаемся к WebSocket серверу через обычный TCP и отправляем WS-фрейм
+            $wsHost = defined('WS_HOST') ? WS_HOST : '10.12.123.243';
+            $wsPort = defined('WS_PORT') ? WS_PORT : 3010;
+
+            $socket = @stream_socket_client(
+                "tcp://{$wsHost}:{$wsPort}",
+                $errno, $errstr, 2
+            );
+
+            if ($socket) {
+                // Формируем WebSocket handshake
+                $key = base64_encode(random_bytes(16));
+                $handshake = "GET /websocket/ HTTP/1.1\r\n"
+                    . "Host: {$wsHost}:{$wsPort}\r\n"
+                    . "Upgrade: websocket\r\n"
+                    . "Connection: Upgrade\r\n"
+                    . "Sec-WebSocket-Key: {$key}\r\n"
+                    . "Sec-WebSocket-Version: 13\r\n\r\n";
+                fwrite($socket, $handshake);
+                // Читаем ответ handshake
+                $response = fread($socket, 1500);
+                error_log(date('Y-m-d H:i:s') . ' [broadcastNotification] socket ok, handshake response: ' . substr($response, 0, 100) . "\n", 3, $_SERVER['DOCUMENT_ROOT'] . '/logs/PHP_errors.log');
+                if (strpos($response, '101') !== false) {
+                    // Формируем WebSocket текстовый фрейм
+                    $frame = $this->buildWsFrame($payload);
+                    fwrite($socket, $frame);
+                    error_log(date('Y-m-d H:i:s') . " [broadcastNotification] frame sent, payload: {$payload}\n", 3, $_SERVER['DOCUMENT_ROOT'] . '/logs/PHP_errors.log');
+                } else {
+                    error_log(date('Y-m-d H:i:s') . " [broadcastNotification] handshake failed, no 101\n", 3, $_SERVER['DOCUMENT_ROOT'] . '/logs/PHP_errors.log');
+                }
+                fclose($socket);
+            } else {
+                error_log(date('Y-m-d H:i:s') . " [broadcastNotification] socket connect failed: {$errno} {$errstr}\n", 3, $_SERVER['DOCUMENT_ROOT'] . '/logs/PHP_errors.log');
+            }
+        } catch (\Exception $e) {
+            error_log(date('Y-m-d H:i:s') . ' [broadcastNotification] ' . $e->getMessage() . "\n",
+                3, $_SERVER['DOCUMENT_ROOT'] . '/logs/PHP_errors.log'
+            );
+        }
+    }
+
+    /**
+     * Формирует WebSocket фрейм для текстового сообщения
+     */
+    private function buildWsFrame(string $payload): string
+    {
+        $length = strlen($payload);
+        $frame = chr(0x81); // FIN + text opcode
+
+        if ($length <= 125) {
+            $frame .= chr($length | 0x80); // маска установлена
+        } elseif ($length <= 65535) {
+            $frame .= chr(126 | 0x80) . pack('n', $length);
+        } else {
+            $frame .= chr(127 | 0x80) . pack('J', $length);
+        }
+
+        // Генерируем маску (4 байта)
+        $mask = random_bytes(4);
+        $frame .= $mask;
+
+        // Маскируем данные
+        for ($i = 0; $i < $length; $i++) {
+            $frame .= $payload[$i] ^ $mask[$i % 4];
+        }
+
+        return $frame;
     }
 
     public function setRecordViewed(int $id)
@@ -419,7 +505,7 @@ class Notifications
             '<p>Ожидается ' . $agreementAction . ' для документа «' . $documentName . '»</p>';
 
         // Панель уведомлений — всегда, task_id=null чтобы не нарушать FK на cam_tasks
-        $this->addRecordToPanel($signerId, $letterText, 0, '/documents');
+        $this->addRecordToPanel($signerId, $letterText, $documentId, '/documents');
 
         if (strlen(trim($executorEmail)) > 0) {
 
@@ -478,7 +564,7 @@ class Notifications
             '<p>Вы назначены руководителем проверки в приказе «' . $documentName . '»</p>';
 
         // Панель уведомлений — всегда
-        $this->addRecordToPanel($signerId, $letterText, 0, '/documents');
+        $this->addRecordToPanel($signerId, $letterText, $documentId, '/documents');
 
         if (strlen(trim($executorEmail)) > 0) {
 
@@ -540,7 +626,7 @@ class Notifications
             '<p>Ожидается ваше согласие или возражения по документу «' . $documentName . '»</p>';
 
         // Панель уведомлений — всегда
-        $this->addRecordToPanel($signerId, $letterText, 0, '/documents');
+        $this->addRecordToPanel($signerId, $letterText, $documentId, '/documents');
 
         if (strlen(trim($executorEmail)) > 0) {
 

@@ -1862,7 +1862,7 @@ class Registry
                                     $html .= "<button class='button icon text red setReject'>" .
                                         "<span class='material-icons'>cancel</span>Отклонить</button>";
                                     if ($level > 0) {
-                                        $html .= "<button class='button icon text setReturn orange'>" .
+                                        $html .= "<button class='button icon text setReturn' style='color: #e67e22'>" .
                                             "<span class='material-icons'>undo</span>Вернуть</button>";
                                     }
                                     $html .= '<div class="redirect-field" style="margin-top: 10px;">';
@@ -1896,7 +1896,7 @@ class Registry
                                 $html .= "<button class='button icon text red setReject'>" .
                                     "<span class='material-icons'>cancel</span>Отклонить</button>";
                                 if ($level > 0) {
-                                    $html .= "<button class='button icon text setReturn orange'>" .
+                                    $html .= "<button class='button icon text setReturn' style='color: #e67e22'>" .
                                         "<span class='material-icons'>undo</span>Вернуть</button>";
                                 }
                                 $html .= '<div class="redirect-field" style="margin-top: 10px;">';
@@ -1929,10 +1929,19 @@ class Registry
                             if ($i > $startIndex) {
                                 for ($j = $startIndex; $j < $i; $j++) {
                                     if (isset($itemArr[$j]['id'])) {
+                                        // Пропускаем скрытые _is_redirector_repeat строки
+                                        if (!empty($itemArr[$j]['_is_redirector_repeat'])) continue;
                                         $prevStatus = $getApproverStatus($itemArr[$j]);
                                         if ($prevStatus['status'] !== 'approved' && $prevStatus['status'] !== 'redirected') {
                                             $prevCanAct = false;
                                             break;
+                                        }
+                                        // redirected — проверяем завершена ли цепочка
+                                        if ($prevStatus['status'] === 'redirected') {
+                                            if (!$isRedirectCompleted($itemArr[$j]['redirect'] ?? [])) {
+                                                $prevCanAct = false;
+                                                break;
+                                            }
                                         }
                                     }
                                 }
@@ -1944,7 +1953,30 @@ class Registry
                                 $html .= "<span style='color: #9e9e9e'>Ожидание предыдущего согласующего</span>";
                             }
                         } else {
+                            // Параллельное — проверяем нет ли незавершённых redirect у предыдущих
                             $canAct = true;
+                            for ($j = $startIndex; $j < $i; $j++) {
+                                if (!isset($itemArr[$j]['id'])) continue;
+                                if (!empty($itemArr[$j]['_is_redirector_repeat'])) continue;
+                                $prevStatus = $getApproverStatus($itemArr[$j]);
+                                // redirected с незавершённой цепочкой — ждём
+                                if ($prevStatus['status'] === 'redirected') {
+                                    if (!$isRedirectCompleted($itemArr[$j]['redirect'] ?? [])) {
+                                        $canAct = false;
+                                        break;
+                                    }
+                                }
+                                // pending с незавершённым redirect — тоже ждём
+                                if ($prevStatus['status'] === 'pending'
+                                    && !empty($itemArr[$j]['redirect'])
+                                    && !$isRedirectCompleted($itemArr[$j]['redirect'])) {
+                                    $canAct = false;
+                                    break;
+                                }
+                            }
+                            if (!$canAct) {
+                                $html .= "<span style='color: #9e9e9e'>Ожидание предыдущего согласующего</span>";
+                            }
                         }
 
                         if ($isAfterRedirect && !$redirectCompleted) {
@@ -1971,7 +2003,7 @@ class Registry
 
                             // Кнопка «Вернуть» — только для получателя перенаправления (level > 0)
                             if ($level > 0) {
-                                $html .= "<button class='button icon text setReturn orange'>" .
+                                $html .= "<button class='button icon text setReturn' style='color: #e67e22'>" .
                                     "<span class='material-icons'>undo</span>Вернуть</button>";
                             }
 
@@ -2060,7 +2092,7 @@ class Registry
                 <div class="el_data">
                     <textarea class="el_textarea" name="comment" rows="3" placeholder="Комментарий"></textarea>
                 </div>
-                <button class="button icon text saveComment blue" style="margin-top:4px;display:none" type="button">
+                <button class="button icon text saveComment" style="margin-top:4px;display:none" type="button">
                     <span class="material-icons">save</span>Сохранить комментарий
                 </button>
             </div>';

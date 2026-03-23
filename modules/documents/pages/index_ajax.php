@@ -6,6 +6,148 @@ use Core\Auth;
 
 require_once $_SERVER['DOCUMENT_ROOT'] . '/core/connect.php';
 
+/*if (isset($_GET['id']) && intval($_GET['id']) > 0 && !isset($_POST['params'])) {
+	$regId = intval($_GET['id']);
+} else {
+	parse_str($_POST['params'], $paramArr);
+	foreach ($paramArr as $name => $value) {
+		$_GET[$name] = $value;
+	}
+	$regId = intval($_GET['id']);
+	$_GET['url'] = $_POST['url'];
+}*/
+
+/**
+ * Возвращает данные для отображения иконки статуса документа
+ *
+ * @param int $userId ID пользователя
+ * @param string $agreementListJson JSON строка agreementlist
+ * @return array Данные для иконки: [icon_class, color, title, can_approve]
+ */
+/*function getDocumentStatusForIcon(int $userId, string $agreementListJson, int $status): array
+{
+    if($status != 1) {
+        // Декодируем JSON
+        $data = json_decode($agreementListJson, true);
+
+        // Если некорректные данные
+        if (!is_array($data)) {
+            error_log('buildAgreementStatus: некорректный JSON для документа, agreementlist: ' . substr($agreementListJson, 0, 200));
+            return [
+                'icon_class' => 'fa-question-circle',
+                'color' => 'var(--color_02)', // серый
+                'title' => 'Ошибка данных',
+                'can_approve' => false,
+                'status_type' => 'error'
+            ];
+        }
+
+        // Сортируем по stage для правильной очередности
+        usort($data, function ($a, $b) {
+            $stageA = isset($a[0]['stage']) ? intval($a[0]['stage']) : 999;
+            $stageB = isset($b[0]['stage']) ? intval($b[0]['stage']) : 999;
+            return $stageA <=> $stageB;
+        }
+        );
+
+        $userFound = false;
+        $currentStageAllApproved = false;
+
+        // Проходим по этапам в порядке очереди
+        foreach ($data as $section) {
+            if (!is_array($section) || count($section) < 2) {
+                continue;
+            }
+
+            $sectionInfo = $section[0] ?? [];
+            $approvers = array_slice($section, 1);
+            $stage = $sectionInfo['stage'] ?? '';
+
+            // Проверяем всех согласующих в этом этапе
+            $allInStageApproved = true;
+            $userInThisStage = false;
+            $userApprovedThisStage = false;
+
+            foreach ($approvers as $approver) {
+                $hasResult = !empty($approver['result']);
+
+                if (!$hasResult) {
+                    $allInStageApproved = false;
+                }
+
+                // Если это текущий пользователь
+                if (($approver['id'] ?? null) == $userId) {
+                    $userFound = true;
+                    $userInThisStage = true;
+                    $userApprovedThisStage = $hasResult;
+                }
+            }
+
+            // Если все в этапе согласовали
+            if ($allInStageApproved) {
+                if ($userApprovedThisStage) {
+                    // Пользователь уже согласовал этот документ
+                    return [
+                        'icon_class' => 'fa-check-circle',
+                        'color' => 'var(--green)', // зелёный
+                        'title' => 'Вы уже согласовали' . ($stage ? " (этап $stage)" : ''),
+                        'can_approve' => false,
+                        'status_type' => 'approved'
+                    ];
+                }
+                continue; // Переходим к следующему этапу
+            }
+
+            // Этап не завершён
+            if ($userInThisStage && !$userApprovedThisStage) {
+                // Пользователь должен согласовать в этом этапе
+                $statusTitle = $allInStageApproved
+                    ? 'Требует вашего согласования' . ($stage ? " (этап $stage)" : '')
+                    : 'Ожидает других согласующих' . ($stage ? " (этап $stage)" : '');
+
+                return [
+                    'icon_class' => $allInStageApproved ? 'fa-exclamation-circle' : 'fa-clock',
+                    'color' => $allInStageApproved ? 'var(--blue)' : '#ffc107', // жёлтый или голубой
+                    'title' => $statusTitle,
+                    'can_approve' => $allInStageApproved,
+                    'status_type' => $allInStageApproved ? 'requires_approval' : 'waiting_others',
+                    'stage' => $stage,
+                    'urgent' => $sectionInfo['urgent'] ?? ''
+                ];
+            } else {
+                // Этап не завершён, но пользователь не в нём
+                return [
+                    'icon_class' => 'fa-pause-circle',
+                    'color' => 'var(--color_02)', // серый
+                    'title' => 'Ожидает завершения других этапов',
+                    'can_approve' => false,
+                    'status_type' => 'waiting_stages'
+                ];
+            }
+        }
+
+
+        // Если пользователь не найден в документе
+        if (!$userFound) {
+            return [
+                'icon_class' => 'fa-minus-circle',
+                'color' => '#adb5bd', // светло-серый
+                'title' => 'Вы не участвуете в согласовании',
+                'can_approve' => false,
+                'status_type' => 'not_involved'
+            ];
+        }
+
+        // Если все этапы пройдены и пользователь участвовал
+        return [
+            'icon_class' => 'fa-check-circle',
+            'color' => '#28a745', // зелёный
+            'title' => 'Документ согласован (вы участвовали)',
+            'can_approve' => false,
+            'status_type' => 'completed'
+        ];
+    }
+}*/
 
 /**
  * Возвращает данные для отображения иконки статуса документа
@@ -404,9 +546,31 @@ function getDocumentStatusForIcon(int $userId, ?string $agreementListJson, int $
                 // Для последовательного согласования проверяем предыдущих
                 if ($userInfo['list_type'] == 1 && $userInfo['index'] > 0) {
                     $approvers = array_slice($userInfo['section'], 1);
+                    $currentRole = intval($userInfo['approver']['role'] ?? 0);
                     for ($i = 0; $i < $userInfo['index']; $i++) {
+                        if (!isset($approvers[$i]['id'])) continue;
+                        // Пропускаем role=0 (утверждающего) стоящего перед role=1 (подписывающим)
+                        // Это некорректный порядок — подписывающий не должен ждать утверждающего
+                        if ($currentRole === 1 && intval($approvers[$i]['role'] ?? 0) === 0) continue;
                         $prevStatus = $getApproverStatus($approvers[$i]);
                         if ($prevStatus['status'] !== 'approved' && $prevStatus['status'] !== 'redirected') {
+                            $canAct = false;
+                            break;
+                        }
+                    }
+                }
+
+                // Для параллельного согласования проверяем незавершённые redirect у предыдущих
+                if ($canAct && $userInfo['list_type'] == 2 && $userInfo['index'] > 0) {
+                    $approvers = array_slice($userInfo['section'], 1);
+                    for ($i = 0; $i < $userInfo['index']; $i++) {
+                        if (!isset($approvers[$i]['id'])) continue;
+                        if (!empty($approvers[$i]['_is_redirector_repeat'])) continue;
+                        $prevStatus = $getApproverStatus($approvers[$i]);
+                        // pending или redirected с незавершённой цепочкой — ждём
+                        if (($prevStatus['status'] === 'redirected' || $prevStatus['status'] === 'pending')
+                            && !empty($approvers[$i]['redirect'])
+                            && !$isRedirectChainDone($approvers[$i])) {
                             $canAct = false;
                             break;
                         }
@@ -532,6 +696,10 @@ function getDocumentStatusForIcon(int $userId, ?string $agreementListJson, int $
     ];
 }
 
+
+
+
+
 $regId = 66;
 
 $gui = new Gui;
@@ -543,7 +711,6 @@ $parent_item = $db->selectOne('documents', 'where parent=' . $regId . ' LIMIT 1'
 $parents = $db->getRegistry('registry');
 $documentacial = $db->getRegistry('documentdocuments');
 $items = $db->getRegistry($table->table_name);
-$institutions = $db->getRegistry('institutions');
 
 $subQuery = '';
 
@@ -557,13 +724,6 @@ $regs = $gui->getTableData($table->table_name);
     }
     #button_nav_create{
         display: none;
-    }
-    #tbl_registry_items .group{
-        display: block;
-    }
-    #tbl_registry_items .group small{
-        color:var(--color_03);
-        font-size:small;
     }
 </style>
 <div class="nav">
@@ -752,13 +912,7 @@ $regs = $gui->getTableData($table->table_name);
                     </td>' : '<td>&nbsp;</td>').'
                     <td>' . $reg->id . '</td>
                     <td class="status '.$class.'"'.$title.'><span class="material-icons '.$class.'"'.$style.'>' . $icon . '</span> '.$agrStatus['status_text'].'</td>
-                    <td class="group">' . stripslashes($reg->name) .
-                    (intval($reg->ins_id) > 0 && isset($institutions['result'][$reg->ins_id])
-                        ? '<br><small>' .
-                        html_entity_decode($institutions['result'][$reg->ins_id]->short, ENT_QUOTES | ENT_HTML5, 'UTF-8') .
-                        '</small>'
-                        : '') .
-                    '</td>
+                    <td class="group">' . stripslashes($reg->name) . '</td>
                     <td>'.$documentacial['array'][$reg->documentacial].'</td>
                     <td>' . $reg->comment . '</td>
                     <td class="link" style="justify-content: end;">'.

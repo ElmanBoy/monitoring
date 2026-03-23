@@ -2152,7 +2152,7 @@ $(document).ready(function () {
     });
 
 
-    const ws = new WebSocket('wss://monitoring.msr.mosreg.ru/websocket');
+    window.ws = new WebSocket('wss://monitoring.msr.mosreg.ru/websocket');
 
     // Проверяем доступность уведомлений только после авторизации
     if (sessionStorage.getItem('just_logged_in') === '1') {
