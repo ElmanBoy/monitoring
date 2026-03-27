@@ -10,13 +10,15 @@ use Core\Registry;
 require_once $_SERVER['DOCUMENT_ROOT'] . '/core/connect.php';
 
 // Временное логирование для отладки напоминаний
-function remind_log(string $msg): void {
+function remind_log(string $msg): void
+{
     $logDir = $_SERVER['DOCUMENT_ROOT'] . '/logs';
     if (!is_dir($logDir)) {
         mkdir($logDir, 0775, true);
     }
     file_put_contents($logDir . '/reminders.log', '[' . date('Y-m-d H:i:s') . '] ' . $msg . PHP_EOL, FILE_APPEND);
 }
+
 //print_r($_POST);
 $db = new Db();
 $auth = new Auth();
@@ -43,51 +45,60 @@ $alertMessage = '';
 $userTaskId = 0;
 
 
-$users = $db->getRegistry("users", '', [], ['surname', 'name', 'middle_name', 'position']);
+$users = $db->getRegistry('users', '', [], ['surname', 'name', 'middle_name', 'position']);
 //$db->db::exec("DELETE FROM ".TBL_PREFIX."checkstaff WHERE check_uid = '$plan_uid' AND institution = ".$insId);
-$exist_task = $db->select('checkstaff', " WHERE check_uid = '$plan_uid' AND institution = ".$insId);
+$exist_task = $db->select('checkstaff', " WHERE check_uid = '$plan_uid' AND institution = " . $insId);
 $inspections = $db->getRegistry('inspections');
 
 // Проверяем что приказ утверждён
 $agreement_data = $db->selectOne('agreement', " WHERE source_table = 'checkinstitutions' AND source_id = " . $insId);
-$order_approved = (intval($agreement_data->status) == 1 || intval($agreement_data->approved) == 1);
+// Для внеплановых задач (plan_uid='0') приказ не требуется
+$is_unplanned = ($plan_uid === '0');
+$order_approved = $is_unplanned || (intval($agreement_data->status) == 1 || intval($agreement_data->approved) == 1);
 
-if($auth->isLogin()) {
+if ($auth->isLogin()) {
 
     if ($auth->checkAjax()) {
-        // Блокируем назначение если приказ не утверждён
+        // Блокируем назначение только если приказ не утверждён и это плановая проверка
         if (!$order_approved) {
             echo json_encode([
                 'result' => false,
                 'resultText' => 'Назначение проверяющих невозможно: приказ о проведении проверки ещё не утверждён.',
                 'errorFields' => []
-            ]);
+            ]
+            );
             exit;
         }
-        if(!isset($_POST['executors'])){
+        if (!isset($_POST['executors'])) {
             $err++;
             $errStr[] = 'Укажите сотрудника или структурное подразделение';
-        }else {
+        } else {
+            // Для внеплановых — проверяем что учреждение выбрано
+            if ($is_unplanned && $insId == 0) {
+                $err++;
+                $errStr[] = 'Укажите объект проверки';
+                $errorFields[] = 'ins_select';
+            }
             $is_head_count = 0;
             for ($i = 0; $i < count($_POST['executors']); $i++) {
                 if (intval($_POST['executors'][$i]) == 0 && intval($_POST['ousr'][$i]) == 0) {
                     $err++;
                     $errStr[] = 'Укажите сотрудника или структурное подразделение';
-                    $errorFields[] = 'executors['.$i.']';
+                    $errorFields[] = 'executors[' . $i . ']';
                 }
                 if (intval($_POST['dates'][$i]) == 0) {
                     $err++;
-                    $errStr[] = 'Укажите даты проверки для сотрудника №'.($i + 1);
-                    $errorFields[] = 'dates['.$i.']';
+                    $errStr[] = 'Укажите даты проверки для сотрудника №' . ($i + 1);
+                    $errorFields[] = 'dates[' . $i . ']';
                 }
                 if (intval($_POST['tasks'][$i]) == 0) {
                     $err++;
-                    $errStr[] = 'Укажите шаблон задачи для сотрудника №'.($i + 1);
-                    $errorFields[] = 'tasks['.$i.']';
+                    $errStr[] = 'Укажите шаблон задачи для сотрудника №' . ($i + 1);
+                    $errorFields[] = 'tasks[' . $i . ']';
                 }
-                if(isset($_POST['is_head'][$i]) && intval($_POST['is_head'][$i]) == 1){
+                if (isset($_POST['is_head'][$i]) && intval($_POST['is_head'][$i]) == 1) {
                     $is_head_count++;
-                }else{
+                } else {
                     $_POST['is_head'][$i] = 0;
                 }
                 //echo 'is_head: '.intval($_POST['is_head'][$i]).' $i: '.$i."\n";
@@ -109,20 +120,22 @@ if($auth->isLogin()) {
                 $errorFields[] = '^is_head[';
             }
 
-            if (strlen($_POST['order_number']) == 0) {
-                $err++;
-                $errStr[] = 'Укажите номер приказа';
-                $errorFields[] = 'order_number';
-            }
-            if (strlen($_POST['order_date']) == 0) {
-                $err++;
-                $errStr[] = 'Укажите дату приказа';
-                $errorFields[] = 'order_date';
-            }
-            if (intval($_POST['order']) == 0) {
-                $err++;
-                $errStr[] = 'Укажите шаблон приказа';
-                $errorFields[] = 'order';
+            if (!$is_unplanned) {
+                if (strlen($_POST['order_number']) == 0) {
+                    $err++;
+                    $errStr[] = 'Укажите номер приказа';
+                    $errorFields[] = 'order_number';
+                }
+                if (strlen($_POST['order_date']) == 0) {
+                    $err++;
+                    $errStr[] = 'Укажите дату приказа';
+                    $errorFields[] = 'order_date';
+                }
+                if (intval($_POST['order']) == 0) {
+                    $err++;
+                    $errStr[] = 'Укажите шаблон приказа';
+                    $errorFields[] = 'order';
+                }
             }
             if (!isset($_POST['signers']) || count($_POST['signers']) == 0) {
                 $err++;
@@ -130,7 +143,7 @@ if($auth->isLogin()) {
                 $errorFields[] = 'signers[]';
             }*/
         }
-        if($err == 0) {
+        if ($err == 0) {
             reset($_POST['executors']);
             reset($_POST['dates']);
 
@@ -147,34 +160,36 @@ if($auth->isLogin()) {
 
             // Логируем полный POST перед основным циклом
             remind_log('POST: ' . json_encode([
-                'executors'        => $_POST['executors'] ?? 'NOT SET',
-                'allowremind_flag' => $_POST['allowremind_flag'] ?? 'NOT SET',
-                'remind_id'        => $_POST['remind_id'] ?? 'NOT SET',
-                'datetime'         => $_POST['datetime'] ?? 'NOT SET',
-                'comment'          => $_POST['comment'] ?? 'NOT SET',
-                'user_task'        => $_POST['user_task'] ?? 'NOT SET',
-            ], JSON_UNESCAPED_UNICODE));
+                    'executors' => $_POST['executors'] ?? 'NOT SET',
+                    'allowremind_flag' => $_POST['allowremind_flag'] ?? 'NOT SET',
+                    'remind_id' => $_POST['remind_id'] ?? 'NOT SET',
+                    'datetime' => $_POST['datetime'] ?? 'NOT SET',
+                    'comment' => $_POST['comment'] ?? 'NOT SET',
+                    'user_task' => $_POST['user_task'] ?? 'NOT SET',
+                ], JSON_UNESCAPED_UNICODE
+                )
+            );
 
             for ($i = 0; $i < count($_POST['executors']); $i++) {
 
-                $userFio = trim($users['array'][$_POST['executors'][$i]][0]).' '.
-                    trim($users['array'][$_POST['executors'][$i]][1]).' '.
+                $userFio = trim($users['array'][$_POST['executors'][$i]][0]) . ' ' .
+                    trim($users['array'][$_POST['executors'][$i]][1]) . ' ' .
                     trim($users['array'][$_POST['executors'][$i]][2]);
-                if(isset($_POST['is_head'][$i]) && intval($_POST['is_head'][$i]) == 1){
-                    $executor_head = $userFio.', '.$users['array'][$_POST['executors'][$i]][3];
-                }else {
+                if (isset($_POST['is_head'][$i]) && intval($_POST['is_head'][$i]) == 1) {
+                    $executor_head = $userFio . ', ' . $users['array'][$_POST['executors'][$i]][3];
+                } else {
                     $executors[] = $userFio . ', ' . $users['array'][$_POST['executors'][$i]][3];
                 }
 
                 // allowremind_actual[] — скрытое поле, JS синхронизирует его с чекбоксом.
                 // Один элемент на сотрудника, читается напрямую по $i.
-                $flagValues  = isset($_POST['allowremind_actual']) ? array_values($_POST['allowremind_actual']) : [];
+                $flagValues = isset($_POST['allowremind_actual']) ? array_values($_POST['allowremind_actual']) : [];
                 $allowRemind = isset($flagValues[$i]) && intval($flagValues[$i]) === 1;
-                $remindId      = intval($_POST['remind_id'][$i] ?? 0);
+                $remindId = intval($_POST['remind_id'][$i] ?? 0);
                 $remindDateRaw = trim($_POST['datetime'][$i] ?? '');
                 // datetime-local передаёт "yyyy-MM-ddTHH:mm" — нормализуем в "yyyy-MM-dd HH:mm"
                 $remindDateTime = str_replace('T', ' ', $remindDateRaw);
-                $remindComment  = htmlspecialchars($_POST['comment'][$i] ?? '');
+                $remindComment = htmlspecialchars($_POST['comment'][$i] ?? '');
 
                 $ans = [
                     'created_at' => date('Y-m-d H:i:s'),
@@ -298,134 +313,134 @@ if($auth->isLogin()) {
                     $errStr[] = 'Ошибка: ' . $e->getMessage();
                 }
             }
-/*
-            //Создаём/редактируем документ приказа
-            //Получаем id приказа
-            $order = $db->selectOne('agreement', " WHERE source_id = ? AND source_table = ?", [$insId, 'checkinstitutions']);
-            $plan = $db->selectOne('checksplans', " WHERE uid = ?  AND active = 1 ORDER BY version DESC", [$plan_uid]);
-            $addinstitution = json_decode($plan->addinstitution, true);
-            $inspectionsList = [];
+            /*
+                        //Создаём/редактируем документ приказа
+                        //Получаем id приказа
+                        $order = $db->selectOne('agreement', " WHERE source_id = ? AND source_table = ?", [$insId, 'checkinstitutions']);
+                        $plan = $db->selectOne('checksplans', " WHERE uid = ?  AND active = 1 ORDER BY version DESC", [$plan_uid]);
+                        $addinstitution = json_decode($plan->addinstitution, true);
+                        $inspectionsList = [];
 
-            $allMinDates = array_column($dateResults, 'min');
-            $allMaxDates = array_column($dateResults, 'max');
-            $globalMin = $date->dateToString(min($allMinDates));
-            $globalMax = $date->dateToString(max($allMaxDates));
+                        $allMinDates = array_column($dateResults, 'min');
+                        $allMaxDates = array_column($dateResults, 'max');
+                        $globalMin = $date->dateToString(min($allMinDates));
+                        $globalMax = $date->dateToString(max($allMaxDates));
 
-            if(is_array($addinstitution) && count($addinstitution) > 0) {
-                foreach ($addinstitution as $ch) {
-                    if ($ch['institutions'] == $insId) {
-                        if (substr_count($ch['inspections'], '[') > 0) {
-                            $inspectionArr = json_decode($ch['inspections']);
-                            foreach ($inspectionArr as $in) {
-                                $inspectionsList[] = $inspections['array'][$in];
+                        if(is_array($addinstitution) && count($addinstitution) > 0) {
+                            foreach ($addinstitution as $ch) {
+                                if ($ch['institutions'] == $insId) {
+                                    if (substr_count($ch['inspections'], '[') > 0) {
+                                        $inspectionArr = json_decode($ch['inspections']);
+                                        foreach ($inspectionArr as $in) {
+                                            $inspectionsList[] = $inspections['array'][$in];
+                                        }
+                                    } else {
+                                        $inspectionsList[] = $inspections['array'][$ch['inspections']];
+                                    }
+                                    $check_periodArr = explode(' - ', $ch['check_periods']);
+                                    $check_period_start = $date->dateToString($check_periodArr[0]);
+                                    $check_period_end = $date->dateToString($check_periodArr[1]);
+                                }
                             }
-                        } else {
-                            $inspectionsList[] = $inspections['array'][$ch['inspections']];
                         }
-                        $check_periodArr = explode(' - ', $ch['check_periods']);
-                        $check_period_start = $date->dateToString($check_periodArr[0]);
-                        $check_period_end = $date->dateToString($check_periodArr[1]);
-                    }
-                }
-            }
-            //'periods': 'I квартал', 'check_types': '3', 'inspections': '1', 'check_periods': '2025-01-01 - 2025-12-31', 'periods_hidden': "[\"01\",\"02\",\"03\"]"
-            $orderId = intval($order->id);
-            $agreement_header = '';
-            $header_vars = [
-                'order_date' => $date->correctDateFormatFromMysql($_POST['order_date']),
-                'order_number' => $_POST['order_number']
-            ];
-//print_r($header_vars);
-            $agreement_header .= $temp->twig_parse($tmpl->header, $header_vars);
+                        //'periods': 'I квартал', 'check_types': '3', 'inspections': '1', 'check_periods': '2025-01-01 - 2025-12-31', 'periods_hidden': "[\"01\",\"02\",\"03\"]"
+                        $orderId = intval($order->id);
+                        $agreement_header = '';
+                        $header_vars = [
+                            'order_date' => $date->correctDateFormatFromMysql($_POST['order_date']),
+                            'order_number' => $_POST['order_number']
+                        ];
+            //print_r($header_vars);
+                        $agreement_header .= $temp->twig_parse($tmpl->header, $header_vars);
 
-            $actionPeriods = $date->getReviewPeriodsFromJson($plan->addinstitution, $plan->year);
-            $actionPeriod = $actionPeriods[$insId]['actionPeriod'];
-            $action_period_start = $date->dateToString($actionPeriods[$insId]['action_start_date']);
-            $action_period_end = $date->dateToString($actionPeriods[$insId]['action_end_date']);
-            $check_period_start = $date->dateToString($actionPeriods[$insId]['check_start_date']);
-            $check_period_end = $date->dateToString($actionPeriods[$insId]['check_end_date']);
+                        $actionPeriods = $date->getReviewPeriodsFromJson($plan->addinstitution, $plan->year);
+                        $actionPeriod = $actionPeriods[$insId]['actionPeriod'];
+                        $action_period_start = $date->dateToString($actionPeriods[$insId]['action_start_date']);
+                        $action_period_end = $date->dateToString($actionPeriods[$insId]['action_end_date']);
+                        $check_period_start = $date->dateToString($actionPeriods[$insId]['check_start_date']);
+                        $check_period_end = $date->dateToString($actionPeriods[$insId]['check_end_date']);
 
-            $body_vars['institution'] = $insName;
-            $body_vars['institution_inn'] = $ins->inn;
-            $body_vars['institution_ogrn'] = $ins->ogrn;
-            $body_vars['institution_legal'] = $ins->legal;
-            $body_vars['institution_agreement_number'] = $ins->agreements_number;
-            $body_vars['institution_agreement_date'] = @explode(" ", $ins->agreements)[0];
-            $body_vars['plan_year'] = $plan->year;
-            $body_vars['order_date'] = $date->correctDateFormatFromMysql($_POST['order_date']);
-            $body_vars['inspection'] = implode(';<br>', $inspectionsList);
-            $body_vars['periods'] = $globalMin . ' - ' . $globalMax;
-            $body_vars['check_period_start'] = $check_period_start;
-            $body_vars['check_period_end'] = $check_period_end;
-            $body_vars['action_period_start'] = $action_period_start;
-            $body_vars['action_period_end'] = $action_period_end;
-            $body_vars['executor_head'] = $executor_head;//$temp->phraseToGenitive($executor_head, 'nominative');
-            $body_vars['executors'] = implode(";<br>", $executors);
-            //print_r($body_vars);
-            $agreement_body = $temp->twig_parse($tmpl->body, $body_vars);
+                        $body_vars['institution'] = $insName;
+                        $body_vars['institution_inn'] = $ins->inn;
+                        $body_vars['institution_ogrn'] = $ins->ogrn;
+                        $body_vars['institution_legal'] = $ins->legal;
+                        $body_vars['institution_agreement_number'] = $ins->agreements_number;
+                        $body_vars['institution_agreement_date'] = @explode(" ", $ins->agreements)[0];
+                        $body_vars['plan_year'] = $plan->year;
+                        $body_vars['order_date'] = $date->correctDateFormatFromMysql($_POST['order_date']);
+                        $body_vars['inspection'] = implode(';<br>', $inspectionsList);
+                        $body_vars['periods'] = $globalMin . ' - ' . $globalMax;
+                        $body_vars['check_period_start'] = $check_period_start;
+                        $body_vars['check_period_end'] = $check_period_end;
+                        $body_vars['action_period_start'] = $action_period_start;
+                        $body_vars['action_period_end'] = $action_period_end;
+                        $body_vars['executor_head'] = $executor_head;//$temp->phraseToGenitive($executor_head, 'nominative');
+                        $body_vars['executors'] = implode(";<br>", $executors);
+                        //print_r($body_vars);
+                        $agreement_body = $temp->twig_parse($tmpl->body, $body_vars);
 
-            $bottom_vars['today_date'] = $date->dateToString(date('Y-m-d'));
-            $bottom_vars['institution'] = $insName;
-            $bottom_vars['plan_year'] = $plan->year;
-            $bottom_vars['order_date'] = $date->correctDateFormatFromMysql($_POST['order_date']);
-            $bottom_vars['check_period_start'] = $check_period_start;
-            $bottom_vars['check_period_end'] = $check_period_end;
-            $bottom_vars['action_period_start'] = $action_period_start;
-            $bottom_vars['action_period_end'] = $action_period_end;
-            $bottom_vars['institution_agreement_number'] = $ins->agreements_number;
-            $bottom_vars['institution_agreement_date'] = $ins->agreements;
-            $bottom_vars['order_number'] = $_POST['order_number'];
-            //print_r($bottom_vars);
-            $agreement_bottom = $temp->twig_parse($tmpl->bottom, $bottom_vars);
+                        $bottom_vars['today_date'] = $date->dateToString(date('Y-m-d'));
+                        $bottom_vars['institution'] = $insName;
+                        $bottom_vars['plan_year'] = $plan->year;
+                        $bottom_vars['order_date'] = $date->correctDateFormatFromMysql($_POST['order_date']);
+                        $bottom_vars['check_period_start'] = $check_period_start;
+                        $bottom_vars['check_period_end'] = $check_period_end;
+                        $bottom_vars['action_period_start'] = $action_period_start;
+                        $bottom_vars['action_period_end'] = $action_period_end;
+                        $bottom_vars['institution_agreement_number'] = $ins->agreements_number;
+                        $bottom_vars['institution_agreement_date'] = $ins->agreements;
+                        $bottom_vars['order_number'] = $_POST['order_number'];
+                        //print_r($bottom_vars);
+                        $agreement_bottom = $temp->twig_parse($tmpl->bottom, $bottom_vars);
 
-            //Добавляем подписантов в отдельную последнюю секцию-этап
-            if(is_array($_POST['signers']) && count($_POST['signers']) > 0){
+                        //Добавляем подписантов в отдельную последнюю секцию-этап
+                        if(is_array($_POST['signers']) && count($_POST['signers']) > 0){
 
-                $signers = [];
-                for($s = 0; $s < count($_POST['signers']); $s++){
-                    $signers[] = '{"id":'.$_POST['signers'][$s].',"type":1, "urgent": 1}';
-                }
-                $last_signers = end($_POST['agreementlist']);
-                $last_signersArr = json_decode($last_signers, true);
-                if($last_signersArr[0]['stage'] == ''){
-                    //Если последний элемент - это секция с подписантами, то меняем её содержимое
-                    $last_signers = '[{"stage":"","list_type":"1","urgent":"1"},'.implode(',', $signers).']';
-                }else {
-                    //Иначае добавляем секцию с подписантами
-                    $_POST['agreementlist'][] = '[{"stage":"","list_type":"1","urgent":"1"},' . implode(',', $signers) . ']';
-                }
-            }
+                            $signers = [];
+                            for($s = 0; $s < count($_POST['signers']); $s++){
+                                $signers[] = '{"id":'.$_POST['signers'][$s].',"type":1, "urgent": 1}';
+                            }
+                            $last_signers = end($_POST['agreementlist']);
+                            $last_signersArr = json_decode($last_signers, true);
+                            if($last_signersArr[0]['stage'] == ''){
+                                //Если последний элемент - это секция с подписантами, то меняем её содержимое
+                                $last_signers = '[{"stage":"","list_type":"1","urgent":"1"},'.implode(',', $signers).']';
+                            }else {
+                                //Иначае добавляем секцию с подписантами
+                                $_POST['agreementlist'][] = '[{"stage":"","list_type":"1","urgent":"1"},' . implode(',', $signers) . ']';
+                            }
+                        }
 
-            $_POST['active'] = 1;
-            $_POST['name'] = $tmpl->name.' № '.$_POST['order_number'];
-            $_POST['header'] = $agreement_header;
-            $_POST['body'] = $agreement_body;
-            $_POST['bottom'] = $agreement_bottom;
-            $_POST['documentacial'] = 1; //Приказ
-            $_POST['document'] = $_POST['order'];
-            $_POST['doc_number'] = $_POST['order_number'];
-            $_POST['docdate'] = $_POST['order_date'];
-            $_POST['signators'] = $_POST['signers'];
-            $_POST['status'] = 0;
-            $_POST['source_id'] = $insId;
-            $_POST['source_table'] = 'checkinstitutions';
+                        $_POST['active'] = 1;
+                        $_POST['name'] = $tmpl->name.' № '.$_POST['order_number'];
+                        $_POST['header'] = $agreement_header;
+                        $_POST['body'] = $agreement_body;
+                        $_POST['bottom'] = $agreement_bottom;
+                        $_POST['documentacial'] = 1; //Приказ
+                        $_POST['document'] = $_POST['order'];
+                        $_POST['doc_number'] = $_POST['order_number'];
+                        $_POST['docdate'] = $_POST['order_date'];
+                        $_POST['signators'] = $_POST['signers'];
+                        $_POST['status'] = 0;
+                        $_POST['source_id'] = $insId;
+                        $_POST['source_table'] = 'checkinstitutions';
 
-            $docCreateResult = $reg->createDocument($_POST, $orderId);
+                        $docCreateResult = $reg->createDocument($_POST, $orderId);
 
-            if($docCreateResult['result']){
-                $alertMessage = ' Приказ о проверке создан.';
-            }else{
-                $err++;
-                $errStr[] = $docCreateResult['resultText'];
-            }*/
+                        if($docCreateResult['result']){
+                            $alertMessage = ' Приказ о проверке создан.';
+                        }else{
+                            $err++;
+                            $errStr[] = $docCreateResult['resultText'];
+                        }*/
 
         }
 
-        if($err == 0) {
+        if ($err == 0) {
             $reg->insertTaskLog($orderId, 'Сохранены изменения в назначении', 'calendar', 'assign_staff');
             echo json_encode(array(
                 'result' => true,
-                'resultText' => 'Сотрудники назначены.'.$alertMessage.'
+                'resultText' => 'Сотрудники назначены.' . $alertMessage . '
                                 <script>
                                 el_app.reloadMainContent();
                                 el_app.dialog_close("assign_staff");
@@ -433,19 +448,22 @@ if($auth->isLogin()) {
                                 el_app.dialog_close("registry_create");
                                 </script>',
                 'post' => $_POST,
-                'errorFields' => []));
-        }else{
+                'errorFields' => [])
+            );
+        } else {
             echo json_encode(array(
                 'result' => false,
                 'resultText' => implode('<br>', $errStr),
                 'post' => $_POST,
-                'errorFields' => $errorFields));
+                'errorFields' => $errorFields)
+            );
         }
 
     }
-}else{
+} else {
     echo json_encode(array(
         'result' => false,
         'resultText' => '<script>alert("Ваша сессия устарела.");document.location.href = "/"</script>',
-        'errorFields' => []));
+        'errorFields' => [])
+    );
 }

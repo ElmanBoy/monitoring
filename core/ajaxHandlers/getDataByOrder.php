@@ -19,7 +19,7 @@ $exArr = [];
 $staffListArr = [];
 
 if($orderId > 0) {
-    $users = $db->getRegistry('users', "where roles <> '2'", [], ['surname', 'name', 'middle_name']);
+    $users = $db->getRegistry('users', "where roles <> '2' ORDER BY surname, name, middle_name", [], ['surname', 'name', 'middle_name']);
     $or = $db->selectOne('agreement', " WHERE id = ?", [$orderId]); //print_r($or);
     $tasks = $db->getRegistry('tasks');
 
@@ -34,7 +34,22 @@ if($orderId > 0) {
     $unitId = $or->unit_id;
 
     $ins = $db->selectOne("institutions", " WHERE id = ?", [$or->ins_id]);
-    $unit = $db->selectOne('insadress',  " WHERE id = ?", [$or->unit_id] );
+
+    // Парсим unit_id который может быть в формате: legal_33, target_33, location_33, insadress_123
+    $unitAddress = '';
+    if (!empty($unitId)) {
+        if (strpos($unitId, 'legal_') === 0) {
+            $unitAddress = $ins->legal ?? '';
+        } elseif (strpos($unitId, 'target_') === 0) {
+            $unitAddress = $ins->target_address ?? '';
+        } elseif (strpos($unitId, 'location_') === 0) {
+            $unitAddress = $ins->location ?? '';
+        } elseif (strpos($unitId, 'insadress_') === 0) {
+            $unitAddressId = intval(str_replace('insadress_', '', $unitId));
+            $unitObj = $db->selectOne('insadress', " WHERE id = ?", [$unitAddressId]);
+            $unitAddress = $unitObj->target_address ?? '';
+        }
+    }
 
     if(strlen($or->executors_list) > 0) {
         $executors = json_decode($or->executors_list);
@@ -129,7 +144,7 @@ if($orderId > 0) {
         'actionPeriodText' => $actionPeriodText,
         'checkPeriod' => $checkPeriod,
         'institution' => htmlspecialchars(stripslashes($ins->short)),
-        'unit' => $unit->target_address,
+        'unit' => htmlspecialchars(stripslashes($unitAddress)),
         'insId' => $insId,
         'unitId' => $unitId,
         'executors' => $exArr,

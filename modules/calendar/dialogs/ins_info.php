@@ -52,7 +52,7 @@ $roadmaps = [];
 
 if ($auth->isLogin()) {
     if ($insId > 0) {
-        $users = $db->getRegistry('users', '', [], ['surname', 'name', 'middle_name']);
+        $users = $db->getRegistry('users', 'ORDER BY surname, name, middle_name', [], ['surname', 'name', 'middle_name']);
         $taskTemplates = $db->getRegistry('tasks');
         $inspections = $db->getRegistry('inspections');
         $ins = $db->selectOne('institutions', ' WHERE id = ?', [$insId]); //print_r($plan);

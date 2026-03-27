@@ -2215,7 +2215,8 @@ class Registry
                 'executors_head' => intval($_POST['executors_head']) > 0 ? intval($_POST['executors_head']) : null,
                 'plan_id' => intval($_POST['plan']) > 0 ? intval($_POST['plan']) : null,
                 'ins_id' => intval($_POST['ins']) > 0 ? intval($_POST['ins']) : null,
-                'unit_id' => intval($_POST['unit_id']) > 0 ? intval($_POST['unit_id']) : null,
+                'unit_id' => !empty($_POST['unit_id']) ? $_POST['unit_id'] : null, // Теперь строка: legal_123, target_123, location_123, insadress_456
+                'unit_address' => !empty($_POST['unit_address']) ? $_POST['unit_address'] : null, // Текст адреса
                 'check_period' => $_POST['check_period'],
                 'action_period' => $_POST['action_period'],//$_POST['action_period_hidden'][0],
                 'action_period_text' => $_POST['action_period']

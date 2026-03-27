@@ -39,7 +39,7 @@ if ($auth->isLogin()) {
     $insector = $db->getRegistry('institutions', 'WHERE inspectors = 1');
     $tasks = $db->getRegistry('tasks');
     $ousr = $db->getRegistry('ousr');
-    $users = $db->getRegistry('users', "where roles <> '2'", [], ['surname', 'name', 'middle_name']);
+    $users = $db->getRegistry('users', "where roles <> '2' ORDER BY surname, name, middle_name", [], ['surname', 'name', 'middle_name']);
         ?>
         <div class='pop_up drag' style='width: 60vw;'>
             <div class='title handle'>

@@ -78,12 +78,27 @@ if($insId > 0) {
         }
     }
 
+    // Логирование для отладки
+    error_log("getPeriodByIns: insId=$insId, inn=" . ($inn->inn ?? 'null') .
+              ", legal=" . ($inn->legal ?? 'null') .
+              ", target_address=" . ($inn->target_address ?? 'null') .
+              ", location=" . ($inn->location ?? 'null') .
+              ", units count=" . count($unitsArr));
+
     echo json_encode([
         'minDate' => $minDate,
         'maxDate' => $maxDate,
         'actionPeriod' => $reviewPeriod,
         'checkPeriod' => $checkPeriod,
-        'units' => implode("\n", $unitsArr)
+        'units' => implode("\n", $unitsArr),
+        '_debug' => [ // Временная отладка
+            'insId' => $insId,
+            'inn' => $inn->inn ?? null,
+            'legal' => $inn->legal ?? null,
+            'target_address' => $inn->target_address ?? null,
+            'location' => $inn->location ?? null,
+            'unitsCount' => count($unitsArr)
+        ]
     ]
     );
 }

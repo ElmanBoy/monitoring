@@ -84,17 +84,21 @@ if ($auth->isLogin()) {
             $errStr[] = 'Укажите проверяющих';
             $errorFields[] = 'executors_list[]';
         }
+        $agreementError = false;
         if (!isset($_POST['agreementlist']) || count($_POST['agreementlist']) == 0) {
-            $err++;
-            $errStr[] = 'Заполните лист согласования';
-            $errorFields[] = '';
+            $agreementError = true;
         }else{
             foreach($_POST['agreementlist'] as $sec){
                 if(is_null($sec) || strlen(trim($sec)) == 0){
-                    $err++;
-                    $errStr[] = 'Заполните лист согласования';
+                    $agreementError = true;
+                    break;
                 }
             }
+        }
+        if ($agreementError) {
+            $err++;
+            $errStr[] = 'Заполните лист согласования';
+            $errorFields[] = '';
         }
 
 
@@ -272,10 +276,38 @@ if ($auth->isLogin()) {
             $check_period_start = $date->dateToString($checkPeriodArr[0]);
             $check_period_end = $date->dateToString($checkPeriodArr[1]);
 
+            // Получаем выбранный адрес из unit_address или по unit_id
+            $institution_address = '';
+            if (!empty($_POST['unit_address'])) {
+                // Если передан текст адреса - используем его
+                $institution_address = $_POST['unit_address'];
+            } elseif (!empty($_POST['unit_id'])) {
+                // Иначе пытаемся получить адрес по идентификатору
+                $unit_id = $_POST['unit_id'];
+                if (strpos($unit_id, 'legal_') === 0) {
+                    $institution_address = $ins->legal;
+                } elseif (strpos($unit_id, 'target_') === 0) {
+                    $institution_address = $ins->target_address;
+                } elseif (strpos($unit_id, 'location_') === 0) {
+                    $institution_address = $ins->location;
+                } elseif (strpos($unit_id, 'insadress_') === 0) {
+                    $addr_id = intval(str_replace('insadress_', '', $unit_id));
+                    $addr = $db->selectOne('insadress', ' WHERE id = ?', [$addr_id]);
+                    if ($addr) {
+                        $institution_address = $addr->target_address;
+                    }
+                }
+            }
+            // Если адрес не выбран - используем юридический по умолчанию
+            if (empty($institution_address)) {
+                $institution_address = $ins->legal;
+            }
+
             $body_vars['institution'] = $insName;
             $body_vars['institution_inn'] = $ins->inn;
             $body_vars['institution_ogrn'] = $ins->ogrn;
             $body_vars['institution_legal'] = $ins->legal;
+            $body_vars['institution_address'] = $institution_address; // Выбранный адрес
             $body_vars['institution_agreement_number'] = $ins->agreements_number;
             $body_vars['institution_agreement_date'] = @explode(" ", $ins->agreements)[0];
             $body_vars['plan_year'] = $plan->year;
@@ -333,8 +365,23 @@ if ($auth->isLogin()) {
             //$_POST['docdate'] = $_POST['order_date'];
             $_POST['signators'] = $_POST['signers'];
             $_POST['status'] = 0;
-            $_POST['source_id'] = $_POST['ins'];//$source_id->id;
-            $_POST['source_table'] = 'checkinstitutions';
+
+            // Формируем action_period_text из action_period для корректного отображения
+            // Очищаем от возможных дублей, если они уже есть
+            $cleanActionPeriodStart = trim(explode(' - ', $action_period_start)[0]);
+            $cleanActionPeriodEnd = trim(explode(' - ', $action_period_end)[0]);
+            $_POST['action_period_text'] = $cleanActionPeriodStart . ' - ' . $cleanActionPeriodEnd;
+
+            // Если source_id не передан из формы, ищем запись в checkinstitutions
+            if (!isset($_POST['source_id']) || intval($_POST['source_id']) == 0) {
+                $checkInst = $db->selectOne('checkinstitutions', ' WHERE plan_uid = ? AND institution = ?', [$plan_uid, $insId]);
+                $_POST['source_id'] = $checkInst ? $checkInst->id : 0;
+            }
+            // source_table уже должна быть установлена из формы, но на всякий случай
+            if (!isset($_POST['source_table'])) {
+                $_POST['source_table'] = 'checkinstitutions';
+            }
+
             $_POST['plan_id'] = $_POST['plan'];
             $_POST['ins_id'] = $_POST['ins'];
             $_POST['prev_ins_id'] = $_POST['ins'];

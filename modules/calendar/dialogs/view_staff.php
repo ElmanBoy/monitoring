@@ -96,7 +96,7 @@ if ($auth->isLogin()) {
             }
         }
 
-        $users = $db->getRegistry('users', "where roles <> '2'", [], ['surname', 'name', 'middle_name']);
+        $users = $db->getRegistry('users', "where roles <> '2' ORDER BY surname, name, middle_name", [], ['surname', 'name', 'middle_name']);
         $new_order_number = 'ПРП' . $new_order_num . '-' . date('Y');
         $prevDate = date('Y-m-d', strtotime($datesEventArr[0] .' -1 day'));
         ?>

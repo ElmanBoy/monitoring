@@ -27,3 +27,4 @@ __MACOSX/
 *.dump
 *.sql
 /modules/.violations/
+/CLAUDE.md

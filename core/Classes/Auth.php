@@ -380,7 +380,10 @@ class Auth
         return ($this->isLogin() && intval($this->_post['ajax']) == 1
             && (strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest' ||
                 strtolower($this->_headers['x-requested-with']) == 'xmlhttprequest')
-            && $_SESSION['csrf-token'] == getallheaders()['x-csrf-token']);
+            && hash_equals(
+                (string)($_SESSION['csrf-token'] ?? ''),
+                (string)(getallheaders()['x-csrf-token'] ?? getallheaders()['X-Csrf-Token'] ?? '')
+            ));
     }
 
 
@@ -419,16 +422,28 @@ class Auth
 	public function getDefaultPage(): string
     {
         $last_path = preg_replace('/^\/+|\/+$/', '', $_COOKIE['last_path']);//$_SESSION['login_path']
-        //Если модуль Данные не разрешен на просмотр, то выбираем первый доступный модуль
-        /*foreach($this->_session['user_permissions'] as $id => $p){
-            if($p['view']){
-                $path = $this->db->selectOne('modules', ' where id = ? order by id', [intval($p['module'])]);
-                $default_page = str_replace('/', '', $path->path);
-                if(is_file($_SERVER['DOCUMENT_ROOT'] . '/modules/'.$default_page.'/pages/index.php')) {
-                    return $path->path;
-                }
+
+        // Очищаем URL от некорректных параметров
+        if (strlen($last_path) > 0) {
+            // Удаляем параметр session_expired
+            $last_path = preg_replace('/[?&]session_expired=1/', '', $last_path);
+
+            // Удаляем пустые параметры module и mode
+            $last_path = preg_replace('/[?&]module=(&|$)/', '$1', $last_path);
+            $last_path = preg_replace('/[?&]mode=(&|$)/', '$1', $last_path);
+
+            // Удаляем параметр open_dialog=undefined
+            $last_path = preg_replace('/[?&]open_dialog=undefined/', '', $last_path);
+
+            // Убираем лишние ? и & в конце или начале
+            $last_path = preg_replace('/[?&]+$/', '', $last_path);
+            $last_path = preg_replace('/\?&/', '?', $last_path);
+
+            // Если остался только домен или пустая строка, используем dashboard
+            if (preg_match('/^https?:\/\/[^\/]+\/?$/', $last_path) || empty($last_path)) {
+                return 'dashboard';
             }
-        }*/
+        }
 
         return strlen($last_path) > 0 ? $last_path : 'dashboard';
     }

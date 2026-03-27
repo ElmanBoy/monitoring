@@ -331,10 +331,11 @@ $html .= '<html lang="ru">
                 font-size: 3.5mm;*/
                 font-family: "Times-Roman", "Times New Roman", serif;
                 font-weight: normal;
-                font-size: 16px;
+                font-size: 14pt;
                 font-kerning: auto;
                 hyphens: auto;
-                line-height: 18px;
+                line-height: 1.15;
+                text-align: justify;
             }
             table, table tr, table tr td, table tr th{
                 border: 1px solid #000;
@@ -344,11 +345,19 @@ $html .= '<html lang="ru">
             table tr td.group{
                 border: none;
             }
+            p {
+                text-indent: 1.25cm;
+                margin: 0 0 0 0;
+            }
+            p[style*="text-align: center"],
+            p[style*="text-align: right"] {
+                text-indent: 0;
+            }
             strong, b{
                 font-weight: 900;
             }
             main{
-                margin: 1cm;
+                margin: 0;
             }
             footer {
                 position: fixed;
@@ -370,7 +379,7 @@ $html .= '<html lang="ru">
                 width: 100px;
             }
             @page {
-                margin: 1cm 0 1cm 0;
+                margin: 20mm 10mm 20mm 30mm;
             }
             .agreement_list{
                 background-color: #dde8f7;

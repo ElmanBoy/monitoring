@@ -54,7 +54,7 @@ var el_plans_registry = {
         });
 
         $(".custom_checkbox input#in_menu").on("change", function (){
-                $(".tm-icon-picker, .short_name").css("visibility", ($(".custom_checkbox input#in_menu").prop("checked") ? "visible" : "hidden"));
+            $(".tm-icon-picker, .short_name").css("visibility", ($(".custom_checkbox input#in_menu").prop("checked") ? "visible" : "hidden"));
         });
 
         $("[name=field_types]").on("change", function (){
@@ -380,6 +380,11 @@ var el_plans_registry = {
         });
 
         el_plans_registry.bindSetOrgByType();
+        el_plans_registry.bindSetOrgByPlanType();
+        // Если тип уже выбран (форма редактирования) — сразу применяем фильтр
+        if (parseInt($("select[name='checks']").val()) > 0) {
+            $("select[name='checks']").trigger("change.plantype");
+        }
         el_plans_registry.bindPassword();
         el_plans_registry.bindLoginAlias();
         el_plans_registry.getPropsInRegistry();
@@ -451,12 +456,12 @@ var el_plans_registry = {
                         if (addinstitution !== null && addinstitution.length > 0) {
                             for (let i = 0; i < addinstitution.length; i++) {
                                 let index = i + 1,
-                                data = {
-                                    institutions: $(addinstitution[i]).val(),
-                                    periods: $("[name='periods[" + index + "]']").val(),
-                                    periods_hidden: $("[name='periods_hidden[" + index + "]']").val(),
-                                    check_periods: $("[name='check_periods[" + index + "]']").val()
-                                };
+                                    data = {
+                                        institutions: $(addinstitution[i]).val(),
+                                        periods: $("[name='periods[" + index + "]']").val(),
+                                        periods_hidden: $("[name='periods_hidden[" + index + "]']").val(),
+                                        check_periods: $("[name='check_periods[" + index + "]']").val()
+                                    };
                                 //console.log(data);
                                 el_plans_registry.setInstitution(data);
                                 if (i < addinstitution.length - 1){
@@ -545,9 +550,9 @@ var el_plans_registry = {
             $(this).hide();
             $(this).closest(".item").find(".rename_done").show()
                 .off("click").on("click", function (){
-                    let $input = $(this).closest(".item").find("input[name=fieldName]"),
+                let $input = $(this).closest(".item").find("input[name=fieldName]"),
                     newVal = $input.val();
-                    $input.remove();
+                $input.remove();
                 $(this).closest(".item").find(".fieldName").text(newVal);
                 $(this).hide();
                 $(this).closest(".item").find(".rename").show();
@@ -736,8 +741,8 @@ var el_plans_registry = {
 
     cloneInstitution: function(is_last = true, purify = true){
         let current_check = $(".pop_up_body select[name='check_types[]']").val(),
-        check_type = $(".pop_up_body select[name='inspections[]']").val(),
-        check_period = $(".pop_up_body input[name='check_periods[]']").val();
+            check_type = $(".pop_up_body select[name='inspections[]']").val(),
+            check_period = $(".pop_up_body input[name='check_periods[]']").val();
 
         $(".pop_up_body .institutions select").chosen("destroy");
         $(".pop_up_body .institutions:last").clone().insertAfter(".pop_up_body .institutions:last");
@@ -787,13 +792,13 @@ var el_plans_registry = {
         institutions_counter++;
 
 
-            $(".institutions:last .clear").off("click").on("click", function (){
-                $(this).closest(".institutions").remove();
-                el_plans_registry.setItemsNumbers($(".pop_up_body .institutions"), "Учреждение");
-                if(institutions_counter > 1){
-                    institutions_counter--;
-                }
-            });
+        $(".institutions:last .clear").off("click").on("click", function (){
+            $(this).closest(".institutions").remove();
+            el_plans_registry.setItemsNumbers($(".pop_up_body .institutions"), "Учреждение");
+            if(institutions_counter > 1){
+                institutions_counter--;
+            }
+        });
 
 
         if (is_last) {
@@ -827,8 +832,8 @@ var el_plans_registry = {
     bind_check_institution_availability: function ($block){
         $block.find("[name='institutions[]'], [name='periods_hidden[]']")
             .on("change input", function (){
-            el_plans_registry.check_institution_availability($block);
-        });
+                el_plans_registry.check_institution_availability($block);
+            });
         $block.find("[name='periods[]']")
             .on("blur", function (){
                 el_plans_registry.check_institution_availability($block);
@@ -1044,19 +1049,63 @@ var el_plans_registry = {
     },
 
     bindSetOrgByType: function (){
-
-        /*$("select[name='check_types[]']").off("change").on("change", function (){
+        $("select[name='check_types[]']").off("change").on("change", function (){
             let $parent = $(this).closest(".institutions"),
                 $inst = $parent.find("select[name='institutions[]']"),
                 $instSelected = $parent.find("input[name='institutions_hidden[]']");
             $inst.html("").trigger("chosen:updated");
             $.post("/", {ajax: 1, action: "getOrgByCheckType", check_type: $(this).val(), selected: $instSelected.val()},
                 function (data){
-                    //el_plans_registry.bindSetUnitsByOrg();
                     el_app.bindGetUnitsByOrg();
-                    $inst.html(data).trigger("chosen:updated");//.trigger("change");
+                    $inst.html(data).trigger("chosen:updated");
                 });
-        });*/
+        });
+    },
+
+    // Вызывается при смене типа ПЛАНА (select[name='checks'])
+    // Обновляет списки учреждений во ВСЕХ блоках и показывает подсказку с критериями
+    bindSetOrgByPlanType: function (){
+        $("select[name='checks']").off("change.plantype").on("change.plantype", function (){
+            let checkType = $(this).val();
+
+            $(".pop_up_body .institutions").each(function (){
+                let $inst         = $(this).find("select[name='institutions[]']"),
+                    $instSelected = $(this).find("input[name='institutions_hidden[]']"),
+                    selected      = $instSelected.val() || 0;
+
+                $inst.html('<option value="">Загрузка...</option>').trigger("chosen:updated");
+
+                $.post("/", {ajax: 1, action: "getOrgByCheckType",
+                        check_type: checkType,
+                        selected: selected},
+                    function (data){
+                        $inst.html(data).trigger("chosen:updated");
+                        el_app.bindGetUnitsByOrg();
+                    });
+            });
+
+            // Подсказка с критериями отбора
+            $(".plan_check_type_hint").remove();
+            let hintText = el_plans_registry.getCheckTypeHint(checkType);
+            if (hintText) {
+                $("select[name='checks']").closest(".item")
+                    .append('<div class="plan_check_type_hint greyText" style="font-size:11px;margin-top:4px;color:var(--color_04)">' +
+                        '<span class="material-icons" style="font-size:12px;vertical-align:middle">info</span> ' +
+                        hintText + '</div>');
+            }
+        });
+    },
+
+    // Подсказки с критериями отбора по типу проверки (id из cam_checks)
+    getCheckTypeHint: function (checkType) {
+        const hints = {
+            '3': 'ФХД (19рв-137): все подведомственные учреждения, не проверявшиеся 3+ лет',
+            '4': 'Субсидии НКО (19рв-84): НКО с действующим соглашением, 1 раз в 3 года',
+            '5': 'Соцзаказ НГО: НГО с действующим соглашением, 1 раз в 3 года',
+            '6': 'МБТ: муниципальные образования — получатели межбюджетных трансфертов',
+            '7': 'Аудит: ТСП и финансовый блок министерства, на основании реестра рисков',
+        };
+        return hints[String(checkType)] || '';
     },
 
     bindSetUnitsByOrg: function (){

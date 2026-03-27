@@ -313,6 +313,10 @@ var el_app = {
         document.title = el_app.current_title;
 
         $("#" + dialog_id).trigger("dialog_close").remove();
+
+        // Генерируем событие dialog_closed с передачей имени диалога
+        $(document).trigger("dialog_closed", [dialog_id]);
+
         if (el_app.calendars.hasOwnProperty("popup_calendar")) {
             if ("destroy" in el_app.calendars.popup_calendar) {
                 el_app.calendars.popup_calendar.destroy();

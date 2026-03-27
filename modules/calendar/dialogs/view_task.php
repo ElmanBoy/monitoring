@@ -62,7 +62,7 @@ if ($check_type_id > 0) {
     $orders = $db->getRegistry('documents', ' WHERE documentacial = 2');
 }
 //Справочник пользователей (для выбора подписантов)
-$users = $db->getRegistry('users', "where roles <> '2'", [], ['surname', 'name', 'middle_name']);
+$users = $db->getRegistry('users', "where roles <> '2' ORDER BY surname, name, middle_name", [], ['surname', 'name', 'middle_name']);
 
 
 //echo '<pre>'.$taskId;print_r($editData);echo '</pre>';

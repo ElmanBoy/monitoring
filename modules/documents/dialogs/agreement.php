@@ -263,9 +263,11 @@ $initialAgreementList = json_decode($tmpl->agreementlist, true) ?? [];
             const AG_USERS_OPTIONS = <?= (function() use ($users) {
                 $opts = '<option value=""></option>';
                 foreach ($users['result'] as $u) {
-                    $fio = trim($u->surname) . ' ' . mb_substr(trim($u->name), 0, 1) . '. ' .
-                        mb_substr(trim($u->middle_name), 0, 1) . '.';
-                    $opts .= '<option value="' . $u->id . '">' . htmlspecialchars($fio) . '</option>';
+                    if($u->id != $_SESSION['user_id']) {
+                        $fio = trim($u->surname) . ' ' . mb_substr(trim($u->name), 0, 1) . '. ' .
+                            mb_substr(trim($u->middle_name), 0, 1) . '.';
+                        $opts .= '<option value="' . $u->id . '">' . htmlspecialchars($fio) . '</option>';
+                    }
                 }
                 return json_encode($opts, JSON_UNESCAPED_UNICODE);
             })() ?>;

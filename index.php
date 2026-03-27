@@ -80,7 +80,7 @@ if (isset($_POST['ajax']) && intval($_POST['ajax']) == 1) {
     if (!$isPublicAction) {
         // Проверяем авторизацию, X-Requested-With и CSRF-токен одним методом
         if (!$auth->checkAjax()) {
-            echo '<script>alert("Ваша сессия устарела.");document.location.href = "/"</script>';
+            echo '<script>document.location.href="/?session_expired=1"</script>';
             die();
         }
     }
@@ -89,9 +89,11 @@ if (isset($_POST['ajax']) && intval($_POST['ajax']) == 1) {
     header('Cache-Control: no-store, no-cache, must-revalidate');
     header('Cache-Control: post-check=0, pre-check=0', false);
 
-    $path = preg_replace('/http(s*):\/\/' . $_SERVER['SERVER_NAME'] . '\//', '', $_SERVER['HTTP_REFERER']);
-    $pathArr = explode('?', $path);
-    $path = str_replace(array('?', '#'), '', $pathArr[0]);
+    // Извлекаем путь модуля из Referer — убираем протокол/домен, query string и hash
+    $referer = $_SERVER['HTTP_REFERER'] ?? '';
+    $path = preg_replace('/https?:\/\/' . preg_quote($_SERVER['SERVER_NAME'], '/') . '\//', '', $referer);
+    $path = strtok($path ?: '', '?#');
+    $path = trim($path ?: '', '/');
 
     // Санитизация входных параметров роутера — только буквы, цифры, _ и -
     // Предотвращает path traversal (../../etc/passwd и подобное)
@@ -127,6 +129,14 @@ if (isset($_POST['ajax']) && intval($_POST['ajax']) == 1) {
         // Если нужно отобразить страницу
         case 'mainpage':
             $urlName = $sanitizePath($_POST['url'] ?? '');
+            // Если url не передан явно — берём из Referer
+            if (strlen($urlName) === 0) {
+                $urlName = $sanitizePath($path);
+            }
+            if (strlen($urlName) === 0) {
+                echo '<script>document.location.href="' . $auth->getDefaultPage() . '"</script>';
+                exit();
+            }
             $page    = $sanitizePath((isset($_POST['page']) && strlen($_POST['page']) > 0) ? $_POST['page'] : 'index');
             $checkModuleAccess($urlName);
             $pageUrl = $_SERVER['DOCUMENT_ROOT'] . '/modules/' . $urlName . '/pages/' . $page . '_ajax.php';
@@ -176,9 +186,29 @@ if (isset($_POST['ajax']) && intval($_POST['ajax']) == 1) {
 
     // Проверяем авторизацию
     if (!$auth->isLogin()) {
+        // Если редирект произошёл из-за устаревшей сессии — сохраняем notice для формы логина
+        if (!empty($_GET['session_expired'])) {
+            $_SESSION['login_notice'] = 'Ваша сессия завершена. Пожалуйста, войдите снова.';
+        }
         include_once __DIR__ . '/tmpl/page/login.php';
-        setcookie('last_path', 'https://' . $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI'], 0, '/', $_SERVER['SERVER_NAME']);
-        $_SESSION['login_path'] = 'https://' . $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI'];
+
+        // Очищаем URL от служебных параметров перед сохранением
+        $requestUri = $_SERVER['REQUEST_URI'];
+        $requestUri = preg_replace('/[?&]session_expired=1/', '', $requestUri);
+        $requestUri = preg_replace('/[?&]module=(&|$)/', '$1', $requestUri);
+        $requestUri = preg_replace('/[?&]mode=(&|$)/', '$1', $requestUri);
+        $requestUri = preg_replace('/[?&]open_dialog=undefined/', '', $requestUri);
+        $requestUri = preg_replace('/[?&]+$/', '', $requestUri);
+        $requestUri = preg_replace('/\?&/', '?', $requestUri);
+
+        // Если после очистки остался только / или пустая строка, используем dashboard
+        if (empty($requestUri) || $requestUri === '/' || $requestUri === '/?') {
+            $requestUri = '/dashboard';
+        }
+
+        $cleanPath = 'https://' . $_SERVER['HTTP_HOST'] . $requestUri;
+        setcookie('last_path', $cleanPath, 0, '/', $_SERVER['SERVER_NAME']);
+        $_SESSION['login_path'] = $cleanPath;
     } else {
         $auth->refreshPermissions(); // пересчитываем права из БД при каждой загрузке страницы
         // Получаем начальную страницу в зависимости от роли пользователя
@@ -197,7 +227,7 @@ if (isset($_POST['ajax']) && intval($_POST['ajax']) == 1) {
         $checkModuleAccess($default_page);
 
         if (!is_file($_SERVER['DOCUMENT_ROOT'] . '/modules/' . $end_path)) {
-            echo '<script>alert("Страница не найдена.");document.location.href="/";</script>';
+            echo '<script>document.location.href="/"</script>';
             exit();
         }
         include_once $_SERVER['DOCUMENT_ROOT'] . '/modules/' . $end_path;

@@ -147,6 +147,19 @@ if ($auth->isLogin()) {
     $trans_id = $busy['trans_id'];
 
     if ($busy != []) {
+        // Получаем план для определения source_id
+        if ($plan_id > 0 && !isset($plan)) {
+            $plan = $db->selectOne('checksplans', " WHERE id = '$plan_id' ORDER BY version DESC LIMIT 1");
+        }
+
+        // Ищем или создаем запись в checkinstitutions для связи с приказом
+        $source_id = 0;
+        if ($plan_id > 0 && $ins_id > 0 && isset($plan->uid)) {
+            $checkInst = $db->selectOne('checkinstitutions', ' WHERE plan_uid = ? AND institution = ?', [$plan->uid, $ins_id]);
+            if ($checkInst) {
+                $source_id = $checkInst->id;
+            }
+        }
 
         $units = $db->getRegistry('units', 'where institution = 1 and active =1');
         $ins = $db->getRegistry('institutions');
@@ -154,7 +167,7 @@ if ($auth->isLogin()) {
         $tasks = $db->getRegistry('tasks');
         $ousr = $db->getRegistry('ousr');
         $oSubQuery = '';
-        if ($plan->checks > 0) {
+        if (isset($plan) && $plan->checks > 0) {
             $oSubQuery = ' AND checks = ' . $plan->checks;
         }
         $orders = $db->getRegistry('documents', ' WHERE documentacial = 1' . $oSubQuery); //print_r($orders);
@@ -204,7 +217,7 @@ if ($auth->isLogin()) {
             }
         }*/
 
-        $users = $db->getRegistry('users', "where roles <> '2'", [], ['surname', 'name', 'middle_name']);
+        $users = $db->getRegistry('users', "where roles <> '2' ORDER BY surname, name, middle_name", [], ['surname', 'name', 'middle_name']);
         $new_order_number = 'ПРП' . $new_order_num . '-' . date('Y');
 
         $prevDate = date('Y-m-d', strtotime($datesEventArr[0] . ' -1 day'));
@@ -226,6 +239,8 @@ if ($auth->isLogin()) {
                     <input type='hidden' name='plan_id' value="<?= $plan_id ?>">
                     <input type='hidden' name='current_ins' value="<?= $ins_id ?>">
                     <input type='hidden' name='doc_id' value="<?= $doc_id ?>">
+                    <input type='hidden' name='source_table' value="checkinstitutions">
+                    <input type='hidden' name='source_id' value="<?= $source_id ?? 0 ?>">
                     <input type='hidden' name='minDate' value="<?= $date->correctDateFormatToMysql($minDate) ?>">
                     <input type='hidden' name='maxDate' value="<?= $date->correctDateFormatToMysql($maxDate) ?>">
                     <input type='hidden' name='checkMinDate' value="<?= $checkPeriodStart ?>">
@@ -314,6 +329,7 @@ if ($auth->isLogin()) {
                             ];
                             echo $reg->renderSelect($i, ['default_value' => $agreement_data->unit_id]);
                             ?>
+                            <input type='hidden' name='unit_address' value='<?= htmlspecialchars($agreement_data->unit_address ?? '') ?>'>
                             <div class='item w_50'>
                                 <div class='el_data'>
                                     <label>Номер приказа</label>
@@ -559,6 +575,12 @@ if ($auth->isLogin()) {
 
                 }).trigger("change");
 
+                // Сохраняем текст выбранного адреса в скрытое поле при изменении селекта
+                $("[name=unit_id]").on("change", function () {
+                    let $option = $(this).find('option:selected');
+                    let addressText = $option.text();
+                    $("[name=unit_address]").val(addressText);
+                });
 
                 $("[name=ins]").on("change", function () {
                     let $self = $(this),
@@ -572,7 +594,7 @@ if ($auth->isLogin()) {
                             action: 'getPeriodByIns',
                             uid: $("[name=uid]").val(),
                             insId: $self.val(),
-                            unit_selected: $('[name=unit_hidden]').val()
+                            unit_selected: $("[name='unit_id']").val() || ''
                         },
                         function (data) {
                             if (data.length > 0) {
