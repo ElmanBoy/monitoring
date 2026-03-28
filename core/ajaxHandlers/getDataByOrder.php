@@ -25,6 +25,24 @@ if($orderId > 0) {
 
     $actionPeriod = json_decode($or->action_period);
     $actionPeriodText = $or->action_period_text;
+
+    // Исправляем дублированные даты в action_period_text если они есть
+    // Формат с дублями: "2026-01-01 - 2026-01-01 - 2026-06-30 - 2026-06-30"
+    // Правильный формат: "01.01.2026 - 30.06.2026"
+    if (!empty($actionPeriodText)) {
+        $parts = explode(' - ', $actionPeriodText);
+        if (count($parts) == 4) {
+            // Если 4 части - значит дублирование, берем первую и последнюю
+            $actionPeriodText = $date->dateToString($parts[0]) . ' - ' . $date->dateToString($parts[3]);
+        } elseif (count($parts) == 2) {
+            // Если 2 части - проверяем, отформатированы ли даты
+            if (strpos($parts[0], '.') === false) {
+                // Даты в формате YYYY-MM-DD, форматируем в DD.MM.YYYY
+                $actionPeriodText = $date->dateToString($parts[0]) . ' - ' . $date->dateToString($parts[1]);
+            }
+        }
+    }
+
     $checkPeriodArr = explode(' - ', $or->check_period);
     $checkPeriod = 'с '.$date->dateToString($checkPeriodArr[0]).' по '.$date->dateToString($checkPeriodArr[1]);
     $datesArr = $date->getDatesFromMonths($actionPeriod);

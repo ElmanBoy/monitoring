@@ -47,6 +47,27 @@ if ($is_object) {
 
 $regs = $gui->getTableData($table->table_name, ' AND (documentacial = 2 OR documentacial = 5)' . $insFilter);
 
+// Загружаем учреждения для отображения в списке
+$institutions = $db->getRegistry('institutions', '', [], ['short', 'name']);
+
+// Для графиков собираем ID актов, чтобы загрузить их за один запрос
+$actIds = [];
+foreach ($regs as $r) {
+    $r = (object)$r;
+    if (intval($r->documentacial) === 5 && !empty($r->source_id)) {
+        $actIds[] = intval($r->source_id);
+    }
+}
+
+// Загружаем акты одним запросом
+$actsMap = [];
+if (!empty($actIds)) {
+    $acts = $db->select('agreement', ' WHERE id IN (' . implode(',', array_unique($actIds)) . ')');
+    foreach ($acts as $act) {
+        $actsMap[$act->id] = $act;
+    }
+}
+
 // Для каждого документа считаем прогресс устранения из agreementlist
 // Акт (documentacial=2) — смотрим есть ли связанный график (documentacial=5 с тем же source_id)
 // График (documentacial=5) — читаем agreementlist и считаем строки по fix_status
@@ -76,6 +97,26 @@ foreach ($regs as $r) {
     }
 }
 ?>
+
+<style>
+    /* Белый цвет иконок при наведении на кнопки */
+    .button:hover .material-icons {
+        color: #fff !important;
+    }
+
+    /* Белый цвет для иконок действий */
+    .material-icons.viewRoad,
+    .material-icons.addRoad,
+    .material-icons.agreementDoc,
+    .material-icons.viewDoc {
+        color: #fff !important;
+    }
+
+    /* Выравнивание кнопок по правому краю */
+    td.link {
+        justify-content: flex-end;
+    }
+</style>
 
 <div class="nav">
     <div class="nav_01">
@@ -122,6 +163,9 @@ foreach ($regs as $r) {
                 </th>
                 <th class="sort">
                     <?= $gui->buildSortFilter('agreement', 'Наименование', 'name', 'el_data', []) ?>
+                </th>
+                <th class="sort">
+                    <?= $gui->buildSortFilter('agreement', 'Объект контроля', 'ins_id', 'el_data', []) ?>
                 </th>
                 <th>
                     <div class="head_sort_filter">Устранение</div>
@@ -192,6 +236,22 @@ foreach ($regs as $r) {
                     }
                 }
 
+                // Определяем ID учреждения (для актов - напрямую, для графиков - через акт)
+                $insId = 0;
+                if (intval($reg->documentacial) === 2) {
+                    $insId = intval($reg->ins_id ?? 0);
+                } elseif (intval($reg->documentacial) === 5) {
+                    $actId = intval($reg->source_id ?? 0);
+                    if ($actId > 0 && isset($actsMap[$actId])) {
+                        $insId = intval($actsMap[$actId]->ins_id ?? 0);
+                    }
+                }
+
+                $insName = '—';
+                if ($insId > 0 && isset($institutions['array'][$insId])) {
+                    $insName = $institutions['array'][$insId][0] ?: $institutions['array'][$insId][1] ?: '—';
+                }
+
                 echo '<tr data-id="' . $reg->id . '" data-parent="' . $regId . '" tabindex="0"' . $rowStyle . '>
                     <td>
                         <div class="custom_checkbox">
@@ -212,6 +272,7 @@ foreach ($regs as $r) {
                         : '<span style="color:var(--color_04);font-size:12px">не подписан</span>') .
                     '</td>
                     <td class="group">' . stripslashes($reg->name) . '</td>
+                    <td style="font-size:13px">' . htmlspecialchars($insName) . '</td>
                     <td>' . $progressHtml . '</td>
                     <td class="link">';
 
@@ -227,15 +288,13 @@ foreach ($regs as $r) {
                         // График уже есть — открыть просмотр
                         echo '<span class="material-icons viewRoad"
                                 data-id="' . $roadIds[$reg->id] . '"
-                                title="Открыть график устранения нарушений"
-                                style="color:var(--color_03)">rule</span> ';
+                                title="Открыть график устранения нарушений">rule</span> ';
                     }
                 } elseif (intval($reg->documentacial) === 5) {
                     // Строка самого графика — открыть
                     echo '<span class="material-icons viewRoad"
                             data-id="' . $reg->id . '"
-                            title="Открыть график устранения нарушений"
-                            style="color:var(--color_03)">rule</span> ';
+                            title="Открыть график устранения нарушений">rule</span> ';
                 }
 
                 if ($is_object) {

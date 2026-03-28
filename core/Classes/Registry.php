@@ -2219,7 +2219,7 @@ class Registry
                 'unit_address' => !empty($_POST['unit_address']) ? $_POST['unit_address'] : null, // Текст адреса
                 'check_period' => $_POST['check_period'],
                 'action_period' => $_POST['action_period'],//$_POST['action_period_hidden'][0],
-                'action_period_text' => $_POST['action_period']
+                'action_period_text' => !empty($_POST['action_period_text']) ? $_POST['action_period_text'] : $_POST['action_period']
             ];
 
 

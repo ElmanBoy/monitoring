@@ -131,6 +131,31 @@ $gui->set('module_id', 18);
             <span class='material-icons drag_handler' title='Переместить'>drag_handle</span>
             <div id='org_stats_chart' style='width: 90vw;height:600px;margin:0 auto'></div>
         </li>
+
+        <?php
+        // Виджет мониторинга устранения нарушений
+        try {
+            $statsViolations = $db->db::getAll("
+                SELECT * FROM v_dashboard_institutions
+                WHERE total_violations > 0
+                ORDER BY violations_overdue DESC, institution_name
+                LIMIT 10
+            ");
+        } catch (Exception $e) {
+            // Если представление не существует или ошибка запроса
+            $statsViolations = [];
+            error_log("Dashboard monitoring widget error: " . $e->getMessage());
+        }
+
+        if (!empty($statsViolations) && count($statsViolations) > 0):
+        ?>
+        <li class='item w_41'>
+            <span class='material-icons drag_handler' title='Переместить'>drag_handle</span>
+            <div id='violations_fix_chart' style='width: 90vw;height:600px;margin:0 auto'></div>
+        </li>
+        <?php else: ?>
+        <!-- Виджет мониторинга: нет данных -->
+        <?php endif; ?>
     </ul>
 
     <script type='text/javascript'>
@@ -372,7 +397,9 @@ $gui->set('module_id', 18);
                 }]
             });*/
 
-            var orgStatsChart = echarts.init(document.getElementById('org_stats_chart'));
+            // TODO: Remove hardcoded orgStatsChart - this is mock data
+            // Should be replaced with real data from database or removed entirely
+            /*var orgStatsChart = echarts.init(document.getElementById('org_stats_chart'));
 
             // Данные для графика
             var orgStatsData = [
@@ -523,13 +550,192 @@ $gui->set('module_id', 18);
                         filterMode: 'filter'
                     }
                 ]
+            });*/
+
+
+            <?php if (count($statsViolations) > 0): ?>
+            // График мониторинга устранения нарушений
+            var violationsFixChart = echarts.init(document.getElementById('violations_fix_chart'));
+
+            var violationsFixData = [
+                <?php foreach ($statsViolations as $row):
+                    $fixRate = $row['total_violations'] > 0
+                        ? round(($row['violations_fixed'] / $row['total_violations']) * 100, 1)
+                        : 0;
+                ?>
+                {
+                    institutionId: <?= $row['institution_id'] ?>,
+                    name: <?= json_encode($row['institution_name'], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
+                    total: <?= $row['total_violations'] ?>,
+                    fixed: <?= $row['violations_fixed'] ?>,
+                    check: <?= $row['violations_check'] ?>,
+                    pending: <?= $row['violations_pending'] ?>,
+                    overdue: <?= $row['violations_overdue'] ?>,
+                    fixRate: <?= $fixRate ?>
+                },
+                <?php endforeach; ?>
+            ];
+
+            var institutionNames = violationsFixData.map(item => item.name);
+            var totalData = violationsFixData.map(item => item.total);
+            var fixedData = violationsFixData.map(item => item.fixed);
+            var checkData = violationsFixData.map(item => item.check);
+            var overdueData = violationsFixData.map(item => item.overdue);
+
+            violationsFixChart.setOption({
+                title: {
+                    text: 'Мониторинг устранения нарушений',
+                    subtext: 'Прогресс устранения по учреждениям (кликните для деталей)',
+                    left: 'center'
+                },
+                emphasis: {
+                    itemStyle: {
+                        borderColor: '#333',
+                        borderWidth: 2
+                    }
+                },
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: { type: 'shadow' },
+                    formatter: function(params) {
+                        var idx = params[0].dataIndex;
+                        var data = violationsFixData[idx];
+                        return data.name + '<br/>' +
+                            'Всего нарушений: ' + data.total + '<br/>' +
+                            'Устранено: ' + data.fixed + ' (' + data.fixRate + '%)<br/>' +
+                            'На проверке: ' + data.check + '<br/>' +
+                            'Просрочено: ' + data.overdue + '<br/><br/>' +
+                            '<em style="color: #999;">Кликните для просмотра деталей</em>';
+                    }
+                },
+                legend: {
+                    data: ['Всего нарушений', 'Устранено', 'На проверке', 'Просрочено'],
+                    top: 50
+                },
+                grid: {
+                    top: '15%',
+                    left: '3%',
+                    right: '4%',
+                    bottom: '0%',
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'value',
+                    boundaryGap: [0, 0.01]
+                },
+                yAxis: {
+                    type: 'category',
+                    data: institutionNames,
+                    axisLabel: {
+                        color: '#2196F3',
+                        fontWeight: 500,
+                        formatter: function(value) {
+                            return value;
+                        }
+                    },
+                    triggerEvent: true
+                },
+                series: [
+                    {
+                        name: 'Всего нарушений',
+                        type: 'bar',
+                        data: totalData,
+                        itemStyle: { color: '#5470C6' },
+                        label: { show: true, position: 'right' }
+                    },
+                    {
+                        name: 'Устранено',
+                        type: 'bar',
+                        data: fixedData,
+                        itemStyle: { color: '#91CC75' },
+                        label: { show: true, position: 'right' }
+                    },
+                    {
+                        name: 'На проверке',
+                        type: 'bar',
+                        data: checkData,
+                        itemStyle: { color: '#FAC858' },
+                        label: { show: true, position: 'right' }
+                    },
+                    {
+                        name: 'Просрочено',
+                        type: 'bar',
+                        data: overdueData,
+                        itemStyle: { color: '#EE6666' },
+                        label: { show: true, position: 'right' }
+                    }
+                ],
+                dataZoom: [
+                    {
+                        type: 'slider',
+                        yAxisIndex: 0,
+                        filterMode: 'filter'
+                    }
+                ]
             });
 
+            // Обработчик клика по графику для перехода к срезу учреждения
+            violationsFixChart.on('click', function(params) {
+                var dataIndex;
+
+                // Если клик по названию учреждения на оси Y
+                if (params.componentType === 'yAxis') {
+                    // params.value содержит название учреждения
+                    dataIndex = institutionNames.indexOf(params.value);
+                } else {
+                    // Клик по столбцу графика
+                    dataIndex = params.dataIndex;
+                }
+
+                if (dataIndex >= 0 && violationsFixData[dataIndex]) {
+                    var institutionId = violationsFixData[dataIndex].institutionId;
+                    // Используем прямой AJAX-запрос
+                    $.ajax({
+                        url: '/',
+                        type: 'POST',
+                        headers: {
+                            'X-Csrf-Token': el_tools.getcookie("CSRF-TOKEN"),
+                            'X-Requested-With': "XMLHttpRequest"
+                        },
+                        data: {
+                            ajax: 1,
+                            mode: 'mainpage',
+                            url: 'dashboard',
+                            page: 'monitoring_institution',
+                            params: 'institution_id=' + institutionId
+                        },
+                        success: function(html) {
+                            $('.main_data').html(html);
+                            history.pushState({}, '', '?url=dashboard');
+                            el_app.mainInit();
+                        }
+                    });
+                }
+            });
+
+            // Меняем курсор при наведении на график и названия учреждений
+            violationsFixChart.on('mouseover', function(params) {
+                if (params.componentType === 'yAxis' || params.componentType === 'series') {
+                    document.getElementById('violations_fix_chart').style.cursor = 'pointer';
+                }
+            });
+
+            violationsFixChart.on('mouseout', function(params) {
+                document.getElementById('violations_fix_chart').style.cursor = 'default';
+            });
+
+            violationsFixChart.getZr().on('mouseout', function() {
+                document.body.style.cursor = 'default';
+            });
+            <?php endif; ?>
 
             // Обработка ресайза для всех графиков
             window.addEventListener('resize', function () {
                 violationChart.resize();
                 orgStatsChart.resize();
+                <?php if (count($statsViolations) > 0): ?>
+                violationsFixChart.resize();
+                <?php endif; ?>
                 /*typeChart.resize();
                 resultChart.resize();
                 statusChart.resize();

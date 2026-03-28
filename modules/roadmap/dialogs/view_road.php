@@ -93,6 +93,13 @@ $fixStatusLabels = [
     #view_road_dialog .row-actions { display: flex; gap: 4px; flex-wrap: wrap; }
     #view_road_dialog .fix-note { font-size: 11px; color: var(--color_04); margin-top: 3px; }
     #view_road_dialog .fix-reject { font-size: 11px; color: #c62828; margin-top: 3px; }
+
+    /* Белый текст и иконки при наведении на кнопки */
+    #view_road_dialog .button:hover,
+    #view_road_dialog .button:hover span,
+    #view_road_dialog .button:hover .material-icons {
+        color: #fff !important;
+    }
 </style>
 
 <div class="pop_up drag" id="view_road_dialog" style="width: 90vw; max-width: 1100px;">
@@ -100,7 +107,7 @@ $fixStatusLabels = [
         <div class="name">
             <span class="material-icons" style="font-size:18px; vertical-align:middle; margin-right:4px">rule</span>
             График устранения нарушений —
-            <strong><?= htmlspecialchars($ins->name ?? '') ?></strong>
+            <strong><?= htmlspecialchars($ins->short ?: $ins->name ?? '') ?></strong>
         </div>
         <div class="button icon close"><span class="material-icons">close</span></div>
     </div>
@@ -263,12 +270,12 @@ $fixStatusLabels = [
             </div>
 
         <?php endif; ?>
-    </div>
 
-    <div class="confirm">
-        <button type="button" class="button icon text close">
-            <span class="material-icons">close</span>Закрыть
-        </button>
+        <div class="confirm" style="text-align: center;">
+            <button type="button" class="button icon close" style="display: inline-flex;">
+                <span class="material-icons">close</span>Закрыть
+            </button>
+        </div>
     </div>
 </div>
 
@@ -290,7 +297,7 @@ $fixStatusLabels = [
         }
 
         // ОК: отправить подтверждение (файл + комментарий)
-        $(document).on('click', '.btn-submit-fix', function () {
+        $('#view_road_dialog').off('click', '.btn-submit-fix').on('click', '.btn-submit-fix', function () {
             var idx       = $(this).data('idx');
             var fileInput = document.getElementById('fix_file_' + idx);
             if (!fileInput || fileInput.files.length === 0) {
@@ -322,55 +329,60 @@ $fixStatusLabels = [
         });
 
         // Министерство: снять нарушение
-        $(document).on('click', '.btn-fix-close', function () {
-            if (!confirm('Подтвердить снятие нарушения?')) return;
+        $('#view_road_dialog').off('click', '.btn-fix-close').on('click', '.btn-fix-close', function () {
             var idx = $(this).data('idx');
-            $('.preloader').fadeIn('fast');
-            $.post('/', {
-                ajax: 1, action: 'update_road', path: 'roadmap',
-                road_id: roadId, row_idx: idx, fix_action: 'close'
-            }, function (data) {
-                var res = JSON.parse(data);
-                $('.preloader').fadeOut('fast');
-                inform(res.result ? 'Отлично!' : 'Ошибка', res.resultText);
-                if (res.result) reloadDialog();
+            confirm('Подтвердить снятие нарушения?').then(function(confirmed) {
+                if (!confirmed) return;
+                $('.preloader').fadeIn('fast');
+                $.post('/', {
+                    ajax: 1, action: 'update_road', path: 'roadmap',
+                    road_id: roadId, row_idx: idx, fix_action: 'close'
+                }, function (data) {
+                    var res = JSON.parse(data);
+                    $('.preloader').fadeOut('fast');
+                    inform(res.result ? 'Отлично!' : 'Ошибка', res.resultText);
+                    if (res.result) reloadDialog();
+                });
             });
         });
 
         // Министерство: вернуть на доработку
-        $(document).on('click', '.btn-fix-return', function () {
-            var comment = prompt('Укажите причину возврата:');
-            if (!comment || $.trim(comment) === '') return;
+        $('#view_road_dialog').off('click', '.btn-fix-return').on('click', '.btn-fix-return', function () {
             var idx = $(this).data('idx');
-            $('.preloader').fadeIn('fast');
-            $.post('/', {
-                ajax: 1, action: 'update_road', path: 'roadmap',
-                road_id: roadId, row_idx: idx, fix_action: 'return', check_comment: comment
-            }, function (data) {
-                var res = JSON.parse(data);
-                $('.preloader').fadeOut('fast');
-                inform(res.result ? 'Отлично!' : 'Ошибка', res.resultText);
-                if (res.result) reloadDialog();
+            prompt('Укажите причину возврата:').then(function(comment) {
+                if (!comment || $.trim(comment) === '') return;
+                $('.preloader').fadeIn('fast');
+                $.post('/', {
+                    ajax: 1, action: 'update_road', path: 'roadmap',
+                    road_id: roadId, row_idx: idx, fix_action: 'return', check_comment: comment
+                }, function (data) {
+                    var res = JSON.parse(data);
+                    $('.preloader').fadeOut('fast');
+                    inform(res.result ? 'Отлично!' : 'Ошибка', res.resultText);
+                    if (res.result) reloadDialog();
+                });
             });
         });
 
         // Министерство: продлить срок
-        $(document).on('click', '.btn-fix-extend', function () {
-            var newDate = prompt('Новый срок устранения (ГГГГ-ММ-ДД):');
-            if (!newDate || $.trim(newDate) === '') return;
-            var reason = prompt('Причина продления:');
-            if (!reason || $.trim(reason) === '') return;
+        $('#view_road_dialog').off('click', '.btn-fix-extend').on('click', '.btn-fix-extend', function () {
             var idx = $(this).data('idx');
-            $('.preloader').fadeIn('fast');
-            $.post('/', {
-                ajax: 1, action: 'update_road', path: 'roadmap',
-                road_id: roadId, row_idx: idx, fix_action: 'extend',
-                deadline_extended: newDate, extended_reason: reason
-            }, function (data) {
-                var res = JSON.parse(data);
-                $('.preloader').fadeOut('fast');
-                inform(res.result ? 'Отлично!' : 'Ошибка', res.resultText);
-                if (res.result) reloadDialog();
+            promptDate('Новый срок устранения:').then(function(newDate) {
+                if (!newDate || $.trim(newDate) === '') return;
+                prompt('Причина продления:').then(function(reason) {
+                    if (!reason || $.trim(reason) === '') return;
+                    $('.preloader').fadeIn('fast');
+                    $.post('/', {
+                        ajax: 1, action: 'update_road', path: 'roadmap',
+                        road_id: roadId, row_idx: idx, fix_action: 'extend',
+                        deadline_extended: newDate, extended_reason: reason
+                    }, function (data) {
+                        var res = JSON.parse(data);
+                        $('.preloader').fadeOut('fast');
+                        inform(res.result ? 'Отлично!' : 'Ошибка', res.resultText);
+                        if (res.result) reloadDialog();
+                    });
+                });
             });
         });
 

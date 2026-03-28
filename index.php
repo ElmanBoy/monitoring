@@ -120,7 +120,12 @@ if (isset($_POST['ajax']) && intval($_POST['ajax']) == 1) {
                 if (is_file($dialogUrl)) {
                     include_once $dialogUrl;
                 } else {
-                    echo '<script>alert("Страница не найдена.");</script>';
+                    // Диалог не найден - просто закрываем без алерта
+                    echo '<script>
+                        if (typeof el_app !== "undefined" && el_app.dialog_close) {
+                            el_app.dialog_close();
+                        }
+                    </script>';
                     exit();
                 }
             }
@@ -143,7 +148,8 @@ if (isset($_POST['ajax']) && intval($_POST['ajax']) == 1) {
             if (is_file($pageUrl)) {
                 include_once $pageUrl;
             } else {
-                echo '<script>alert("Страница не найдена.");</script>';
+                // Страница не найдена - редирект на dashboard без алерта
+                echo '<script>document.location.href="' . $auth->getDefaultPage() . '"</script>';
                 exit();
             }
             break;
@@ -189,6 +195,15 @@ if (isset($_POST['ajax']) && intval($_POST['ajax']) == 1) {
         // Если редирект произошёл из-за устаревшей сессии — сохраняем notice для формы логина
         if (!empty($_GET['session_expired'])) {
             $_SESSION['login_notice'] = 'Ваша сессия завершена. Пожалуйста, войдите снова.';
+
+            // Сразу очищаем URL в браузере от session_expired
+            echo '<script>
+                if (window.history.replaceState) {
+                    const url = new URL(window.location);
+                    url.searchParams.delete("session_expired");
+                    window.history.replaceState({}, document.title, url.pathname + url.search);
+                }
+            </script>';
         }
         include_once __DIR__ . '/tmpl/page/login.php';
 

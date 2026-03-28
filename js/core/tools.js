@@ -27,39 +27,198 @@ window.alert = (message) => {
  * @returns {Promise<boolean>}
  */
 window.confirm = (question) => {
-    let confirm = false,
-        PromiseConfirm = el_tools.notify(true, "Подтвердите действие", question,
+    console.log('[Custom Confirm] Called with question:', question);
+    return new Promise(function (resolve, reject) {
+        let confirmResult = false;
+
+        const PromiseConfirm = el_tools.notify(true, "Подтвердите действие", question,
             [
                 {
-                    html: '<button class="button icon text close_button success" type="button">' +
+                    html: '<button class="button icon text btn-confirm-yes" type="button">' +
                         '<span class="material-icons">done</span>Да</button>',
-                    name: ".close_button",
+                    name: ".btn-confirm-yes",
                     handler: function () {
+                        confirmResult = true;
                         $("#pop_up_notify").trigger("alert_confirmed");
                         el_tools.notify_close();
-                        confirm = true;
                     }
                 },
                 {
-                    html: '<button class="button icon text close_button fail" type="button">' +
+                    html: '<button class="button icon text btn-confirm-no" type="button">' +
                         '<span class="material-icons">block</span>Нет</button>',
-                    name: ".close_button",
+                    name: ".btn-confirm-no",
                     handler: function () {
+                        confirmResult = false;
                         $("#pop_up_notify").trigger("alert_reject");
                         el_tools.notify_close();
-                        confirm = false;
                     }
-                }]);
+                }
+            ]);
 
-    $("#pop_up_notify .success").on('click', e => {
-        confirm = true;
+        // Обработка кнопки закрытия (крестик) - считаем как отмену
+        $("#pop_up_notify .close").off("click").on("click", function () {
+            confirmResult = false;
+            el_tools.notify_close();
+        });
+
+        PromiseConfirm.on('alert_close', () => {
+            console.log('[Custom Confirm] Resolving with:', confirmResult);
+            resolve(confirmResult);
+        });
     });
-    $("#pop_up_notify .fail, #pop_up_notify .close").on('click', e => {
-        confirm = false;
+};
+
+/**
+ * Переопределение нативного prompt. Вместо него выводится стилизованное диалоговое окно
+ * с полем ввода текста.
+ * @name prompt
+ * @global
+ * @function
+ * @param message {string} Текст вопроса
+ * @param defaultValue {string} Значение по умолчанию
+ * @returns {Promise<string|null>}
+ */
+window.prompt = (message, defaultValue = '') => {
+    console.log('[Custom Prompt] Called with message:', message);
+    let inputValue = null;
+    const inputHtml = `
+        <div class="el_data">
+            <label>${message}</label>
+            <textarea id="prompt_input" class="el_input" rows="4" style="min-height: 80px; resize: vertical;" autofocus>${defaultValue}</textarea>
+        </div>
+    `;
+
+    const PromisePrompt = el_tools.notify(true, "Ввод данных", inputHtml,
+        [
+            {
+                html: '<button class="button icon text close_button success" type="button">' +
+                    '<span class="material-icons">done</span>ОК</button>',
+                name: ".close_button.success",
+                handler: function () {
+                    inputValue = $("#prompt_input").val() || null;
+                    $("#pop_up_notify").trigger("alert_confirmed");
+                    el_tools.notify_close();
+                }
+            },
+            {
+                html: '<button class="button icon text close_button fail" type="button">' +
+                    '<span class="material-icons">block</span>Отмена</button>',
+                name: ".close_button.fail",
+                handler: function () {
+                    inputValue = null;
+                    $("#pop_up_notify").trigger("alert_reject");
+                    el_tools.notify_close();
+                }
+            }
+        ]);
+
+    setTimeout(() => {
+        $("#prompt_input").trigger("focus").trigger("select");
+    }, 100);
+
+    $("#pop_up_notify").off("keydown").on("keydown", function (e) {
+        // Ctrl+Enter или Cmd+Enter для подтверждения
+        if ((e.ctrlKey || e.metaKey) && e.which === 13) {
+            e.preventDefault();
+            inputValue = $("#prompt_input").val() || null;
+            el_tools.notify_close();
+            $("#pop_up_notify").trigger("alert_close");
+        } else if (e.which === 27) { // Escape для отмены
+            e.preventDefault();
+            inputValue = null;
+            el_tools.notify_close();
+            $("#pop_up_notify").trigger("alert_close");
+        }
+        // Обычный Enter просто добавляет новую строку в textarea
     });
+
     return new Promise(function (resolve, reject) {
-        PromiseConfirm.on('alert_close', (e) => {
-            resolve(confirm);
+        PromisePrompt.on('alert_close', () => {
+            console.log('[Custom Prompt] Resolving with:', inputValue);
+            resolve(inputValue);
+        });
+    });
+};
+
+/**
+ * Диалог выбора даты с использованием flatpickr
+ * @name promptDate
+ * @global
+ * @function
+ * @param message {string} Текст вопроса
+ * @param defaultValue {string} Значение по умолчанию (YYYY-MM-DD)
+ * @returns {Promise<string|null>}
+ */
+window.promptDate = (message, defaultValue = '') => {
+    console.log('[Custom PromptDate] Called with message:', message);
+    let inputValue = null;
+    const inputHtml = `
+        <div class="el_data">
+            <label>${message}</label>
+            <input type="text" id="prompt_date_input" class="el_input flatpickr-input" value="${defaultValue}" placeholder="Выберите дату">
+        </div>
+    `;
+
+    const PromisePrompt = el_tools.notify(true, "Выбор даты", inputHtml,
+        [
+            {
+                html: '<button class="button icon text close_button success" type="button">' +
+                    '<span class="material-icons">done</span>ОК</button>',
+                name: ".close_button.success",
+                handler: function () {
+                    inputValue = $("#prompt_date_input").val() || null;
+                    $("#pop_up_notify").trigger("alert_confirmed");
+                    el_tools.notify_close();
+                }
+            },
+            {
+                html: '<button class="button icon text close_button fail" type="button">' +
+                    '<span class="material-icons">block</span>Отмена</button>',
+                name: ".close_button.fail",
+                handler: function () {
+                    inputValue = null;
+                    $("#pop_up_notify").trigger("alert_reject");
+                    el_tools.notify_close();
+                }
+            }
+        ]);
+
+    setTimeout(() => {
+        // Инициализируем flatpickr
+        const fp = flatpickr("#prompt_date_input", {
+            locale: typeof flatpickr !== 'undefined' && flatpickr.l10ns && flatpickr.l10ns.ru ? flatpickr.l10ns.ru : "default",
+            dateFormat: "Y-m-d",
+            defaultDate: defaultValue || null,
+            allowInput: true,
+            disableMobile: true,
+            onClose: function(selectedDates, dateStr, instance) {
+                // Автоматически не закрываем диалог при выборе даты
+            }
+        });
+
+        // Открываем календарь автоматически
+        fp.open();
+        $("#prompt_date_input").trigger("focus");
+    }, 100);
+
+    $("#pop_up_notify").off("keydown").on("keydown", function (e) {
+        if (e.which === 13) { // Enter
+            e.preventDefault();
+            inputValue = $("#prompt_date_input").val() || null;
+            el_tools.notify_close();
+            $("#pop_up_notify").trigger("alert_close");
+        } else if (e.which === 27) { // Escape
+            e.preventDefault();
+            inputValue = null;
+            el_tools.notify_close();
+            $("#pop_up_notify").trigger("alert_close");
+        }
+    });
+
+    return new Promise(function (resolve, reject) {
+        PromisePrompt.on('alert_close', () => {
+            console.log('[Custom PromptDate] Resolving with:', inputValue);
+            resolve(inputValue);
         });
     });
 };
@@ -433,17 +592,17 @@ const el_tools = {
             });
 
 
-            $("#pop_up_notify .close_button.success").trigger("focus");
+            $("#pop_up_notify .close_button.success, #pop_up_notify .btn-confirm-yes").trigger("focus");
 
             $popup_notify.off("keydown").on("keydown", function (e) {
                 switch (e.which) {
                     //Клавиша Enter
                     case 13:
-                        $("#pop_up_notify .close_button.success").trigger("click");
+                        $("#pop_up_notify .close_button.success, #pop_up_notify .btn-confirm-yes").trigger("click");
                         break;
                     //Клавиша Escape
                     case 27:
-                        $("#pop_up_notify .close_button.fail, #pop_up_notify .button.icon.close")
+                        $("#pop_up_notify .close_button.fail, #pop_up_notify .btn-confirm-no, #pop_up_notify .button.icon.close")
                             .trigger("click");
                         break;
                 }
