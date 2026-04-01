@@ -274,6 +274,85 @@ if (isset($_POST['data']) && strlen($_POST['data']) > 0) { //Предпросм�
             if (!empty($order_number_r)) $doc_data['order_number'] = $order_number_r;
             if (!empty($order_date_r)) $doc_data['order_date'] = $date->dateToString($order_date_r);
         }
+
+        // Дополнительные переменные для документов типа ГРАФИК УСТРАНЕНИЯ (documentacial = 5)
+        // Нарушения хранятся в agreementlist, подгружаются данные учреждения и периоды проверки
+        if ($documentacial == 5) {
+            $insId_s = intval($agr->ins_id);
+            $planId_s = intval($agr->plan_id);
+
+            // Загружаем данные учреждения
+            $institution_s = null;
+            if ($insId_s > 0) {
+                $institution_s = $db->selectOne('institutions', ' WHERE id = ?', [$insId_s]);
+            }
+
+            // Загружаем периоды проверки из checkstaff
+            $check_period_start_s = '';
+            $check_period_end_s = '';
+            $check_scope_period_s = '';
+
+            if ($insId_s > 0 && $planId_s > 0) {
+                $plan_s = $db->selectOne('checksplans', ' WHERE id = ?', [$planId_s]);
+                if ($plan_s && strlen($plan_s->uid ?? '') > 0) {
+                    $staffRows_s = $db->select('checkstaff', ' WHERE check_uid = ? AND institution = ? ORDER BY id DESC LIMIT 1', [$plan_s->uid, $insId_s]);
+                    if (count($staffRows_s) > 0) {
+                        $staff_s = $staffRows_s[0];
+                        if (!empty($staff_s->check_period)) {
+                            $checkPeriodArr_s = explode(' - ', $staff_s->check_period);
+                            $check_period_start_s = $date->dateToString($checkPeriodArr_s[0] ?? '');
+                            $check_period_end_s = $date->dateToString($checkPeriodArr_s[1] ?? '');
+                        }
+                        if (!empty($staff_s->check_scope_period)) {
+                            $check_scope_period_s = $staff_s->check_scope_period;
+                        }
+                    }
+                }
+            }
+
+            // Формируем HTML-таблицу нарушений из agreementlist
+            $schedule_violations = json_decode($agr->agreementlist ?? '[]', true) ?: [];
+            $correctionTableHtml_s = '';
+
+            if (count($schedule_violations) > 0) {
+                $correctionTableHtml_s .= '<table style="width: 100%; border-collapse: collapse;">';
+                $correctionTableHtml_s .= '<thead><tr>';
+                $correctionTableHtml_s .= '<th style="width: 5%; text-align: center;">№ п/п</th>';
+                $correctionTableHtml_s .= '<th style="width: 40%; text-align: center;">Наименование нарушения</th>';
+                $correctionTableHtml_s .= '<th style="width: 25%; text-align: center;">Мероприятия по устранению нарушения</th>';
+                $correctionTableHtml_s .= '<th style="width: 15%; text-align: center;">Срок устранения</th>';
+                $correctionTableHtml_s .= '<th style="width: 15%; text-align: center;">Ответственный</th>';
+                $correctionTableHtml_s .= '</tr></thead><tbody>';
+
+                $index_s = 1;
+                foreach ($schedule_violations as $violation_s) {
+                    $correctionTableHtml_s .= '<tr>';
+                    $correctionTableHtml_s .= '<td style="text-align: center;">' . $index_s . '</td>';
+                    $correctionTableHtml_s .= '<td>' . htmlspecialchars($violation_s['schedule_offers'] ?? '') . '</td>';
+                    $correctionTableHtml_s .= '<td>' . htmlspecialchars($violation_s['schedule_actions'] ?? '') . '</td>';
+                    $correctionTableHtml_s .= '<td style="text-align: center;">' . htmlspecialchars($violation_s['schedule_deadlines'] ?? '') . '</td>';
+                    $correctionTableHtml_s .= '<td>' . htmlspecialchars($violation_s['schedule_responsible'] ?? '') . '</td>';
+                    $correctionTableHtml_s .= '</tr>';
+                    $index_s++;
+                }
+
+                $correctionTableHtml_s .= '</tbody></table>';
+            }
+
+            // Добавляем переменные для шаблона
+            $doc_data['institution'] = $institution_s->name ?? '';
+            $doc_data['institution_short'] = $institution_s->short ?? '';
+            $doc_data['institution_legal'] = $institution_s->legal ?? '';
+            $doc_data['institution_phones'] = $institution_s->phones ?? '';
+            $doc_data['institution_head'] = $institution_s->leader ?? '';
+            $doc_data['shedule_date'] = $date->dateToString($agr->docdate);
+            $doc_data['check_period_start'] = $check_period_start_s;
+            $doc_data['check_period_end'] = $check_period_end_s;
+            $doc_data['check_scope_period'] = $check_scope_period_s;
+            $doc_data['shedule_number'] = $agr->doc_number ?? '';
+            $doc_data['control_institution'] = $institution_s->short ?? '';
+            $doc_data['correction_table'] = $correctionTableHtml_s;
+        }
     }
     $docId = $agr->id;
     //$outputType = 1;

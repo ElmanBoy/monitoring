@@ -48,6 +48,29 @@ $fixStatusLabels = [
     3 => ['text' => 'Возврат',             'color' => '#e65100'],
     4 => ['text' => 'Просрочено',          'color' => '#c62828'],
 ];
+
+// Максимальная длина комментария до сворачивания
+$commentMaxLength = 100;
+
+// Функция для форматирования комментария с возможностью раскрытия
+function formatComment($comment, $maxLength, $uid) {
+    if (empty($comment)) return '';
+    $commentEscaped = htmlspecialchars($comment);
+    if (mb_strlen($comment) <= $maxLength) {
+        return $commentEscaped;
+    }
+    $short = htmlspecialchars(mb_substr($comment, 0, $maxLength));
+    return '<span id="' . htmlspecialchars($uid) . '_short">' . $short . '... ' .
+            '<a href="#" class="comment-toggle" data-target="' . htmlspecialchars($uid) . '" title="Показать полностью" style="color:#1565c0; text-decoration:none; vertical-align:middle">' .
+            '<span class="material-icons" style="font-size:16px; vertical-align:middle">unfold_more</span>' .
+            '</a>' .
+            '</span>' .
+            '<span id="' . htmlspecialchars($uid) . '_full" style="display:none">' . $commentEscaped . ' ' .
+            '<a href="#" class="comment-toggle" data-target="' . htmlspecialchars($uid) . '" title="Свернуть" style="color:#1565c0; text-decoration:none; vertical-align:middle">' .
+            '<span class="material-icons" style="font-size:16px; vertical-align:middle">unfold_less</span>' .
+            '</a>' .
+            '</span>';
+}
 ?>
 
 <style>
@@ -170,7 +193,7 @@ $fixStatusLabels = [
                             </td>
 
                             <td style="max-width:220px; font-size:12px; color:var(--color_04)">
-                                <?= htmlspecialchars($row['schedule_actions'] ?? '') ?>
+                                <?php echo formatComment($row['schedule_actions'] ?? '', $commentMaxLength, 'action_' . $roadId . '_' . $idx); ?>
                             </td>
 
                             <td style="white-space:nowrap">
@@ -194,7 +217,7 @@ $fixStatusLabels = [
                                 <?= $fBadge['text'] ?>
                             </span>
                                 <?php if ($fixSt === 3 && !empty($row['check_comment'])): ?>
-                                    <div class="fix-reject"><?= htmlspecialchars($row['check_comment']) ?></div>
+                                    <div class="fix-reject"><?php echo formatComment($row['check_comment'], $commentMaxLength, 'check_' . $roadId . '_' . $idx); ?></div>
                                 <?php endif; ?>
                             </td>
 
@@ -204,11 +227,11 @@ $fixStatusLabels = [
                                            id="fix_file_<?= $idx ?>"
                                            multiple
                                            style="font-size:11px; display:block; margin-bottom:4px; width:100%">
-                                    <input type="text"
-                                           id="fix_comment_<?= $idx ?>"
-                                           class="el_input"
-                                           placeholder="Комментарий"
-                                           style="font-size:12px">
+                                    <textarea id="fix_comment_<?= $idx ?>"
+                                              class="el_input"
+                                              placeholder="Комментарий"
+                                              style="font-size:12px; min-height:60px; resize:vertical"
+                                              rows="3"></textarea>
                                 <?php elseif ($fixSt >= 1): ?>
                                     <?php
                                     $fids = is_array($row['fix_files'] ?? null) ? $row['fix_files'] : [];
@@ -222,7 +245,7 @@ $fixStatusLabels = [
                                         </a>
                                     <?php endforeach; ?>
                                     <?php if (!empty($row['fix_comment'])): ?>
-                                        <div class="fix-note"><?= htmlspecialchars($row['fix_comment']) ?></div>
+                                        <div class="fix-note"><?php echo formatComment($row['fix_comment'], $commentMaxLength, 'fix_' . $roadId . '_' . $idx); ?></div>
                                     <?php endif; ?>
                                 <?php else: ?>
                                     —
@@ -384,6 +407,14 @@ $fixStatusLabels = [
                     });
                 });
             });
+        });
+
+        // Раскрытие/сворачивание комментариев
+        $('#view_road_dialog').off('click', '.comment-toggle').on('click', '.comment-toggle', function (e) {
+            e.preventDefault();
+            var uid = $(this).data('target');
+            $('#' + uid + '_short').toggle();
+            $('#' + uid + '_full').toggle();
         });
 
     })();

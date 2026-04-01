@@ -11,6 +11,12 @@ use Core\Registry;
 
 require_once $_SERVER['DOCUMENT_ROOT'] . '/core/connect.php';
 
+// ВАЖНО: Этот файл вызван!
+error_log("========================================");
+error_log("=== PDF.PHP CALLED (NEW VERSION) ===");
+error_log("=== POST params: " . json_encode($_POST['params'] ?? []));
+error_log("========================================");
+
 $gui  = new Gui;
 $db   = new Db;
 $auth = new Auth();
@@ -98,9 +104,56 @@ $html .= '<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <style>
-    * { font-family: "DejaVu Sans", sans-serif; font-size: 11pt; }
-    body { margin: 0; padding: 0 20px; }
-    footer { position: fixed; bottom: 0; left: 0; right: 0; font-size: 8pt; color: #666; border-top: 1px solid #ccc; padding: 3px 10px; display: flex; justify-content: space-between; align-items: center; }
+    @font-face {
+        font-family: "Times New Roman";
+        font-style: normal;
+        font-weight: 400;
+        src: url("/fonts/timesnrcyrmt.ttf") format("truetype");
+    }
+    @font-face {
+        font-family: "Times New Roman";
+        font-style: italic;
+        font-weight: 400;
+        src: url("/fonts/timesnrcyrmt_inclined.ttf") format("truetype");
+    }
+    @font-face {
+        font-family: "Times New Roman";
+        font-style: normal;
+        font-weight: 700;
+        src: url("/core/vendor/dompdf/dompdf/lib/fonts/Times-Bold.ttf") format("truetype");
+    }
+    @font-face {
+        font-family: "Times New Roman";
+        font-style: italic;
+        font-weight: 700;
+        src: url("/fonts/timesnrcyrmt_boldinclined.ttf") format("truetype");
+    }
+    body {
+        font-family: "Times-Roman", "Times New Roman", serif;
+        font-size: 14pt;
+        margin: 0;
+        padding: 0 20px;
+        line-height: 1.15;
+        text-align: justify;
+    }
+    footer {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        font-size: 11px;
+        line-height: 14px;
+        color: #000;
+        border-top: 1px solid #000;
+        padding: 5px 0 0 12px;
+        height: .1cm;
+    }
+    footer img {
+        position: absolute;
+        bottom: -30px;
+        right: 10px;
+        width: 100px;
+    }
     main { padding-bottom: 40px; }
     .agreement_list { margin: 10px 0; font-size: 95%; }
     .agreement_list h4 { font-weight: 600; font-size: 14px; margin: 0; }
@@ -171,13 +224,48 @@ if ($documentacial == 6) {
 
 } elseif ($documentacial == 5) {
     // График устранения нарушений — печатная форма
+    error_log("[PDF] Document type 5 (schedule) - docId: " . $docId);
     $schedule = json_decode($tmpl->agreementlist ?? '[]', true) ?: [];
+    error_log("[PDF] Schedule items count: " . count($schedule));
 
-    if (strlen($tmpl->header ?? '') > 0) {
-        $html .= $temp->twig_parse($tmpl->header, [], []);
+    // Загружаем шаблон документа
+    $docTemplate = null;
+    if (!empty($tmpl->document)) {
+        $docTemplate = $db->selectOne('documents', ' WHERE id = ?', [$tmpl->document]);
+        error_log("[PDF] Template loaded: id=" . ($docTemplate ? $docTemplate->id : 'NULL'));
     }
 
-    $html .= '<table class="schedule_pdf">
+    // Загружаем данные учреждения
+    $insId = intval($tmpl->ins_id ?? 0);
+    error_log("[PDF] Institution ID: " . $insId);
+    $ins = null;
+    if ($insId > 0) {
+        $ins = $db->selectOne('institutions', ' WHERE id = ?', [$insId]);
+        error_log("[PDF] Institution loaded: " . ($ins ? $ins->short : 'NULL'));
+    }
+
+    // Получение периода проверки по учреждению
+    $checkArr = $db->select('checkstaff', ' WHERE institution = ?', [$insId]);
+    $dateResults = [];
+    foreach ($checkArr as $chr) {
+        $dateResults[] = $date->getMinMaxDates($chr->dates);
+    }
+    $allMinDates = array_column($dateResults, 'min');
+    $allMaxDates = array_column($dateResults, 'max');
+    $globalMin = count($allMinDates) ? $date->correctDateFormatFromMysql(min($allMinDates)) : '';
+    $globalMax = count($allMaxDates) ? $date->correctDateFormatFromMysql(max($allMaxDates)) : '';
+
+    // Проверяемый период (можно взять из связанного акта через source_id)
+    $checkScopePeriod = '';
+    if (!empty($tmpl->source_id)) {
+        $sourceAct = $db->selectOne('agreement', ' WHERE id = ?', [$tmpl->source_id]);
+        if ($sourceAct && !empty($sourceAct->check_period)) {
+            $checkScopePeriod = $sourceAct->check_period;
+        }
+    }
+
+    // Формируем таблицу нарушений
+    $correctionTableHtml = '<table class="schedule_pdf">
         <thead><tr>
             <th style="width:30px">№</th>
             <th style="width:28%">Нарушение / Предложения по устранению</th>
@@ -195,7 +283,7 @@ if ($documentacial == 6) {
         $isOv  = $dl && strtotime($dl) < time() && $fixSt < 2;
         $cls   = $fixSt === 2 ? 'fix-done' : ($fixSt === 1 ? 'fix-pending' : ($isOv ? 'fix-overdue' : ''));
 
-        $html .= '<tr>
+        $correctionTableHtml .= '<tr>
             <td style="text-align:center">' . $num . '</td>
             <td>' . htmlspecialchars($row['schedule_offers'] ?? '') . '</td>
             <td>' . htmlspecialchars($row['schedule_actions'] ?? '') . '</td>
@@ -205,7 +293,40 @@ if ($documentacial == 6) {
         </tr>';
         $num++;
     }
-    $html .= '</tbody></table>';
+    $correctionTableHtml .= '</tbody></table>';
+
+    // Подготовка переменных для Twig
+    $header_vars = [
+        'institution'        => $ins->name ?? '',
+        'institution_short'  => $ins->short ?? '',
+        'institution_legal'  => $ins->legal ?? '',
+        'institution_phones' => $ins->phones ?? '',
+        'institution_head'   => $ins->leader ?? '',
+        'shedule_date'       => $date->correctDateFormatFromMysql($tmpl->docdate ?? date('Y-m-d')),
+        'check_period_start' => $globalMin,
+        'check_period_end'   => $globalMax,
+        'check_scope_period' => $checkScopePeriod,
+        'shedule_number'     => $tmpl->doc_number ?? '',
+        'control_institution' => $ins->short ?? '',
+        'correction_table'   => $correctionTableHtml,
+    ];
+
+    // Используем header из шаблона, если есть
+    if ($docTemplate && strlen($docTemplate->header ?? '') > 0) {
+        $html .= $temp->twig_parse($docTemplate->header, $header_vars);
+    } elseif (strlen($tmpl->header ?? '') > 0) {
+        $html .= $temp->twig_parse($tmpl->header, $header_vars);
+    }
+
+    // Используем body из шаблона - он содержит заголовок и переменную correction_table
+    if ($docTemplate && strlen($docTemplate->body ?? '') > 0) {
+        $html .= $temp->twig_parse($docTemplate->body, $header_vars);
+    }
+
+    // Используем bottom из шаблона (подпись директора)
+    if ($docTemplate && strlen($docTemplate->bottom ?? '') > 0) {
+        $html .= $temp->twig_parse($docTemplate->bottom, $header_vars);
+    }
 
 } else {
     // Обычный документ — акт, приказ и т.д.
@@ -224,7 +345,7 @@ $html .= '</main></body></html>';
 
 $options = new Options();
 $options->set('isHtml5ParserEnabled', true);
-$options->set('defaultFont', 'Jost');
+$options->set('defaultFont', 'Times-Roman');
 $options->set('defaultEncoding', 'UTF-8');
 $options->set('isRemoteEnabled', true);
 $dompdf = new Dompdf($options);
@@ -233,7 +354,7 @@ $dompdf->setPaper('A4', $orientation);
 $dompdf->render();
 $canvas     = $dompdf->getCanvas();
 $footerText = 'Страница {PAGE_NUM} из {PAGE_COUNT}. Страница создана: ' . $date->dateToString($tmpl->created_at);
-$canvas->page_text(8, $footer_position, $footerText, 'DejaVu Sans', 8, [0, 0, 0]);
+$canvas->page_text(8, $footer_position, $footerText, 'Times New Roman', 8, [0, 0, 0]);
 
 if (isset($_POST['params']['outputType']) && intval($_POST['params']['outputType']) == 0) {
     echo base64_encode($dompdf->output());

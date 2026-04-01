@@ -87,7 +87,7 @@ var el_roadmap_registry = {
         // Просмотр PDF акта / графика
         $(".viewDoc").off("click").on("click", function () {
             let taskId = $(this).data("id");
-            el_app.dialog_open("pdf", {docId: taskId, is_inst: true}, "roadmap");
+            el_app.dialog_open("planPdf", {docId: taskId, is_inst: true}, "roadmap");
         });
 
         // Создать график

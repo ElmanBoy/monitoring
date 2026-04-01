@@ -151,6 +151,81 @@ foreach ($agreementList as &$section) {
 }
 unset($section);
 
+// ============ ВАЛИДАЦИЯ СЕКЦИИ ПОДПИСАНТОВ ============
+// Проверяем соответствие бизнес-правилам из /IGNORE/Agreement.md
+// ВАЖНО: Считаем только участников ПЕРВОГО УРОВНЯ (не учитываем redirect и _is_redirector_repeat)
+$validationErrors = [];
+$documentType = intval($agr->documentacial ?? 0);
+
+foreach ($agreementList as $sectionIdx => &$section) {
+    if (!is_array($section) || !isset($section[0])) continue;
+
+    // Проверяем секцию подписантов (stage="" или не указан)
+    $isSignersSection = (!array_key_exists('stage', $section[0]) || $section[0]['stage'] === '');
+
+    if ($isSignersSection) {
+        $participants = array_slice($section, 1); // Пропускаем метаданные
+
+        // Считаем только участников ПЕРВОГО УРОВНЯ (не перенаправленных и не возвраты)
+        $firstLevelParticipants = [];
+        $signerCount = 0;      // type=1
+        $approverCount = 0;    // type=2
+
+        foreach ($participants as $p) {
+            if (!is_array($p)) continue;
+
+            // Пропускаем участников, которые являются возвратом после перенаправления
+            if (!empty($p['_is_redirector_repeat'])) {
+                continue;
+            }
+
+            // Это участник первого уровня
+            $firstLevelParticipants[] = $p;
+
+            if (!isset($p['type']) && !isset($p['role'])) continue;
+            $type = isset($p['type']) ? intval($p['type']) : (isset($p['role']) ? (intval($p['role']) == 1 ? 1 : 2) : 0);
+
+            if ($type == 1) $signerCount++;
+            if ($type == 2) $approverCount++;
+        }
+
+        $participantCount = count($firstLevelParticipants);
+
+        // Правило 1: Максимум 2 участника первого уровня в секции подписантов
+        if ($participantCount > 2) {
+            $validationErrors[] = "Секция подписантов: превышено максимальное количество участников первого уровня (найдено: {$participantCount}, максимум: 2). Перенаправления не учитываются.";
+        }
+
+        // Правило 2: Максимум 1 подписант (type=1) первого уровня
+        if ($signerCount > 1) {
+            $validationErrors[] = "Секция подписантов: слишком много подписантов первого уровня (найдено: {$signerCount}, максимум: 1)";
+        }
+
+        // Правило 3: Максимум 1 утверждающий (type=2) первого уровня
+        if ($approverCount > 1) {
+            $validationErrors[] = "Секция подписантов: слишком много утверждающих первого уровня (найдено: {$approverCount}, максимум: 1)";
+        }
+
+        // Правило 4: Для приказов (documentacial=1) только 1 подписант первого уровня, без утверждающих
+        if ($documentType == 1) {
+            if ($participantCount != 1 || $signerCount != 1 || $approverCount > 0) {
+                $validationErrors[] = "Приказ: должен иметь ровно 1 подписанта первого уровня без утверждающих (сейчас: {$participantCount} участник(ов) первого уровня, {$approverCount} утверждающих)";
+            }
+        }
+    }
+}
+unset($section);
+
+// Если есть ошибки валидации - возвращаем их
+if (count($validationErrors) > 0) {
+    echo json_encode([
+        'result' => false,
+        'resultText' => implode("\n", $validationErrors),
+        'html' => ''
+    ]);
+    exit;
+}
+
 // Автоисправление порядка подписантов: role=1 (подписывает) должен быть перед role=0 (утверждает)
 $agreementListChanged = false;
 foreach ($agreementList as &$section) {

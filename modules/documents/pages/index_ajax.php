@@ -967,12 +967,34 @@ $regs = $gui->getTableData($table->table_name);
                     module = "calendar";
                     handler = "order_staff";
                     break;
+                case 2:
+                    module = 'roadmap';
+                    handler = 'registry_items_edit';
+                    break;
                 case 3:
                     module = 'plans';
                     handler = 'registry_edit';
                     break;
+                case 5:
+                    module = 'roadmap';
+                    handler = 'view_road';
+                    break;
             }
-            el_app.dialog_open(handler, {doc_id: doc_id, ins_id: ins_id, plan_id: plan_id}, module);
+            if (handler === "") {
+                alert("Редактирование этого типа документа не реализовано.");
+                return;
+            }
+            // Передаём правильные параметры в зависимости от типа документа
+            if (doc_type === 5) {
+                // График устранения - передаём roadId
+                el_app.dialog_open(handler, {roadId: doc_id}, module);
+            } else if (doc_type === 2) {
+                // Акт - передаём как массив [doc_id, parent_id] для registry_items_edit
+                el_app.dialog_open(handler, [doc_id, 66], module);
+            } else {
+                // Остальные типы - стандартные параметры
+                el_app.dialog_open(handler, {doc_id: doc_id, ins_id: ins_id, plan_id: plan_id}, module);
+            }
         });
 
         $('#registry_items_delete_real .tab-pane li').on('click', function () {

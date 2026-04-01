@@ -29,16 +29,9 @@ $insFilter = '';
 if ($is_object) {
     $userInsId = intval($_SESSION['user_institution']);
     if ($userInsId > 0) {
-        // Акты: ins_id = учреждение напрямую
-        // Графики: source_id = id акта, у которого ins_id = учреждение
-        $insFilter = " AND (
-            (documentacial = 2 AND ins_id = {$userInsId})
-            OR
-            (documentacial = 5 AND source_id IN (
-                SELECT id FROM " . TBL_PREFIX . "agreement
-                WHERE documentacial = 2 AND ins_id = {$userInsId}
-            ))
-        )";
+        // Для ОК показываем акты и графики его учреждения
+        // И акты, и графики имеют ins_id = учреждение объекта контроля
+        $insFilter = " AND ins_id = {$userInsId}";
     } else {
         // Учреждение не определено — ничего не показываем
         $insFilter = ' AND 1 = 0';
@@ -162,6 +155,9 @@ foreach ($regs as $r) {
                     <?= $gui->buildSortFilter('agreement', 'Дата', 'docdate', 'el_data', [], 'suggest', 'date') ?>
                 </th>
                 <th class="sort">
+                    <?= $gui->buildSortFilter('agreement', '№ документа', 'doc_number', 'el_data', []) ?>
+                </th>
+                <th class="sort">
                     <?= $gui->buildSortFilter('agreement', 'Наименование', 'name', 'el_data', []) ?>
                 </th>
                 <th class="sort">
@@ -271,6 +267,7 @@ foreach ($regs as $r) {
                         ? $date->correctDateFormatFromMysql($reg->docdate)
                         : '<span style="color:var(--color_04);font-size:12px">не подписан</span>') .
                     '</td>
+                    <td>' . htmlspecialchars($reg->doc_number ?? '') . '</td>
                     <td class="group">' . stripslashes($reg->name) . '</td>
                     <td style="font-size:13px">' . htmlspecialchars($insName) . '</td>
                     <td>' . $progressHtml . '</td>
@@ -297,19 +294,33 @@ foreach ($regs as $r) {
                             title="Открыть график устранения нарушений">rule</span> ';
                 }
 
-                if ($is_object) {
+                // Иконки для актов и графиков
+                if (intval($reg->documentacial) === 2) {
+                    // Акт - иконки как в модуле documents
                     echo '<span class="material-icons agreementDoc"
                             data-id="' . $reg->id . '"
-                            title="Направить возражения">call_missed</span> ';
+                            data-doctype="2"
+                            title="Согласование документа">verified</span> ';
+                    echo '<span class="material-icons viewDoc"
+                            data-id="' . $reg->id . '"
+                            title="Просмотр документа">picture_as_pdf</span>';
                 } else {
-                    echo '<span class="material-icons agreementDoc"
+                    // График - свои иконки
+                    if ($is_object) {
+                        echo '<span class="material-icons agreementDoc"
+                                data-id="' . $reg->id . '"
+                                data-doctype="5"
+                                title="Направить возражения">call_missed</span> ';
+                    } else {
+                        echo '<span class="material-icons agreementDoc"
+                                data-id="' . $reg->id . '"
+                                data-doctype="5"
+                                title="Просмотр переписки">pageview</span> ';
+                    }
+                    echo '<span class="material-icons viewDoc"
                             data-id="' . $reg->id . '"
-                            title="Просмотр переписки">pageview</span> ';
+                            title="Ознакомление с актом">picture_as_pdf</span>';
                 }
-
-                echo '<span class="material-icons viewDoc"
-                        data-id="' . $reg->id . '"
-                        title="Ознакомление с актом">picture_as_pdf</span>';
 
                 echo '</td></tr>';
             }
@@ -323,9 +334,42 @@ foreach ($regs as $r) {
 <script src="/js/assets/agreement_list.js"></script>
 <script src="/modules/roadmap/js/registry_items.js?v=<?= $gui->genpass() ?>"></script>
 <script>
+    // Перехватываем двойной клик на строках таблицы для графиков устранения
+    $(document).ready(function() {
+        // Для графиков устранения (documentacial=5) открываем view_road вместо стандартного редактирования
+        $(".table_data tbody tr td:not(:first-child):not(.link)").off("dblclick").on("dblclick", function (e) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+
+            let $row = $(this).closest("tr");
+            let rowId = $row.data("id");
+            let docType = $row.find("td").eq(3).text().trim(); // Колонка "Тип"
+
+            if (docType === "График устранения") {
+                // Открываем просмотр графика
+                el_app.dialog_open("view_road", {roadId: rowId}, "roadmap");
+            } else {
+                // Для актов открываем стандартное редактирование
+                $(".preloader").fadeIn('fast');
+                let parentId = $row.data("parent");
+                let params = [rowId, parentId];
+                el_app.edited_id = rowId;
+                el_app.dialog_open("registry_items_edit", params);
+            }
+        });
+    });
+
     $('.agreementDoc').off('click').on('click', function () {
         let taskId = $(this).data('id');
-        el_app.dialog_open('agreement', {docId: taskId}, 'roadmap');
+        let docType = $(this).data('doctype');
+
+        // Для графиков (documentacial=5) открываем view_road
+        if (docType === 5) {
+            el_app.dialog_open('view_road', {roadId: taskId}, 'roadmap');
+        } else {
+            // Для актов (documentacial=2) открываем agreement
+            el_app.dialog_open('agreement', {docId: taskId}, 'roadmap');
+        }
     });
     $('.viewDoc').off('click').on('click', function () {
         let taskId = $(this).data('id');

@@ -706,7 +706,7 @@ $initialAgreementList = json_decode($tmpl->agreementlist, true) ?? [];
                         };
                         if (!newItem.id) { el_tools.notify('error', 'Ошибка', 'Выберите сотрудника'); return; }
                         const $ag = $('#ag' + section);
-                        let agj = JSON.parse($ag.val());
+                        let agj = $.trim($ag.val()).length > 0 ? JSON.parse($ag.val()) : []; console.log(agj)
                         // Вставляем после afterIndex (или в конец если -1)
                         if (afterIndex < 0) {
                             agj.push(newItem);

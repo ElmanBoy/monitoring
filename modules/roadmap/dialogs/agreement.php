@@ -43,7 +43,7 @@ $agreementlist = json_decode($tmpl->agreementlist ?? '[]', true) ?: [];
 // Если это акт или документ с листом согласования — строим таблицу
 $html .= '<div style="margin-bottom:10px">
     <strong>' . htmlspecialchars($tmpl->name) . '</strong><br>
-    <small>Инициатор: ' . $initiator_fio . ' ' . $initiator_position . '</small>
+    <small>Инициатор: ' . ($initiator_fio ?: 'не указан') . ($initiator_position ? ' ' . $initiator_position : '') . '</small>
 </div>';
 
 if (is_array($agreementlist) && count($agreementlist) > 0 && isset($agreementlist[0][0]['list_type'])) {
@@ -97,9 +97,16 @@ if (is_array($agreementlist) && count($agreementlist) > 0 && isset($agreementlis
     }
 
     $html .= '</table></div></div>';
+} else {
+    // Лист согласования отсутствует
+    $html .= '<div style="margin-top:20px; padding:15px; background:#f5f5f5; border-left:4px solid #ff9800;">
+        <strong>Лист согласования отсутствует</strong><br>
+        <small>Документ был создан без листа согласования или данные недоступны.</small>
+    </div>';
 }
 
 // Блок возражений — только для ОК (role=5), только для актов
+$hasViolations = false;
 if ($is_object && intval($tmpl->documentacial) === 2) {
     // Берём учреждение из акта
     $insId = intval($tmpl->ins_id ?: $tmpl->source_id);
@@ -116,6 +123,7 @@ if ($is_object && intval($tmpl->documentacial) === 2) {
             'SELECT * FROM ' . TBL_PREFIX . 'checksviolations WHERE tasks IN (' . implode(',', $tids) . ') ORDER BY id'
         );
         if (!empty($violations)) {
+            $hasViolations = true;
             $html .= '<div style="margin-top:20px"><strong>Возражения к нарушениям</strong></div><hr>';
             $num = 1;
             foreach ($violations as $vi) {
@@ -173,16 +181,18 @@ if ($is_object && intval($tmpl->documentacial) === 2) {
         </ul>
 
         <div class="agreement_block tab-panel" id="tab_agreement-panel">
-            <form class="ajaxFrm noreset" id="objections" onsubmit="return false">
-                <?= $html ?>
-                <?php if ($is_object && intval($tmpl->documentacial) === 2): ?>
-                    <div class="confirm">
-                        <button class="button icon text save">
-                            <span class="material-icons">send</span>Отправить возражения
-                        </button>
-                    </div>
-                <?php endif; ?>
-            </form>
+            <div class="group">
+                <form class="ajaxFrm noreset" id="objections" onsubmit="return false">
+                    <?= $html ?>
+                    <?php if ($hasViolations): ?>
+                        <div class="confirm">
+                            <button class="button icon text save">
+                                <span class="material-icons">send</span>Отправить возражения
+                            </button>
+                        </div>
+                    <?php endif; ?>
+                </form>
+            </div>
         </div>
 
         <div class="preview_block tab-panel" id="tab_preview-panel" style="display:none">
@@ -300,13 +310,18 @@ if ($is_object && intval($tmpl->documentacial) === 2) {
             $('#agreement #tab_preview, #tab_preview').on('click', function () {
                 $('.preloader').fadeIn('fast');
                 $.post('/', {
-                    ajax: 1, mode: 'popup', module: 'roadmap', url: 'pdf', outputType: 0,
-                    params: {docId: DOC_ID}
+                    ajax: 1, action: 'planPdf', params: {docId: DOC_ID}
                 }, function (data) {
                     if (data.length > 0) {
                         $('#pdf-viewer').attr('src', 'data:application/pdf;base64,' + data);
                         $('.preloader').fadeOut('fast');
+                    } else {
+                        console.error('Пустой ответ от planPdf');
+                        $('.preloader').fadeOut('fast');
                     }
+                }).fail(function(xhr, status, error) {
+                    console.error('Ошибка загрузки PDF:', error, xhr.responseText);
+                    $('.preloader').fadeOut('fast');
                 });
             });
 

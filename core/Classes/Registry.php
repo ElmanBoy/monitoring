@@ -2154,7 +2154,7 @@ class Registry
             if (!$hasItems) {
                 $html .= '<tr class="ag-add-row">' .
                     '<td colspan="5" style="padding:4px 8px">' .
-                    '<button class="ag-add-btn button icon text"' .
+                    '<button class="ag-add-btn button icon text blue"' .
                     ' data-section="' . $section . '"' .
                     ' data-index="-1"' .
                     ' data-is-signers="' . ($isSignersSection ? '1' : '0') . '"' .

@@ -439,10 +439,19 @@ class Auth
             $last_path = preg_replace('/[?&]+$/', '', $last_path);
             $last_path = preg_replace('/\?&/', '?', $last_path);
 
-            // Если остался только домен или пустая строка, используем dashboard
+            // Если остался только домен или пустая строка, выбираем страницу по умолчанию
             if (preg_match('/^https?:\/\/[^\/]+\/?$/', $last_path) || empty($last_path)) {
+                // Для сотрудников объектов контроля (роль ОК, role=5) - roadmap
+                if ($this->haveUserRole(5)) {
+                    return 'roadmap';
+                }
                 return 'dashboard';
             }
+        }
+
+        // Для сотрудников объектов контроля (роль ОК, role=5) без сохраненного пути - roadmap
+        if (strlen($last_path) == 0 && $this->haveUserRole(5)) {
+            return 'roadmap';
         }
 
         return strlen($last_path) > 0 ? $last_path : 'dashboard';
