@@ -510,11 +510,50 @@ $initialAgreementList = json_decode($tmpl->agreementlist, true) ?? [];
             }
 
             /**
+             * Обновляет видимость кнопок "Добавить" в секциях подписантов
+             * в зависимости от количества участников первого уровня
+             */
+            function updateAddButtonsVisibility() {
+                // Проходим по всем секциям
+                $('[name=addAgreement]').each(function() {
+                    const $ag = $(this);
+                    const sectionId = $ag.attr('id').replace('ag', '');
+                    let agj;
+                    try {
+                        agj = JSON.parse($ag.val());
+                    } catch (e) {
+                        return;
+                    }
+
+                    // Проверяем, является ли это секцией подписантов
+                    if (!agj[0] || agj[0].stage !== '') return;
+
+                    // Считаем участников первого уровня
+                    let firstLevelCount = 0;
+                    for (let i = 1; i < agj.length; i++) {
+                        if (agj[i].id && !agj[i]._is_redirector_repeat) {
+                            firstLevelCount++;
+                        }
+                    }
+
+                    // Показываем/скрываем кнопки добавления
+                    const $addButtons = $('.ag-add-btn[data-section="' + sectionId + '"]');
+                    if (firstLevelCount >= 2) {
+                        $addButtons.hide();
+                    } else {
+                        $addButtons.show();
+                    }
+                });
+            }
+
+            /**
              * Переинициализирует все обработчики событий после перерисовки таблицы.
              * БАГ #7 ИСПРАВЛЕН: единственное место привязки обработчиков — эта функция.
              * $(document).ready вызывает только её.
              */
             function reinitEvents() {
+                // Обновляем видимость кнопок добавления
+                updateAddButtonsVisibility();
                 $(document).off('click', '.setAgree').on('click', '.setAgree', function (e) {
                     e.preventDefault();
                     const section = $(this).closest('.actions').data('section');
@@ -594,15 +633,37 @@ $initialAgreementList = json_decode($tmpl->agreementlist, true) ?? [];
                 });
 
                 // Удаление сотрудника инициатором
-                $(document).off('click', '.ag-delete-btn').on('click', '.ag-delete-btn', function (e) {
+                $('#agreement_list_container').off('click', '.ag-delete-btn').on('click', '.ag-delete-btn', async function (e) {
                     e.preventDefault();
-                    const section = $(this).data('section');
-                    const index   = $(this).data('index');
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+
+                    const $btn = $(this);
+                    const section = $btn.data('section');
+                    const index   = $btn.data('index');
+
+                    // Получаем информацию о сотруднике для подтверждения
+                    const $tr = $btn.closest('tr');
+                    const $userCell = $tr.find('td[data-user-id]');
+                    // Клонируем ячейку и удаляем кнопки и иконки для чистого извлечения имени
+                    const $clone = $userCell.clone();
+                    $clone.find('button, .material-icons').remove();
+                    const userName = $clone.text().trim();
+
+                    // Запрашиваем подтверждение (асинхронный кастомный confirm возвращает Promise)
+                    const confirmed = await window.confirm('Вы уверены, что хотите удалить сотрудника "' + userName + '" из списка согласования?');
+
+                    if (confirmed !== true) {
+                        return false;
+                    }
+
                     const $ag = $('#ag' + section);
                     let agj = JSON.parse($ag.val());
                     agj.splice(index, 1);
                     $ag.val(JSON.stringify(agj));
                     saveAgreementList();
+
+                    return false;
                 });
 
                 // Вспомогательная функция сохранения agreementList на сервер
@@ -647,6 +708,12 @@ $initialAgreementList = json_decode($tmpl->agreementlist, true) ?? [];
                         if (answer.result) {
                             if (answer.serverTime) _serverTime = answer.serverTime;
                             refreshAgreementTable(answer.resultAgreement);
+
+                            // Обновляем главный список документов для отображения актуального статуса
+                            if (typeof el_app !== 'undefined' && typeof el_app.reloadMainContent === 'function') {
+                                el_app.reloadMainContent();
+                            }
+
                             if (onSuccess) onSuccess();
                         } else {
                             el_tools.notify('error', 'Ошибка', answer.resultText);
@@ -706,7 +773,24 @@ $initialAgreementList = json_decode($tmpl->agreementlist, true) ?? [];
                         };
                         if (!newItem.id) { el_tools.notify('error', 'Ошибка', 'Выберите сотрудника'); return; }
                         const $ag = $('#ag' + section);
-                        let agj = $.trim($ag.val()).length > 0 ? JSON.parse($ag.val()) : []; console.log(agj)
+                        let agj = $.trim($ag.val()).length > 0 ? JSON.parse($ag.val()) : [];
+
+                        // ПРОВЕРКА: В секции подписантов не может быть больше 2 участников первого уровня
+                        if (isSigners) {
+                            // Считаем участников первого уровня (исключаем _is_redirector_repeat)
+                            let firstLevelCount = 0;
+                            for (let i = 1; i < agj.length; i++) {
+                                if (agj[i].id && !agj[i]._is_redirector_repeat) {
+                                    firstLevelCount++;
+                                }
+                            }
+                            if (firstLevelCount >= 2) {
+                                el_tools.notify('error', 'Ошибка', 'В секции подписантов не может быть больше 2 участников первого уровня');
+                                addRow.remove();
+                                return;
+                            }
+                        }
+
                         // Вставляем после afterIndex (или в конец если -1)
                         if (afterIndex < 0) {
                             agj.push(newItem);
@@ -909,14 +993,16 @@ $initialAgreementList = json_decode($tmpl->agreementlist, true) ?? [];
                     ajax: 1,
                     action: 'renderAgreementTable',
                     path: 'documents',
-                    agreementList: <?= json_encode(
-                        array_map('json_encode', $initialAgreementList),
-                        JSON_UNESCAPED_UNICODE
-                    ) ?>,
+                    agreementList: <?= json_encode($initialAgreementList, JSON_UNESCAPED_UNICODE) ?>,
                     docId: DOC_ID
                 }, function (data) {
                     let answer;
-                    try { answer = JSON.parse(data); } catch (e) { return; }
+                    try {
+                        answer = JSON.parse(data);
+                    } catch (e) {
+                        console.error('Ошибка парсинга ответа renderAgreementTable:', e, data);
+                        return;
+                    }
                     if (answer.result) {
                         $('#agreement_list_container').html(answer.html);
                         $('select[name="redirect[]"]').chosen({
@@ -926,7 +1012,12 @@ $initialAgreementList = json_decode($tmpl->agreementlist, true) ?? [];
                             allowInput: true
                         });
                         reinitEvents();
+                    } else {
+                        console.error('Ошибка рендеринга таблицы согласования:', answer.resultText);
                     }
+                    $('.preloader').fadeOut('fast');
+                }).fail(function(xhr, status, error) {
+                    console.error('AJAX ошибка renderAgreementTable:', error, xhr.responseText);
                     $('.preloader').fadeOut('fast');
                 });
                 el_app.initTabs();

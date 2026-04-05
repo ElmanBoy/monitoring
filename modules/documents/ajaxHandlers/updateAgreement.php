@@ -68,19 +68,39 @@ function normalizeSection($item): array
 
 $_POST['agreementList'] = fixAgreementList($_POST['agreementList']);
 
-// Валидация порядка в секции подписантов: role=1 должен быть перед role=0
+// Получаем тип документа для валидации
+$documentType = intval($agr->documentacial ?? 0);
+
+// Валидация секции подписантов
 foreach ($_POST['agreementList'] as $section) {
     if (!is_array($section) || !isset($section[0])) continue;
     // Секция подписантов — stage=""
     if (!array_key_exists('stage', $section[0]) || $section[0]['stage'] !== '') continue;
-    $lastSignerIdx   = -1;
+
+    // Считаем участников первого уровня
+    $signerCount = 0;
+    $approverCount = 0;
+    $firstLevelCount = 0;
+    $lastSignerIdx = -1;
     $firstApproverIdx = -1;
+
     for ($k = 1; $k < count($section); $k++) {
         if (!isset($section[$k]['id']) || !empty($section[$k]['_is_redirector_repeat'])) continue;
+
+        $firstLevelCount++;
         $role = intval($section[$k]['role'] ?? 0);
-        if ($role === 1) $lastSignerIdx = $k;
-        if ($role === 0 && $firstApproverIdx === -1) $firstApproverIdx = $k;
+
+        if ($role === 1) {
+            $signerCount++;
+            $lastSignerIdx = $k;
+        }
+        if ($role === 0) {
+            $approverCount++;
+            if ($firstApproverIdx === -1) $firstApproverIdx = $k;
+        }
     }
+
+    // Проверка порядка: role=1 должен быть перед role=0
     if ($lastSignerIdx > -1 && $firstApproverIdx > -1 && $lastSignerIdx > $firstApproverIdx) {
         echo json_encode([
             'result'      => false,
@@ -88,6 +108,21 @@ foreach ($_POST['agreementList'] as $section) {
             'errorFields' => []
         ]);
         exit;
+    }
+
+    // Проверка количества участников в зависимости от типа документа
+    // Показываем предупреждение, но не блокируем сохранение (пользователь может быть в процессе формирования списка)
+    $quantityWarning = '';
+    if ($documentType == 1) {
+        // Приказ: только 1 подписант, без утверждающих
+        if ($firstLevelCount != 1 || $signerCount != 1 || $approverCount > 0) {
+            $quantityWarning = '⚠️ Внимание: Приказ должен иметь ровно 1 подписанта без утверждающих. ';
+        }
+    } else {
+        // Остальные документы: 1 подписант + 1 утверждающий
+        if ($firstLevelCount != 2 || $signerCount != 1 || $approverCount != 1) {
+            $quantityWarning = '⚠️ Внимание: Документ должен иметь ровно 2 участника первого уровня - один подписывает, второй утверждает. ';
+        }
     }
 }
 
@@ -671,7 +706,7 @@ if ($finalStatus == 1) {
 
 echo json_encode([
     'result'          => $result['result'],
-    'resultText'      => $finalMessage . '<script>el_app.reloadMainContent();</script>',
+    'resultText'      => $quantityWarning . $finalMessage . '<script>el_app.reloadMainContent();</script>',
     'resultAgreement' => $agreementList,
     'resultStats'     => $globalStats,
     'serverTime'      => date('d.m.Y H:i'),

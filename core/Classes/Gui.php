@@ -1066,7 +1066,7 @@ class Gui
                     $columnHtml .= '<div class="el_option"><label class="container">' . $text . '
                         <input type="checkbox"' . ((is_array($this->filterFields[$columnName])
                             && in_array($value, $this->filterFields[$columnName])) ? ' checked' : '') . '
-                         name="filter_' . $filterName . '[]" value="' . $value . '" class="filterer">
+                         name="filter_' . $filterName . '[]" value="' . $value . '">
                         <span class="checkmark"></span></label></div>';
                 }
             }
@@ -1087,8 +1087,19 @@ class Gui
                                 <div class="button icon uncheck_all"><span class="material-icons">remove_done</span></div>
                                 <div class="button icon done close_select"><span class="material-icons">highlight_off</span></div>
                                 </div>';
-                $this->filterFields[$columnName] = array_unique($this->filterFields[$columnName]);
+
+                // Удаляем дубликаты с учётом регистра (регистронезависимая дедупликация)
+                $uniqueFields = [];
+                $lowerCaseMap = [];
                 foreach ($this->filterFields[$columnName] as $fItem) {
+                    $lowerItem = mb_strtolower($fItem);
+                    if (!isset($lowerCaseMap[$lowerItem])) {
+                        $lowerCaseMap[$lowerItem] = true;
+                        $uniqueFields[] = $fItem;
+                    }
+                }
+
+                foreach ($uniqueFields as $fItem) {
 
                     $text = ($idAsValue) ? $filterItems[$fItem] : $fItem;
 

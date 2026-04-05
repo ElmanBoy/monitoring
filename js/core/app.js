@@ -1151,12 +1151,19 @@ var el_app = {
             e.preventDefault();
             let listWrap = $(this).closest("th").find(".data_filter_select"),
                 list = listWrap.find("input"),
+                list_name = "";
+
+            // Проверяем, что есть хотя бы один input элемент
+            if (list.length > 0 && $(list[0]).attr("name")) {
                 list_name = $(list[0]).attr("name").replace("[]", "");
+            }
 
             if (listWrap.css("display") === "none") {
                 $(".table_data .data_filter_select").hide();
                 listWrap.show();
-                el_tools.setcookie("role_show_" + list_name, "open");
+                if (list_name) {
+                    el_tools.setcookie("role_show_" + list_name, "open");
+                }
 
                 /*$(document).off("click").on("click", function (e) {
                     let listWrap = $(".data_filter_select"),
@@ -1169,7 +1176,9 @@ var el_app = {
                 });*/
             } else {
                 listWrap.hide();
-                el_tools.setcookie("role_show_" + list_name, "close");
+                if (list_name) {
+                    el_tools.setcookie("role_show_" + list_name, "close");
+                }
             }
         });
 

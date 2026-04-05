@@ -17,108 +17,14 @@ $initiatorId = intval($agr->initiator ?? 0);
 if ($initiatorId === 0) {
     $initiatorId = intval($agr->author ?? 0);
 }
-$agreementList = $_POST['agreementList'];
 
-// ============ Декодируем JSON и преобразуем в правильную структуру ============
-function convertArrayToObject($arr) {
-    if (!is_array($arr)) {
-        return $arr;
-    }
+// Получаем agreementList - он уже должен быть массивом
+$agreementList = $_POST['agreementList'] ?? [];
 
-    // Проверяем, является ли это массивом с числовыми индексами
-    $isNumericArray = true;
-    foreach (array_keys($arr) as $key) {
-        if (!is_int($key)) {
-            $isNumericArray = false;
-            break;
-        }
-    }
-
-    // Если это ассоциативный массив (уже объект), возвращаем как есть
-    if (!$isNumericArray) {
-        $result = [];
-        foreach ($arr as $key => $value) {
-            $result[$key] = convertArrayToObject($value);
-        }
-        return $result;
-    }
-
-    // Если это числовой массив, преобразуем в объект на основе структуры
-    if (count($arr) > 0 && is_array($arr[0])) {
-        // Проверяем, похоже ли на секцию согласования
-        if (isset($arr[0][0]) && ($arr[0][0] === '1' || $arr[0][0] === '' || $arr[0][0] === 'stage')) {
-            // Это заголовок секции
-            $section = [];
-            if (count($arr[0]) >= 3) {
-                $section['stage'] = $arr[0][0] === '' ? '' : $arr[0][0];
-                $section['urgent'] = $arr[0][1] ?? '1';
-                $section['list_type'] = $arr[0][2] ?? '2';
-            }
-
-            // Остальные элементы - сотрудники
-            $result = [$section];
-            for ($i = 1; $i < count($arr); $i++) {
-                $user = [];
-                if (count($arr[$i]) >= 2) {
-                    $user['id'] = intval($arr[$i][0]);
-                    $user['type'] = intval($arr[$i][1]);
-
-                    // Дополнительные поля
-                    if (isset($arr[$i][2]) && $arr[$i][2] !== '') {
-                        $user['vrio'] = $arr[$i][2];
-                    }
-                    if (isset($arr[$i][3]) && $arr[$i][3] !== '') {
-                        $user['role'] = $arr[$i][3];
-                    }
-                    if (isset($arr[$i][4]) && $arr[$i][4] !== '') {
-                        $user['urgent'] = $arr[$i][4];
-                    }
-
-                    // Результат
-                    if (isset($arr[$i][5]) && is_array($arr[$i][5]) && count($arr[$i][5]) >= 2) {
-                        $user['result'] = [
-                            'id' => intval($arr[$i][5][0]),
-                            'date' => $arr[$i][5][1]
-                        ];
-                    }
-
-                    // Перенаправление
-                    if (isset($arr[$i][6]) && is_array($arr[$i][6])) {
-                        $user['redirect'] = [];
-                        foreach ($arr[$i][6] as $redirect) {
-                            if (is_array($redirect) && count($redirect) >= 2) {
-                                $user['redirect'][] = [
-                                    'id' => intval($redirect[0]),
-                                    'type' => intval($redirect[1])
-                                ];
-                            }
-                        }
-                    }
-                }
-                $result[] = $user;
-            }
-            return $result;
-        }
-    }
-
-    return $arr;
+// Если пустой или некорректный - берём из БД
+if (empty($agreementList) || !is_array($agreementList)) {
+    $agreementList = json_decode($agr->agreementlist ?? '[]', true) ?: [];
 }
-
-// Декодируем JSON и преобразуем структуру
-$decodedAgreementList = [];
-foreach ($agreementList as $item) {
-    if (is_string($item)) {
-        $decoded = json_decode($item, true);
-        if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
-            $decodedAgreementList[] = convertArrayToObject($decoded);
-        } else {
-            $decodedAgreementList[] = $item;
-        }
-    } else {
-        $decodedAgreementList[] = convertArrayToObject($item);
-    }
-}
-$agreementList = $decodedAgreementList;
 
 // Нормализуем булевые значения и пустые result
 function normalizeAgreementSection(array $section): array
@@ -168,8 +74,8 @@ foreach ($agreementList as $sectionIdx => &$section) {
 
         // Считаем только участников ПЕРВОГО УРОВНЯ (не перенаправленных и не возвраты)
         $firstLevelParticipants = [];
-        $signerCount = 0;      // type=1
-        $approverCount = 0;    // type=2
+        $signerCount = 0;      // role=1 (подписывает)
+        $approverCount = 0;    // role=0 (утверждает)
 
         foreach ($participants as $p) {
             if (!is_array($p)) continue;
@@ -182,48 +88,52 @@ foreach ($agreementList as $sectionIdx => &$section) {
             // Это участник первого уровня
             $firstLevelParticipants[] = $p;
 
-            if (!isset($p['type']) && !isset($p['role'])) continue;
-            $type = isset($p['type']) ? intval($p['type']) : (isset($p['role']) ? (intval($p['role']) == 1 ? 1 : 2) : 0);
-
-            if ($type == 1) $signerCount++;
-            if ($type == 2) $approverCount++;
+            // ВАЖНО: В секции подписантов используется поле 'role', а не 'type'
+            // role=1 - подписывает, role=0 - утверждает
+            if (isset($p['role'])) {
+                $role = intval($p['role']);
+                if ($role == 1) $signerCount++;      // Подписывает
+                if ($role == 0) $approverCount++;    // Утверждает
+            }
         }
 
         $participantCount = count($firstLevelParticipants);
 
-        // Правило 1: Максимум 2 участника первого уровня в секции подписантов
-        if ($participantCount > 2) {
-            $validationErrors[] = "Секция подписантов: превышено максимальное количество участников первого уровня (найдено: {$participantCount}, максимум: 2). Перенаправления не учитываются.";
-        }
-
-        // Правило 2: Максимум 1 подписант (type=1) первого уровня
-        if ($signerCount > 1) {
-            $validationErrors[] = "Секция подписантов: слишком много подписантов первого уровня (найдено: {$signerCount}, максимум: 1)";
-        }
-
-        // Правило 3: Максимум 1 утверждающий (type=2) первого уровня
-        if ($approverCount > 1) {
-            $validationErrors[] = "Секция подписантов: слишком много утверждающих первого уровня (найдено: {$approverCount}, максимум: 1)";
-        }
-
-        // Правило 4: Для приказов (documentacial=1) только 1 подписант первого уровня, без утверждающих
+        // Валидация в зависимости от типа документа
         if ($documentType == 1) {
+            // Правило для приказов (documentacial=1): только 1 подписант первого уровня, без утверждающих
             if ($participantCount != 1 || $signerCount != 1 || $approverCount > 0) {
-                $validationErrors[] = "Приказ: должен иметь ровно 1 подписанта первого уровня без утверждающих (сейчас: {$participantCount} участник(ов) первого уровня, {$approverCount} утверждающих)";
+                $validationErrors[] = "Приказ: должен иметь ровно 1 подписанта первого уровня без утверждающих (сейчас: {$participantCount} участник(ов) первого уровня, из них {$signerCount} подписывающих и {$approverCount} утверждающих)";
+            }
+        } else {
+            // Правила для всех остальных типов документов (акты, планы, графики и т.д.)
+
+            // Правило 1: Ровно 2 участника первого уровня в секции подписантов
+            if ($participantCount != 2) {
+                $validationErrors[] = "Секция подписантов: должно быть ровно 2 участника первого уровня (найдено: {$participantCount}). Один подписывает, второй утверждает. Перенаправления не учитываются.";
+            }
+
+            // Правило 2: Ровно 1 подписант (role=1) первого уровня
+            if ($signerCount != 1) {
+                $validationErrors[] = "Секция подписантов: должен быть ровно 1 подписывающий первого уровня (найдено: {$signerCount})";
+            }
+
+            // Правило 3: Ровно 1 утверждающий (role=0) первого уровня
+            if ($approverCount != 1) {
+                $validationErrors[] = "Секция подписантов: должен быть ровно 1 утверждающий первого уровня (найдено: {$approverCount})";
             }
         }
     }
 }
 unset($section);
 
-// Если есть ошибки валидации - возвращаем их
+// Если есть ошибки валидации - формируем предупреждение, но продолжаем рендеринг
+$validationWarning = '';
 if (count($validationErrors) > 0) {
-    echo json_encode([
-        'result' => false,
-        'resultText' => implode("\n", $validationErrors),
-        'html' => ''
-    ]);
-    exit;
+    $validationWarning = '<div style="background:#fff3cd;border:1px solid #ffc107;padding:10px;margin:10px 0;border-radius:4px;">' .
+        '<strong>⚠️ Предупреждение:</strong><br>' .
+        implode('<br>', $validationErrors) .
+        '</div>';
 }
 
 // Автоисправление порядка подписантов: role=1 (подписывает) должен быть перед role=0 (утверждает)
@@ -282,6 +192,8 @@ if (count($signs) > 0) {
 }
 
 // Получаем данные об учреждениях для title
+// ВАЖНО: объявляем как global, т.к. buildAgreementList ожидает их как глобальные переменные
+global $ins, $mins, $units;
 $ins = $db->getRegistry('institutions', '', [], ['short']);
 $mins = $db->getRegistry('ministries');
 $units = $db->getRegistry('units');
@@ -389,5 +301,8 @@ for ($i = 0; $i < count($agreementList); $i++) {
 
 $html .= '</table></div>';
 
-echo json_encode(['result' => true, 'html' => $html]);
+// Добавляем предупреждение в начало, если есть ошибки валидации
+$finalHtml = $validationWarning . $html;
+
+echo json_encode(['result' => true, 'html' => $finalHtml]);
 exit;

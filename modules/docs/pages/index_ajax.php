@@ -72,7 +72,7 @@ $regs = $gui->getTableData($table->table_name);
                 <th class="sort">
                     <?
                     echo $gui->buildSortFilter(
-                        'registryitems',
+                        'documents',
                         '№',
                         'id',
                         'el_data',
@@ -83,7 +83,7 @@ $regs = $gui->getTableData($table->table_name);
                 <th class="sort">
                     <?
                     echo $gui->buildSortFilter(
-                        'registryitems',
+                        'documents',
                         'Статус',
                         'active',
                         'constant',
@@ -94,7 +94,7 @@ $regs = $gui->getTableData($table->table_name);
                 <th class="sort">
                     <?
                     echo $gui->buildSortFilter(
-                        'registryitems',
+                        'documents',
                         'Наименование',
                         'name',
                         'el_data',

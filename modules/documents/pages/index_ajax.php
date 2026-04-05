@@ -150,18 +150,103 @@ require_once $_SERVER['DOCUMENT_ROOT'] . '/core/connect.php';
 }*/
 
 /**
+ * Проверяет соответствие количества подписантов требованиям
+ *
+ * @param string $agreementListJson JSON строка agreementlist
+ * @param int $documentType Тип документа (documentacial)
+ * @return array ['valid' => bool, 'error' => string]
+ */
+function validateSignersCount(?string $agreementListJson, int $documentType): array
+{
+    $data = json_decode($agreementListJson, true);
+
+    if (!is_array($data) || empty($data)) {
+        return ['valid' => false, 'error' => 'Нет данных согласования'];
+    }
+
+    // Ищем секцию подписантов (stage='')
+    foreach ($data as $section) {
+        if (!is_array($section) || !isset($section[0])) continue;
+
+        // Проверяем только секцию подписантов
+        $isSignersSection = (!array_key_exists('stage', $section[0]) || $section[0]['stage'] === '');
+
+        if ($isSignersSection) {
+            $participants = array_slice($section, 1);
+
+            // Считаем участников первого уровня
+            $firstLevelCount = 0;
+            $signerCount = 0;
+            $approverCount = 0;
+
+            foreach ($participants as $p) {
+                if (!is_array($p)) continue;
+
+                // _is_redirector_repeat означает, что участник вернется после перенаправления
+                // Такие участники УЧИТЫВАЮТСЯ при валидации, так как они часть списка
+                $firstLevelCount++;
+
+                if (isset($p['role'])) {
+                    $role = intval($p['role']);
+                    if ($role == 1) $signerCount++;
+                    if ($role == 0) $approverCount++;
+                }
+            }
+
+            // Проверяем в зависимости от типа документа
+            if ($documentType == 1) {
+                // Приказ: только 1 подписант
+                if ($firstLevelCount != 1 || $signerCount != 1 || $approverCount > 0) {
+                    return [
+                        'valid' => false,
+                        'error' => 'Ошибка подписантов',
+                        'error_full' => 'Приказ должен иметь ровно 1 подписанта без утверждающих'
+                    ];
+                }
+            } else {
+                // Остальные документы: 1 подписант + 1 утверждающий
+                if ($firstLevelCount != 2 || $signerCount != 1 || $approverCount != 1) {
+                    return [
+                        'valid' => false,
+                        'error' => 'Ошибка подписантов',
+                        'error_full' => 'Документ должен иметь 2 участника первого уровня - один подписывает, второй утверждает'
+                    ];
+                }
+            }
+
+            return ['valid' => true, 'error' => ''];
+        }
+    }
+
+    // Секция подписантов не найдена
+    return ['valid' => false, 'error' => 'Секция подписантов отсутствует'];
+}
+
+/**
  * Возвращает данные для отображения иконки статуса документа
  * Учитывает последовательность согласования, перенаправления и отклонения
  *
  * @param int $userId ID пользователя
  * @param string $agreementListJson JSON строка agreementlist
  * @param int $documentStatus Общий статус документа
+ * @param int $docId ID документа для загрузки подписей
  * @return array Данные для иконки: [icon_class, color, title, can_approve, ...]
  */
-function getDocumentStatusForIcon(int $userId, ?string $agreementListJson, int $documentStatus): array
+function getDocumentStatusForIcon(int $userId, ?string $agreementListJson, int $documentStatus, int $docId = 0): array
 {
+    global $db;
+
     // Декодируем JSON
     $data = json_decode($agreementListJson, true);
+
+    // Загружаем подписи из таблицы cam_signs
+    $user_signs = [];
+    if ($docId > 0) {
+        $signs = $db->select('signs', " WHERE table_name = 'agreement' AND doc_id = ?", [$docId]);
+        foreach ($signs as $s) {
+            $user_signs[$s->user_id][$s->section] = ['type' => $s->type, 'date' => $s->created_at];
+        }
+    }
 
     // Если нет данных согласования или пустой массив
     if (!is_array($data) || empty($data)) {
@@ -176,10 +261,27 @@ function getDocumentStatusForIcon(int $userId, ?string $agreementListJson, int $
     }
 
     // Функция определения статуса согласующего
-    $getApproverStatus = function($approver) {
+    $getApproverStatus = function($approver, $section = null) use ($user_signs) {
         $result = $approver['result'] ?? null;
 
+        // Если result не установлен, проверяем cam_signs
         if (!$result || !is_array($result)) {
+            // Если есть подписи для этого пользователя
+            if (isset($user_signs[$approver['id']])) {
+                // Если указана секция - проверяем её
+                if ($section !== null && isset($user_signs[$approver['id']][$section])) {
+                    $signType = intval($user_signs[$approver['id']][$section]['type']);
+                    $signDate = $user_signs[$approver['id']][$section]['date'];
+                    return ['status' => 'approved', 'result_id' => $signType, 'date' => $signDate];
+                }
+                // Если секция не указана - берём первую найденную
+                if ($section === null) {
+                    $firstSign = reset($user_signs[$approver['id']]);
+                    $signType = intval($firstSign['type']);
+                    $signDate = $firstSign['date'];
+                    return ['status' => 'approved', 'result_id' => $signType, 'date' => $signDate];
+                }
+            }
             return ['status' => 'pending', 'result_id' => 0];
         }
 
@@ -187,17 +289,17 @@ function getDocumentStatusForIcon(int $userId, ?string $agreementListJson, int $
 
         switch ($resultId) {
             case 1: // Подписание
-                return ['status' => 'approved', 'result_id' => 1];
+                return ['status' => 'approved', 'result_id' => 1, 'date' => $result['date'] ?? ''];
             case 2: // Согласование с ЭП
-                return ['status' => 'approved', 'result_id' => 2];
+                return ['status' => 'approved', 'result_id' => 2, 'date' => $result['date'] ?? ''];
             case 3: // Согласование
-                return ['status' => 'approved', 'result_id' => 3];
+                return ['status' => 'approved', 'result_id' => 3, 'date' => $result['date'] ?? ''];
             case 4: // Перенаправление
-                return ['status' => 'redirected', 'result_id' => 4];
+                return ['status' => 'redirected', 'result_id' => 4, 'date' => $result['date'] ?? ''];
             case 5: // Отклонение
-                return ['status' => 'rejected', 'result_id' => 5];
+                return ['status' => 'rejected', 'result_id' => 5, 'date' => $result['date'] ?? ''];
             case 6: // Возврат на доработку
-                return ['status' => 'returned', 'result_id' => 6];
+                return ['status' => 'returned', 'result_id' => 6, 'date' => $result['date'] ?? ''];
             default:
                 return ['status' => 'pending', 'result_id' => 0];
         }
@@ -395,6 +497,25 @@ function getDocumentStatusForIcon(int $userId, ?string $agreementListJson, int $
         usort($allFound, function($a, $b) use ($getApproverStatus, $priority, $isRedirectChainDone) {
             $sa = $getApproverStatus($a['approver'])['status'];
             $sb = $getApproverStatus($b['approver'])['status'];
+
+            // ПРАВИЛО: _is_redirector_repeat имеет наивысший приоритет
+            // (это повторная запись после завершения перенаправления - актуальный статус)
+            $aIsRepeat = !empty($a['approver']['_is_redirector_repeat']);
+            $bIsRepeat = !empty($b['approver']['_is_redirector_repeat']);
+            if ($aIsRepeat && !$bIsRepeat) return -1; // a (repeat) имеет приоритет
+            if (!$aIsRepeat && $bIsRepeat) return 1;  // b (repeat) имеет приоритет
+
+            // ПРАВИЛО: Секция подписантов (stage='') имеет приоритет над этапами согласования
+            // Это важно, когда пользователь участвует и в подписантах, и в согласовании
+            $aStage = $a['section_info']['stage'] ?? null;
+            $bStage = $b['section_info']['stage'] ?? null;
+            $aIsSigners = ($aStage === '');
+            $bIsSigners = ($bStage === '');
+
+            // Если один из них - секция подписантов, а другой - этап, приоритет у подписантов
+            if ($aIsSigners && !$bIsSigners) return -1; // секция подписантов важнее
+            if (!$aIsSigners && $bIsSigners) return 1;  // секция подписантов важнее
+
             // redirected с незавершённой цепочкой получает наивысший приоритет (выше pending)
             $pa = ($sa === 'redirected' && !$isRedirectChainDone($a['approver'])) ? -1 : ($priority[$sa] ?? 9);
             $pb = ($sb === 'redirected' && !$isRedirectChainDone($b['approver'])) ? -1 : ($priority[$sb] ?? 9);
@@ -418,8 +539,31 @@ function getDocumentStatusForIcon(int $userId, ?string $agreementListJson, int $
         switch ($userStatus['status']) {
             case 'approved':
                 // Пользователь уже согласовал/подписал
-                $type = intval($userInfo['approver']['type'] ?? 1);
-                $title = $type == 1 ? 'Вы подписали' : 'Вы согласовали';
+                // Проверяем result.id для точного определения действия
+                $resultId = $userStatus['result_id'] ?? 0;
+
+                if ($resultId == 1) {
+                    // result.id=1 - подписано с ЭП
+                    $title = 'Вы подписали';
+                } elseif ($resultId == 2 || $resultId == 3) {
+                    // result.id=2 - согласовано с ЭП, result.id=3 - согласовано без ЭП
+                    $title = 'Вы согласовали';
+                } else {
+                    // Фоллбэк: проверяем role (для секции подписантов) и type (для секций согласования)
+                    $role = intval($userInfo['approver']['role'] ?? -1);
+                    $type = intval($userInfo['approver']['type'] ?? -1);
+
+                    if ($role == 1) {
+                        $title = 'Вы подписали';
+                    } elseif ($role == 0) {
+                        $title = 'Вы согласовали';
+                    } elseif ($type == 1) {
+                        $title = 'Вы подписали';
+                    } else {
+                        $title = 'Вы согласовали';
+                    }
+                }
+
                 if (!empty($userInfo['stage'])) {
                     $title .= " (этап {$userInfo['stage']})";
                 }
@@ -856,13 +1000,26 @@ $regs = $gui->getTableData($table->table_name);
                 $style = '';
                 $title = '';
                 $agrStatus = getDocumentStatusForIcon($_SESSION['user_id'],
-                    $reg->agreementlist, $reg->status);
-                if($reg->status == 1 || $agrStatus['icon_class'] == 'task_alt'){
-                    $icon = 'task_alt';
-                    $status = 'Согласован';
-                    $class = 'green';
+                    $reg->agreementlist, $reg->status, $reg->id);
 
+                // Проверяем количество подписантов
+                $signersValidation = validateSignersCount($reg->agreementlist, intval($reg->documentacial));
+
+                // Если валидация не прошла - всегда показываем предупреждение
+                if (!$signersValidation['valid']) {
+                    $icon = 'warning';
+                    $statusText = $signersValidation['error'];
+                    $class = 'orange';
+                    $style = ' style="color:#ff9800; display: inline;vertical-align: bottom;"'; // Оранжевый цвет для иконки
+                    $title = ' title="' . ($signersValidation['error_full'] ?? $signersValidation['error']) . '"';
+                } elseif($reg->status == 1 || $agrStatus['icon_class'] == 'task_alt'){
+                    // Валидация прошла и документ согласован
+                    $icon = 'task_alt';
+                    $statusText = 'Согласован';
+                    $class = 'green';
+                    $style = '';
                 }else{
+                    // Валидация прошла, документ в процессе согласования
                     switch($agrStatus['status_type']){
                         case '':
                             break;
@@ -880,6 +1037,7 @@ $regs = $gui->getTableData($table->table_name);
                             $style = ' style="color:' . $agrStatus['color'] . '"';
                         }
                     }
+                    $statusText = $agrStatus['status_text'] ?? '';
                 }
 
                 if($reg->status != 1 && $reg->approved != 1 && ( $_SESSION['user_id'] == $reg->author || $auth->isAdmin() ) ){
@@ -911,7 +1069,7 @@ $regs = $gui->getTableData($table->table_name);
                         </div>
                     </td>' : '<td>&nbsp;</td>').'
                     <td>' . $reg->id . '</td>
-                    <td class="status '.$class.'"'.$title.'><span class="material-icons '.$class.'"'.$style.'>' . $icon . '</span> '.$agrStatus['status_text'].'</td>
+                    <td class="status '.$class.'"'.$title.'><span class="material-icons '.$class.'"'.$style.'>' . $icon . '</span> '.$statusText.'</td>
                     <td class="group">' . stripslashes($reg->name) . '</td>
                     <td>'.$documentacial['array'][$reg->documentacial].'</td>
                     <td>' . $reg->comment . '</td>

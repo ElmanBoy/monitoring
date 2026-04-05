@@ -1384,11 +1384,14 @@ class Registry
         }
 
         // Функция определения статуса согласующего
-        $getApproverStatus = function ($approver) use ($user_signs, $section) {
+        $getApproverStatus = function ($approver, $currentLevel = 0) use ($user_signs, $section) {
             $result = $approver['result'] ?? null;
 
             if (!$result || !is_array($result)) {
-                if (isset($user_signs[$approver['id']][$section])) {
+                // ВАЖНО: Проверяем user_signs ТОЛЬКО для записей первого уровня (level=0)
+                // Для записей внутри redirect (level>0) НЕ проверяем user_signs,
+                // иначе будет копироваться статус из предыдущих действий того же пользователя
+                if ($currentLevel === 0 && isset($user_signs[$approver['id']][$section])) {
                     $signType = intval($user_signs[$approver['id']][$section]['type']);
                     $signDate = $user_signs[$approver['id']][$section]['date'];
                     return ['status' => 'approved', 'result_id' => $signType, 'date' => $signDate];
@@ -1474,6 +1477,16 @@ class Registry
 
         // Определяем, является ли это секцией подписантов
         $isSignersSection = ($level == 0 && isset($itemArr[0]['stage']) && $itemArr[0]['stage'] === '');
+
+        // Подсчитываем участников первого уровня в секции подписантов (для ограничения добавления)
+        $firstLevelCount = 0;
+        if ($isSignersSection) {
+            for ($fi = $startIndex; $fi < count($itemArr); $fi++) {
+                if (isset($itemArr[$fi]['id']) && empty($itemArr[$fi]['_is_redirector_repeat'])) {
+                    $firstLevelCount++;
+                }
+            }
+        }
 
         // ============ ПРОВЕРКА ЗАВЕРШЕНИЯ ПРЕДЫДУЩИХ ЭТАПОВ ============
         $allPreviousStagesCompleted = true;
@@ -1582,7 +1595,7 @@ class Registry
                 continue;
             }
 
-            $statusInfo = $getApproverStatus($item);
+            $statusInfo = $getApproverStatus($item, $level);
             $resultId = $statusInfo['result_id'];
             $resultDate = $statusInfo['date'] ?? ($item['result']['date'] ?? '');
 
@@ -1727,6 +1740,10 @@ class Registry
                 && $statusInfo['status'] === 'pending'
                 && empty($item['_is_redirector_repeat'])
                 && $level == 0;
+
+            // Кнопку "Добавить" показываем для инициатора независимо от статуса
+            $canShowAddButton = $isInitiator && empty($item['_is_redirector_repeat']) && $level == 0;
+
             if ($canEdit) {
                 $itemJson = htmlspecialchars(json_encode($item, JSON_UNESCAPED_UNICODE));
                 $bs = 'background:none;border:none;cursor:pointer;vertical-align:middle;padding:0 2px';
@@ -1746,16 +1763,25 @@ class Registry
                 $posInPending = array_search($i, $pendingIndexes);
                 $isFirst = ($posInPending === 0);
                 $isLast = ($posInPending === $pendingCount - 1);
-                $isSignersSectionStr = $isSignersSection ? '1' : '0';
 
                 $editBtn = "<button class='ag-edit-btn' data-section='$section' data-index='$i' data-item='$itemJson' title='Редактировать' style='$bs;color:var(--color_03);margin-left:4px'><span class='material-icons' style='font-size:15px'>edit</span></button>";
                 $editBtn .= "<button class='ag-delete-btn' data-section='$section' data-index='$i' title='Удалить' style='$bs;color:var(--red)'><span class='material-icons' style='font-size:15px'>delete</span></button>";
-                $editBtn .= "<button class='ag-add-btn' data-section='$section' data-index='$i' data-is-signers='$isSignersSectionStr' title='Добавить после' style='$bs;color:var(--green)'><span class='material-icons' style='font-size:15px'>person_add</span></button>";
+
                 if (!$isFirst) {
                     $editBtn .= "<button class='ag-move-up-btn' data-section='$section' data-index='$i' title='Переместить вверх' style='$bs;color:var(--color_03)'><span class='material-icons' style='font-size:15px'>arrow_upward</span></button>";
                 }
                 if (!$isLast) {
                     $editBtn .= "<button class='ag-move-down-btn' data-section='$section' data-index='$i' title='Переместить вниз' style='$bs;color:var(--color_03)'><span class='material-icons' style='font-size:15px'>arrow_downward</span></button>";
+                }
+            }
+
+            // Кнопка "Добавить после" для инициатора (независимо от статуса участника)
+            if ($canShowAddButton) {
+                $bs = 'background:none;border:none;cursor:pointer;vertical-align:middle;padding:0 2px';
+                $isSignersSectionStr = $isSignersSection ? '1' : '0';
+                $canAddMore = !$isSignersSection || $firstLevelCount < 2;
+                if ($canAddMore) {
+                    $editBtn .= "<button class='ag-add-btn' data-section='$section' data-index='$i' data-is-signers='$isSignersSectionStr' title='Добавить после' style='$bs;color:var(--green)'><span class='material-icons' style='font-size:15px'>person_add</span></button>";
                 }
             }
 
@@ -1853,18 +1879,31 @@ class Registry
                                 if ($canSign) {
                                     $canAct = true;
                                     $html .= "<div class='actions' data-section='" . $section . "'>";
-                                    $html .= "<button class='button icon text green setSign'>" .
-                                        "<span class='material-icons'>verified</span>Подписать</button>";
-                                    $html .= "<button class='button icon text blue setAgree'>" .
-                                        "<span class='material-icons'>task_alt</span>Утвердить</button>";
-                                    $html .= "<button class='button icon text green setAgreeSign'>" .
-                                        "<span class='material-icons'>verified</span>Утвердить с ЭП</button>";
+
+                                    // ПРАВИЛО: подписанты первого уровня могут только подписывать,
+                                    // перенаправленные (level > 0 или isAfterRedirect) могут утверждать
+                                    $isFirstLevelSigner = ($level == 0 && !$isAfterRedirect);
+
+                                    if ($isFirstLevelSigner) {
+                                        // Подписант первого уровня: только Подписать, Отклонить, Перенаправить
+                                        $html .= "<button class='button icon text green setSign'>" .
+                                            "<span class='material-icons'>verified</span>Подписать</button>";
+                                    } else {
+                                        // Перенаправленный: Утвердить, Утвердить с ЭП, Отклонить, Перенаправить
+                                        $html .= "<button class='button icon text blue setAgree'>" .
+                                            "<span class='material-icons'>task_alt</span>Утвердить</button>";
+                                        $html .= "<button class='button icon text green setAgreeSign'>" .
+                                            "<span class='material-icons'>verified</span>Утвердить с ЭП</button>";
+                                    }
+
                                     $html .= "<button class='button icon text red setReject'>" .
                                         "<span class='material-icons'>cancel</span>Отклонить</button>";
+
                                     if ($level > 0) {
                                         $html .= "<button class='button icon text setReturn' style='color: #e67e22'>" .
                                             "<span class='material-icons'>undo</span>Вернуть</button>";
                                     }
+
                                     $html .= '<div class="redirect-field" style="margin-top: 10px;">';
                                     $f = [
                                         'type' => 'list_fromdb_multi',
@@ -1887,18 +1926,31 @@ class Registry
                                 // ПАРАЛЛЕЛЬНОЕ - все видят кнопки сразу
                                 $canAct = true;
                                 $html .= "<div class='actions' data-section='" . $section . "'>";
-                                $html .= "<button class='button icon text green setSign'>" .
-                                    "<span class='material-icons'>verified</span>Подписать</button>";
-                                $html .= "<button class='button icon text blue setAgree'>" .
-                                    "<span class='material-icons'>task_alt</span>Утвердить</button>";
-                                $html .= "<button class='button icon text green setAgreeSign'>" .
-                                    "<span class='material-icons'>verified</span>Утвердить с ЭП</button>";
+
+                                // ПРАВИЛО: подписанты первого уровня могут только подписывать,
+                                // перенаправленные (level > 0 или isAfterRedirect) могут утверждать
+                                $isFirstLevelSigner = ($level == 0 && !$isAfterRedirect);
+
+                                if ($isFirstLevelSigner) {
+                                    // Подписант первого уровня: только Подписать, Отклонить, Перенаправить
+                                    $html .= "<button class='button icon text green setSign'>" .
+                                        "<span class='material-icons'>verified</span>Подписать</button>";
+                                } else {
+                                    // Перенаправленный: Утвердить, Утвердить с ЭП, Отклонить, Перенаправить
+                                    $html .= "<button class='button icon text blue setAgree'>" .
+                                        "<span class='material-icons'>task_alt</span>Утвердить</button>";
+                                    $html .= "<button class='button icon text green setAgreeSign'>" .
+                                        "<span class='material-icons'>verified</span>Утвердить с ЭП</button>";
+                                }
+
                                 $html .= "<button class='button icon text red setReject'>" .
                                     "<span class='material-icons'>cancel</span>Отклонить</button>";
+
                                 if ($level > 0) {
                                     $html .= "<button class='button icon text setReturn' style='color: #e67e22'>" .
                                         "<span class='material-icons'>undo</span>Вернуть</button>";
                                 }
+
                                 $html .= '<div class="redirect-field" style="margin-top: 10px;">';
                                 $f = [
                                     'type' => 'list_fromdb_multi',
@@ -2187,10 +2239,11 @@ class Registry
 
         $exist = $docId > 0
             ? $this->db->selectOne('agreement', ' WHERE id = ?', [$docId])
-            : $this->db->selectOne('agreement', ' WHERE source_table = ? 
-        AND source_id = ? ORDER BY id DESC LIMIT 1', [$data['source_table'], $data['source_id']]
+            : $this->db->selectOne('agreement', ' WHERE source_table = ?
+        AND source_id = ? AND documentacial = ? ORDER BY id DESC LIMIT 1',
+                [$data['source_table'], $data['source_id'], intval($data['documentacial'])]
             );
-        $documentId = $exist->id;
+        $documentId = $exist->id ?? 0;
 
         //Проверяем обязательные поля
         foreach ($regProps as $f) {
@@ -2229,7 +2282,7 @@ class Registry
             }
 
             try {
-                if (intval($exist->id) == 0) {
+                if (intval($exist->id ?? 0) == 0) {
                     $this->db->insert('agreement', $registry);
                     $documentId = $this->db->last_insert_id;
                 } else {
@@ -2497,7 +2550,9 @@ class Registry
             $date = new \Core\Date();
             if (is_array($data['institutions']) && count($data['institutions']) > 0) {
                 for ($i = 0; $i < count($data['institutions']); $i++) {
-                    $mothsArr = json_decode($data['periods_hidden'][$i]);
+                    $mothsArr = is_string($data['periods_hidden'][$i])
+                        ? json_decode($data['periods_hidden'][$i])
+                        : $data['periods_hidden'][$i];
                     $action_start = $date->getMonthNameByNumber(intval($mothsArr[0]));
                     $insArr[$i] = [
                         'check_types' => $data['checks'],
@@ -2594,7 +2649,9 @@ class Registry
                     $ch_period = explode(' - ', $ch['check_periods']);
                     $ch_period_start = $this->date->correctDateFormatFromMysql($ch_period[0]);
                     $ch_period_end = $this->date->correctDateFormatFromMysql($ch_period[1]);
-                    $mothsArr = json_decode($ch['periods_hidden']);
+                    $mothsArr = is_string($ch['periods_hidden'])
+                        ? json_decode($ch['periods_hidden'])
+                        : $ch['periods_hidden'];
                     $years = $date->getYearsFromPeriod($ch['check_periods']);
                     $action_start = $date->getMonthNameByNumber(intval($mothsArr[0]));
                     $body_vars[] = [

@@ -16,6 +16,15 @@ $registry = $db->selectOne($table->table_name, ' where id = ?', [$row_id]);
 $plans = $db->selectOne('checksplans', ' ORDER BY id DESC LIMIT 1');
 $doc = $db->selectOne('agreement', " WHERE source_table = 'checksplans' AND source_id = ? ORDER BY id DESC LIMIT 1", [$row_id]);
 
+// Загружаем данные об учреждениях для этого плана с названиями
+$checksQuery = "
+    SELECT ci.*, i.short as institution_name
+    FROM " . TBL_PREFIX . "checkinstitutions ci
+    LEFT JOIN " . TBL_PREFIX . "institutions i ON i.id = ci.institution
+    WHERE ci.plan_uid = ? AND ci.plan_version = ?
+";
+$checks = R::getAll($checksQuery, [trim($registry->uid), intval($registry->version)]);
+
 
 //Открываем транзакцию
 $busy = $db->transactionOpen('roles', intval($_POST['params']));
@@ -84,11 +93,73 @@ if ($busy != []) {
     <script src='/js/assets/agreement_list.js'></script>
     <script src='/modules/plans/js/registry.js'></script>
     <script>
+        // Данные об учреждениях для загрузки в форму
+        window.existingChecks = <?= json_encode($checks) ?>;
+
         $(document).ready(function(){
             el_app.mainInit();
             el_plans_registry.create_init();
             agreement_list.agreement_list_init();
             $('[name=initiator]').val("<?=$_SESSION['user_id']?>").trigger('chosen:updated');
+
+            // Загружаем существующие учреждения в форму
+            if (window.existingChecks && window.existingChecks.length > 0) {
+                var existingChecks = window.existingChecks;
+                // Удаляем пустой первый блок, если он есть
+                let $firstInstitution = $(".pop_up_body .institutions:first");
+                if ($firstInstitution.find("[name='institutions[]']").val() == "0" ||
+                    $firstInstitution.find("[name='institutions[]']").val() == "") {
+                    $firstInstitution.remove();
+                }
+
+                // Добавляем каждое учреждение
+                for (let i = 0; i < existingChecks.length; i++) {
+                    let check = existingChecks[i];
+
+                    if (i > 0) {
+                        // Клонируем блок для всех кроме первого
+                        el_plans_registry.cloneInstitution(true, false);
+                    }
+
+                    let $currentInstitution = $(".pop_up_body .institutions").eq(i);
+
+                    // Устанавливаем значения
+                    setTimeout(function() {
+                        let $select = $currentInstitution.find("[name='institutions[]']");
+
+                        // Проверяем, есть ли в селекте нужная опция
+                        if (check.institution && $select.find('option[value="' + check.institution + '"]').length === 0) {
+                            // Если опции нет - добавляем её (получаем название из скрытого поля или загружаем через AJAX)
+                            let institutionName = check.institution_name || 'ID: ' + check.institution;
+                            $select.append('<option value="' + check.institution + '">' + institutionName + '</option>');
+                        }
+
+                        $select.val(check.institution).trigger("chosen:updated");
+                        $currentInstitution.find("[name='check_types[]']").val(check.check_types).trigger("chosen:updated");
+
+                        // Для inspections может быть JSON-массив
+                        if (check.inspections) {
+                            try {
+                                let inspectionsValue = typeof check.inspections === 'string' ? JSON.parse(check.inspections) : check.inspections;
+                                $currentInstitution.find("[name='inspections[]']").val(inspectionsValue).trigger("chosen:updated");
+                            } catch(e) {
+                                $currentInstitution.find("[name='inspections[]']").val(check.inspections).trigger("chosen:updated");
+                            }
+                        }
+
+                        // Устанавливаем период проверки
+                        if (check.check_periods_start && check.check_periods_end) {
+                            let periodValue = check.check_periods_start + ' - ' + check.check_periods_end;
+                            $currentInstitution.find("[name='check_periods[]']").val(periodValue);
+                            // Обновляем alt-input flatpickr
+                            let flatpickrInstance = $currentInstitution.find("[name='check_periods[]']")[0]._flatpickr;
+                            if (flatpickrInstance) {
+                                flatpickrInstance.setDate([check.check_periods_start, check.check_periods_end]);
+                            }
+                        }
+                    }, 300 * (i + 1));
+                }
+            }
 
             $('select[name=agreementtemplate]').off('change').on('change', function () {
                 let val = parseInt($(this).val());

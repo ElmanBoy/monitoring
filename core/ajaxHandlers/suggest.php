@@ -69,8 +69,9 @@ if($_POST['column'] == 'all') {
     switch($fields[$columnName]){
         case 'integer':
         case 'bigint':
-            $where_field = $columnName.' = ?';
-            $slots = [intval($search)];
+            // Для числовых полей используем CAST + LIKE для частичного поиска
+            $where_field = 'CAST(' . $columnName . ' AS TEXT) LIKE ?';
+            $slots = ['%' . $search . '%'];
             break;
         case 'time without time zone':
         case 'date':

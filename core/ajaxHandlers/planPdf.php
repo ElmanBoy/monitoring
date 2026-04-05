@@ -106,12 +106,31 @@ if (isset($_POST['data']) && strlen($_POST['data']) > 0) { //Предпросм�
 } elseif ($planId > 0) { //Просмотр документа из базы данных
     $subQuery = '';
     if ($docType > 0) {
-        $subQuery = 'source_id = ? AND documentacial = ' . $docType;
+        // Для планов ищем по source_id + source_table + documentacial
+        $subQuery = "source_id = ? AND source_table = 'checksplans' AND documentacial = " . $docType;
     } else {
         $subQuery = 'id = ?';
     }
     //echo $subQuery;
     $agr = $db->selectOne('agreement', $subQuery, [$planId]);
+
+    // Проверяем найден ли agreement
+    if (!$agr || !isset($agr->id)) {
+        echo "<div class='pop_up drag' style='width: 60vw'>
+            <div class='title handle'>
+                <div class='name'>Ошибка</div>
+                <div class='button icon close'><span class='material-icons'>close</span></div>
+            </div>
+            <div class='pop_up_body'>
+                <p>Документ согласования для плана #" . $planId . " не найден. Возможно, план еще не был отправлен на согласование.</p>
+                <div class='confirm'>
+                    <button class='button icon close'><span class='material-icons'>close</span>Закрыть</button>
+                </div>
+            </div>
+        </div>";
+        die();
+    }
+
     //print_r($agr);
     //$document = $db->selectOne('documents', ' WHERE id = ?', [$agr->document]);
     $documentacial = intval($agr->documentacial);
@@ -120,18 +139,60 @@ if (isset($_POST['data']) && strlen($_POST['data']) > 0) { //Предпросм�
         $plan = $db->selectOne('checksplans', ' id = ?', [$agr->source_id]);
         $docId = $agr->id;
         $docName = $plan->short;
-        $planData = json_decode($plan->addinstitution, true);
-        if (is_array($planData) && count($planData) > 0) {
-            for ($i = 0; $i < count($planData); $i++) {
-                $action_start = $date->getMonthNameByNumber(intval($planData[$i]['periods_hidden'][0]));
-                $data['check_types'][$i] = $plan->checks;
-                $data['institutions'][$i] = $planData[$i]['institutions'];
-                $data['units'][$i] = $planData[$i]['units'];
-                $data['periods'][$i] = $planData[$i]['periods'];
-                $data['periods_hidden'][$i] = $planData[$i]['periods_hidden'];
-                $data['start_month'] = $action_start;
-                $data['inspections'][$i] = $plan->inspections;
-                $data['check_periods'][$i] = $planData[$i]['check_periods'];
+
+        // Загружаем данные об учреждениях из cam_checkinstitutions
+        $checksQuery = "
+            SELECT ci.*, i.short as institution_name
+            FROM " . TBL_PREFIX . "checkinstitutions ci
+            LEFT JOIN " . TBL_PREFIX . "institutions i ON i.id = ci.institution
+            WHERE ci.plan_uid = ? AND ci.plan_version = ?
+            ORDER BY ci.id
+        ";
+        $planDataFromDb = R::getAll($checksQuery, [trim($plan->uid), intval($plan->version)]);
+
+        // Если данных в checkinstitutions нет, пробуем загрузить из старого формата
+        if (empty($planDataFromDb)) {
+            $planDataFromDb = json_decode($plan->addinstitution, true) ?: [];
+        }
+
+        if (is_array($planDataFromDb) && count($planDataFromDb) > 0) {
+            for ($i = 0; $i < count($planDataFromDb); $i++) {
+                // Проверяем, это новый формат (из БД) или старый (из JSON)
+                if (isset($planDataFromDb[$i]['institution'])) {
+                    // Новый формат из cam_checkinstitutions
+                    $periods_hidden = $planDataFromDb[$i]['periods_hidden'] ?? '[]';
+                    if (is_string($periods_hidden)) {
+                        $periods_hidden = json_decode($periods_hidden, true);
+                    }
+                    $action_start = is_array($periods_hidden) && count($periods_hidden) > 0
+                        ? $date->getMonthNameByNumber(intval($periods_hidden[0]))
+                        : '';
+
+                    $inspections = $planDataFromDb[$i]['inspections'] ?? '[]';
+                    if (is_string($inspections)) {
+                        $inspections = json_decode($inspections, true);
+                    }
+
+                    $data['check_types'][$i] = $planDataFromDb[$i]['check_types'];
+                    $data['institutions'][$i] = $planDataFromDb[$i]['institution'];
+                    $data['units'][$i] = $planDataFromDb[$i]['units'];
+                    $data['periods'][$i] = $planDataFromDb[$i]['periods'];
+                    $data['periods_hidden'][$i] = $periods_hidden;
+                    $data['start_month'] = $action_start;
+                    $data['inspections'][$i] = $inspections;
+                    $data['check_periods'][$i] = $planDataFromDb[$i]['check_periods_start'] . ' - ' . $planDataFromDb[$i]['check_periods_end'];
+                } else {
+                    // Старый формат из addinstitution (JSON)
+                    $action_start = $date->getMonthNameByNumber(intval($planDataFromDb[$i]['periods_hidden'][0]));
+                    $data['check_types'][$i] = $plan->checks;
+                    $data['institutions'][$i] = $planDataFromDb[$i]['institutions'];
+                    $data['units'][$i] = $planDataFromDb[$i]['units'];
+                    $data['periods'][$i] = $planDataFromDb[$i]['periods'];
+                    $data['periods_hidden'][$i] = $planDataFromDb[$i]['periods_hidden'];
+                    $data['start_month'] = $action_start;
+                    $data['inspections'][$i] = $plan->inspections;
+                    $data['check_periods'][$i] = $planDataFromDb[$i]['check_periods'];
+                }
             }
         }
         $data['inspections'] = $plan->inspections;
@@ -232,17 +293,30 @@ if (isset($_POST['data']) && strlen($_POST['data']) > 0) { //Предпросм�
                 }
             }
 
-            // Проверяемый период из addinstitution плана
+            // Проверяемый период из cam_checkinstitutions
             $verifiable_start_r = '';
             $verifiable_end_r = '';
             if ($plan_r) {
-                $addInstitution_r = json_decode($plan_r->addinstitution ?? '[]', true);
-                foreach ((array)$addInstitution_r as $ads) {
-                    if (intval($ads['institutions'] ?? 0) == $insId && isset($ads['check_periods'])) {
-                        $vArr = explode(' - ', $ads['check_periods']);
-                        $verifiable_start_r = $date->correctDateFormatFromMysql($vArr[0] ?? '');
-                        $verifiable_end_r = $date->correctDateFormatFromMysql($vArr[1] ?? '');
-                        break;
+                // Сначала пытаемся загрузить из cam_checkinstitutions
+                $checkInstQuery = "SELECT check_periods_start, check_periods_end
+                                   FROM " . TBL_PREFIX . "checkinstitutions
+                                   WHERE plan_uid = ? AND plan_version = ? AND institution = ?
+                                   LIMIT 1";
+                $checkInstData = R::getAll($checkInstQuery, [trim($plan_r->uid), intval($plan_r->version), $insId]);
+
+                if (!empty($checkInstData) && isset($checkInstData[0])) {
+                    $verifiable_start_r = $date->correctDateFormatFromMysql($checkInstData[0]['check_periods_start'] ?? '');
+                    $verifiable_end_r = $date->correctDateFormatFromMysql($checkInstData[0]['check_periods_end'] ?? '');
+                } else {
+                    // Фоллбэк на старый формат
+                    $addInstitution_r = json_decode($plan_r->addinstitution ?? '[]', true);
+                    foreach ((array)$addInstitution_r as $ads) {
+                        if (intval($ads['institutions'] ?? 0) == $insId && isset($ads['check_periods'])) {
+                            $vArr = explode(' - ', $ads['check_periods']);
+                            $verifiable_start_r = $date->correctDateFormatFromMysql($vArr[0] ?? '');
+                            $verifiable_end_r = $date->correctDateFormatFromMysql($vArr[1] ?? '');
+                            break;
+                        }
                     }
                 }
             }

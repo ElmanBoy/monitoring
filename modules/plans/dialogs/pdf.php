@@ -31,7 +31,32 @@ $author = $users['array'][$plan->author][0].' '.
     mb_substr(trim($users['array'][$plan->author][2]), 0, 1).'.';
 $date_createArr = explode(' ', $plan->created_at);
 
-$checks = json_decode($plan->addinstitution, true);
+// Загружаем данные об учреждениях из cam_checkinstitutions
+$checksQuery = "
+    SELECT ci.*, i.short as institution_name
+    FROM " . TBL_PREFIX . "checkinstitutions ci
+    LEFT JOIN " . TBL_PREFIX . "institutions i ON i.id = ci.institution
+    WHERE ci.plan_uid = ? AND ci.plan_version = ?
+    ORDER BY ci.id
+";
+$checksFromDb = R::getAll($checksQuery, [trim($plan->uid), intval($plan->version)]);
+
+// Преобразуем данные в формат, совместимый со старым кодом
+$checks = [];
+if (!empty($checksFromDb)) {
+    foreach ($checksFromDb as $check) {
+        $checks[] = [
+            'institutions' => $check['institution'],
+            'units' => $check['units'],
+            'inspections' => $check['inspections'],
+            'periods' => $check['periods'],
+            'check_periods' => $check['check_periods_start'] . ' - ' . $check['check_periods_end']
+        ];
+    }
+} else {
+    // Фоллбэк на старый формат, если записей в checkinstitutions нет
+    $checks = json_decode($plan->addinstitution, true) ?: [];
+}
 $gui->set('module_id', 1);
 
 $html = '<html lang="ru">

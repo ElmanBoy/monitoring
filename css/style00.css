@@ -562,6 +562,14 @@
     background: none;
     color: var(--color_02);
 }
+.table_data tbody tr td.status.blue{
+    background: none;
+    color: var(--blue);
+}
+.table_data tbody tr td.status.orange{
+    background: none;
+    color: #ff9800;
+}
 .table_data tbody tr td.status.идгу{
     background: none;
     color: var(--blue);
@@ -761,7 +769,8 @@
 
 .scroll_wrap {
     scrollbar-width: thin;
-    /*overflow: auto;*/
+    overflow: auto;
+    min-height: 90vh;
     /*height: 93%;
     width: 100%;*/
     /*margin-top: 51px;*/

@@ -61,7 +61,7 @@ if (isset($_POST['params']) && substr_count($_POST['params'], 'plan=') > 0) {
                     <th class="sort" style="width: 100px">
                         <?
                         echo $gui->buildSortFilter(
-                            'registry',
+                            'checksplans',
                             '№',
                             'id',
                             'el_data',
@@ -72,20 +72,20 @@ if (isset($_POST['params']) && substr_count($_POST['params'], 'plan=') > 0) {
                     <th class="sort" style='width: 100px'>
                         <?
                         echo $gui->buildSortFilter(
-                            'registry',
+                            'checksplans',
                             'Статус',
                             'active',
                             'constant',
-                            ['1' => 'На рссмотрении', '0' => 'Утверждён']
+                            ['0' => 'На рассмотрении', '1' => 'Утверждён', '2' => 'Отклонён']
                         );
                         ?>
                     </th>
                     <th class="sort" style='width: 40%'>
                         <?
                         echo $gui->buildSortFilter(
-                            'registry',
+                            'checksplans',
                             'Наименование',
-                            'name',
+                            'short',
                             'el_data',
                             []
                         );
@@ -94,7 +94,7 @@ if (isset($_POST['params']) && substr_count($_POST['params'], 'plan=') > 0) {
                     <th class='sort'>
                         <?
                         echo $gui->buildSortFilter(
-                            'registry',
+                            'checksplans',
                             'На год',
                             'year',
                             'el_data',
@@ -105,7 +105,7 @@ if (isset($_POST['params']) && substr_count($_POST['params'], 'plan=') > 0) {
                     <th class='sort'>
                         <?
                         echo $gui->buildSortFilter(
-                            'registry',
+                            'checksplans',
                             'Версия',
                             'version',
                             'el_data',
@@ -116,7 +116,7 @@ if (isset($_POST['params']) && substr_count($_POST['params'], 'plan=') > 0) {
                     <th class='sort'>
                         <?
                         echo $gui->buildSortFilter(
-                            'registry',
+                            'checksplans',
                             'Дата создания',
                             'created_at',
                             'el_data',

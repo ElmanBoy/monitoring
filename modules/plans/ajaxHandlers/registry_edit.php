@@ -125,6 +125,10 @@ if($err == 0) {
     //Подгатавливаем данные для ввода в БД
     foreach ($regProps as $f) {
         $value = $reg->prepareValues($f, $_POST);
+        // Если это внешний ключ и значение = 0, устанавливаем NULL
+        if (in_array($f['field_name'], ['planname', 'name', 'document']) && intval($value) == 0) {
+            $value = null;
+        }
         $registry[$f['field_name']] = $value;
     }
 
@@ -204,6 +208,14 @@ if($err == 0) {
 
         //Если план еще не утвержден, то можно редактировать. Иначе создаем новую версию плана
         if (intval($row->active) == 0) {
+            // Очищаем внешние ключи со значением 0 перед сохранением
+            if (isset($registry['planname']) && intval($registry['planname']) == 0) {
+                $registry['planname'] = null;
+            }
+            if (isset($registry['name']) && intval($registry['name']) == 0) {
+                $registry['name'] = null;
+            }
+
             $result = $db->update('checksplans', $rowId, $registry);
 
             //Изменяем документ плана
@@ -268,8 +280,16 @@ if($err == 0) {
             $_POST['status'] = 0;
             $_POST['source_id'] = $rowId;
             $_POST['source_table'] = 'checksplans';
-            //Создание документа плана в cam_agreement
-            $docCreateResult = $reg->createDocument($_POST, $rowId);
+
+            // Ищем существующий agreement для этого плана
+            $existingAgreement = $db->selectOne('agreement',
+                " WHERE source_table = 'checksplans' AND source_id = ? AND documentacial = 3",
+                [$rowId]
+            );
+            $agreementId = $existingAgreement->id ?? 0;
+
+            //Создание/обновление документа плана в cam_agreement
+            $docCreateResult = $reg->createDocument($_POST, $agreementId);
 
 
 

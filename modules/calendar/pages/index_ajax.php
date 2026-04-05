@@ -32,15 +32,16 @@ $planShort = [];
 
 $perms = $auth->getCurrentModulePermission();
 
-if ($planId > 0) { //Если выбран конкретный план
+if ($planId > 0) {
     $plan = $db->selectOne('checksplans', ' where id = ?', [$planId]);
     $planUid[0] = $plan->uid;
     $planYear[0] = $plan->year;
     $planIdArr[0] = $plan->id;
     $planShort[0] = $plan->short;
     $checks[0] = json_decode($plan->addinstitution, true);
-} else { //Выбран пункт "Задачи без плана". То есть все планы (???)
-    $plans = $db->select('checksplans');
+} else {
+    // Загружаем только утвержденные планы
+    $plans = $db->select('checksplans', ' WHERE active = 1');
     $i = 0;
     foreach ($plans as $plan) {
         $planUid[$i] = $plan->uid;
@@ -50,23 +51,17 @@ if ($planId > 0) { //Если выбран конкретный план
         $checks[$i] = json_decode($plan->addinstitution, true);
         $i++;
     }
-    //echo '<pre>';print_r($checks); print_r($planUid);echo '</pre>';
     $null_checks = $db->select('checkstaff', " 
     WHERE active = 1 AND (check_uid = '0' OR check_uid IS NULL)"
-    ); // print_r($null_checks);
+    );
     $n = $i;
     $null_che = [];
     foreach ($null_checks as $che) {
-
         $checks[$n][0]['institutions'] = intval($che->institution);
         $checks[$n][0]['object_type'] = $che->object_type;
         $planUid[$n] = '0';
         $n++;
     }
-    //print_r($null_checks);
-    //reset($checks);
-    //$checks[0] = array_merge($checks[0], $null_che);
-    //echo '<pre>';print_r($checks); print_r($planUid);echo '</pre>';
 }
 
 $persons = $db->getRegistry('persons', '', [], ['surname', 'first_name', 'middle_name', 'birth']);
@@ -76,6 +71,41 @@ $users = $db->getRegistry('users', '', [], ['surname', 'name', 'middle_name']);
 $insp = $db->getRegistry('inspections');
 $tasks_templates = $db->getRegistry('tasks');
 
+// Обработка фильтров из URL
+$filters = [];
+if (isset($_GET['filter']) && strlen($_GET['filter']) > 0) {
+    $filterArr = explode(';', $_GET['filter']);
+    foreach ($filterArr as $filterItem) {
+        $filterParts = explode(':', $filterItem);
+        if (count($filterParts) == 2) {
+            $filterField = $filterParts[0];
+            $filterValues = explode('|', $filterParts[1]);
+            $filters[$filterField] = array_map('urldecode', $filterValues);
+        }
+    }
+}
+
+// ========== ДОБАВЛЕНО: Обработка сортировки ==========
+$sortField = '';
+$sortDirection = 'ASC';
+if (isset($_GET['sort']) && strlen($_GET['sort']) > 0) {
+    $sortArr = explode(':', $_GET['sort']);
+    if (count($sortArr) > 1) {
+        $sortField = $sortArr[1];
+        if (strpos($sortField, '_r') !== false) {
+            $sortDirection = 'DESC';
+            $sortField = str_replace('_r', '', $sortField);
+        }
+    } else {
+        $sortField = $sortArr[0];
+        if (strpos($sortField, '_r') !== false) {
+            $sortDirection = 'DESC';
+            $sortField = str_replace('_r', '', $sortField);
+        }
+    }
+    if ($sortField == 'registryitems.id') $sortField = 'id';
+}
+// ========== КОНЕЦ ДОБАВЛЕННОГО БЛОКА ==========
 
 $gui->set('module_id', 14);
 ?>
@@ -93,26 +123,15 @@ $gui->set('module_id', 14);
                 'renew' => 'Обновить календарь',
                 'create' => 'Создать задание',
                 'switch_plan' => 'Показать',
-
-                //'plans' => 'Планы проверок',
-                //'filter_panel' => 'Открыть панель фильтров',
-                //'clone' => 'Копия записи',
-                //'delete' => 'Удалить выделенные',
                 'logout' => 'Выйти'
             ]
         );
         ?>
-
-        <? /*div class="button icon text" title="Журнал работ">
-			<span class="material-icons">fact_check</span>Журнал работ
-		</div*/ ?>
     </div>
-
 </div>
 <div class="scroll_wrap">
     <form method='post' id='table'
           class='ajaxFrm scroll_current'<?= $_COOKIE['calendar_view'] == 'table' ? '' : ' style="display: none"' ?>>
-        <!--<input type='hidden' name='registry_id' id='registry_id' value="<? /*= $planId */ ?>">-->
         <table class='table_data statistic' id='tbl_registry_items'>
             <thead>
             <tr class='fixed_thead'>
@@ -130,20 +149,20 @@ $gui->set('module_id', 14);
                 <th class="sort">
                     <?
                     echo $gui->buildSortFilter(
-                        'registryitems',
+                        'institutions',
                         'Объект проверки',
-                        'parent_items',
-                        'constant',
-                        []//$checks['array']
+                        'short',
+                        'el_data',
+                        []
                     );
                     ?>
                 </th>
                 <th class="sort">
                     <?
                     echo $gui->buildSortFilter(
-                        'registryitems',
+                        'users',
                         'Исполнитель',
-                        'name',
+                        'user_fio',
                         'el_data',
                         []
                     );
@@ -152,31 +171,25 @@ $gui->set('module_id', 14);
                 <th class='sort'>
                     <?
                     echo $gui->buildSortFilter(
-                        'registryitems',
+                        'checkstaff',
                         'Даты проверки',
-                        'name',
+                        'dates',
                         'el_data',
                         []
                     );
                     ?>
                 </th>
                 <th class='sort'>
-                    <?
-                    echo $gui->buildSortFilter(
-                        'registryitems',
-                        'Статус задачи',
-                        'name',
-                        'el_data',
-                        []
-                    );
-                    ?>
+                    <div class="head_sort_filter">
+                        <div class="button icon text sorter" title="Сортировать">Статус задачи<span class="material-icons">north</span></div>
+                    </div>
                 </th>
                 <th class='sort'>
                     <?
                     echo $gui->buildSortFilter(
                         'registryitems',
                         'Шаблон задачи',
-                        'name',
+                        'task_id',
                         'el_data',
                         []
                     );
@@ -201,32 +214,108 @@ $gui->set('module_id', 14);
             $allIns = [];
             $taskIds = [];
 
-            // Загружаем все приказы по учреждениям одним запросом
             $agreementsByIns = [];
             $allAgreements = $db->select('agreement', " WHERE source_table = 'checkinstitutions'");
             foreach ($allAgreements as $agr) {
                 $agreementsByIns[intval($agr->source_id)] = $agr;
             }
 
+            // ========== ДОБАВЛЕНО: Сбор всех групп для сортировки ==========
+            $allGroups = [];
             if (is_array($checks) && count($checks) > 0) {
                 for ($p = 0; $p < count($checks); $p++) {
-                    foreach ($checks[$p] as $ch) {
-                        //if (!in_array($ch['institutions'], $allIns)) {
-                        $allIns[] = $ch['institutions'];
-                        $dates = $date->getDatesFromMonths(json_decode($ch['periods_hidden']), $planYear[$p]);
-                        $tasks = [];
-                        //Собираем массив проверок без дат из плана (внеплановые)
-                        if ($dates == []) {
-                            $null_ins[] = $ch['institutions'];
-                        }
+                    foreach ($checks[$p] as $idx => $ch) {
+                        $allGroups[] = [
+                            'p' => $p,
+                            'idx' => $idx,
+                            'ch' => $ch,
+                            'instId' => $ch['institutions'],
+                            'instName' => stripslashes($ins['result'][$ch['institutions']]->short)
+                        ];
+                    }
+                }
+            }
 
-//echo " !!!!!!!!!! WHERE check_uid = '$planUid[$p]' AND institution = '" . $ch['institutions'] . "' ".$ch['object_type']."<br>";
-                        $tasks = $db->getRegistry('checkstaff', " WHERE check_uid = '$planUid[$p]' AND institution = '" . $ch['institutions'] . "'");
-                        //echo $check_number.' '.$ch['institutions'].' '.count($tasks).'<br>'; print_r($tasks);
-                        if (count($tasks['result']) > 0) {
-                            $task_number = 1;
-                            foreach ($tasks['result'] as $task) {
-                                if (!in_array($task->id, $taskIds)) { //исключаем повторения
+            // Сортировка групп
+            if ($sortField == 'id') {
+                usort($allGroups, function($a, $b) use ($sortDirection) {
+                    if ($sortDirection == 'ASC') {
+                        return $a['instId'] - $b['instId'];
+                    } else {
+                        return $b['instId'] - $a['instId'];
+                    }
+                });
+            } elseif ($sortField == 'short') {
+                usort($allGroups, function($a, $b) use ($sortDirection) {
+                    if ($sortDirection == 'ASC') {
+                        return strcasecmp($a['instName'], $b['instName']);
+                    } else {
+                        return strcasecmp($b['instName'], $a['instName']);
+                    }
+                });
+            }
+            // ========== КОНЕЦ ДОБАВЛЕННОГО БЛОКА ==========
+
+            if (is_array($checks) && count($checks) > 0) {
+                // ========== ИЗМЕНЕНО: используем $allGroups вместо вложенных циклов ==========
+                $groupsToProcess = !empty($allGroups) ? $allGroups : [];
+                foreach ($groupsToProcess as $groupData) {
+                    $p = $groupData['p'];
+                    $ch = $groupData['ch'];
+
+                    $dates = $date->getDatesFromMonths(json_decode($ch['periods_hidden']), $planYear[$p]);
+                    $tasks = [];
+                    if ($dates == []) {
+                        $null_ins[] = $ch['institutions'];
+                    }
+
+                    $tasks = $db->getRegistry('checkstaff', " WHERE check_uid = '$planUid[$p]' AND institution = '" . $ch['institutions'] . "'");
+
+                    if (count($tasks['result']) > 0) {
+                        $task_number = 1;
+                        foreach ($tasks['result'] as $task) {
+                            if (!in_array($task->id, $taskIds)) {
+                                // Фильтрация
+                                $includeTask = true;
+                                if (!empty($filters)) {
+                                    if (isset($filters['short']) && !empty($filters['short'])) {
+                                        $instName = stripslashes($ins['result'][$ch['institutions']]->short);
+                                        $matchFound = false;
+                                        foreach ($filters['short'] as $filterValue) {
+                                            if (stripos($instName, $filterValue) !== false) {
+                                                $matchFound = true;
+                                                break;
+                                            }
+                                        }
+                                        if (!$matchFound) $includeTask = false;
+                                    }
+
+                                    if ($includeTask && isset($filters['user_fio']) && !empty($filters['user_fio'])) {
+                                        $executorFio = trim($users['array'][$task->user][0]) . ' ' . trim($users['array'][$task->user][1]) . ' ' . trim($users['array'][$task->user][2]);
+                                        $matchFound = false;
+                                        foreach ($filters['user_fio'] as $filterValue) {
+                                            if (stripos($executorFio, $filterValue) !== false) {
+                                                $matchFound = true;
+                                                break;
+                                            }
+                                        }
+                                        if (!$matchFound) $includeTask = false;
+                                    }
+
+                                    if ($includeTask && isset($filters['task_id']) && !empty($filters['task_id'])) {
+                                        $taskName = $tasks_templates['array'][$task->task_id] ?? '';
+                                        $matchFound = false;
+                                        foreach ($filters['task_id'] as $filterValue) {
+                                            if (stripos($taskName, $filterValue) !== false) {
+                                                $matchFound = true;
+                                                break;
+                                            }
+                                        }
+                                        if (!$matchFound) $includeTask = false;
+                                    }
+                                }
+
+                                if ($includeTask) {
                                     $dateArr = explode(' - ', $task->dates);
                                     $allDates[] = $dateArr[0];
                                     $allDatesStart[$ch['institutions']][] = $dateArr[0];
@@ -289,16 +378,14 @@ $gui->set('module_id', 14);
                                         <td>' . $tasks_templates['array'][$task->task_id] . '</td>
                                         <td class="link">
                                             <span class="material-icons view_staff" data-id="' . $task->check_uid . '_' . $task->id . '" title="Редактирование задачи">edit</span>
-                                            <!--span class="material-icons view_task" data-id="' . $task->id . '" title="Просмотр задачи">pageview</span-->
                                         </td>
-                                    </tr>';
+                                     </tr>';
 
 
                                     $insId = $ins['result'][$task->institution]->id;
                                     if (!isset($insColor[$insId])) {
                                         $insColor[$insId] = $gui->generateDarkHslHexColor();
                                     }
-                                    //$insName = htmlspecialchars($ins['result'][$task->institution]->short);
                                     $name = $object . '  <br>Проверяющий: ' . trim($users['array'][$task->user][0])
                                         . ' ' . trim($users['array'][$task->user][1]) . ' ' . trim($users['array'][$task->user][2]);
                                     $executor = 'Проверяющий: ' . trim($users['array'][$task->user][0])
@@ -321,21 +408,34 @@ $gui->set('module_id', 14);
                                         resourceId: '" . $insId . "',
                                         color: '$insColor[$insId]' 
                                     }";
-
-
-                                    $task_number++;
                                 }
-                                $taskIds[] = $task->id;
-                            }
 
-                        } else {
+                                $task_number++;
+                            }
+                            $taskIds[] = $task->id;
+                        }
+
+                    } else {
+                        $includeInstitution = true;
+                        if (!empty($filters) && isset($filters['short']) && !empty($filters['short'])) {
+                            $instName = stripslashes($ins['result'][$ch['institutions']]->short);
+                            $matchFound = false;
+                            foreach ($filters['short'] as $filterValue) {
+                                if (stripos($instName, $filterValue) !== false) {
+                                    $matchFound = true;
+                                    break;
+                                }
+                            }
+                            if (!$matchFound) $includeInstitution = false;
+                        }
+
+                        if ($includeInstitution) {
                             $object = str_replace("\n", ' ', stripslashes($ins['result'][$ch['institutions']]->short));
                             $insIdInt = intval($ch['institutions']);
                             $agr = isset($agreementsByIns[$insIdInt]) ? $agreementsByIns[$insIdInt] : null;
                             $agrApproved = $agr && (intval($agr->status) == 1 || intval($agr->approved) == 1);
 
                             if ($agr === null) {
-                                // Приказ не создан
                                 $actionCell = '<small><a href="" class="new_order"' .
                                     ' data-plan-id="' . $planIdArr[$p] . '"' .
                                     ' data-plan-name="' . htmlspecialchars($planShort[$p]) . '"' .
@@ -344,13 +444,11 @@ $gui->set('module_id', 14);
                                     ($planId == 0 ? ' <span class="greyText">(' . htmlspecialchars($planShort[$p]) . ')</span>' : '') .
                                     '</a></small>';
                             } elseif (!$agrApproved) {
-                                // Приказ создан, но не утверждён — открываем согласование
                                 $actionCell = '<small><a href="" class="open_agreement_btn" style="color:var(--color_warning,#e6a817)"' .
                                     ' data-agr-id="' . $agr->id . '">' .
                                     '<span class="material-icons" style="vertical-align:middle">hourglass_empty</span> ' .
                                     'Приказ на согласовании</a></small>';
                             } else {
-                                // Приказ утверждён — можно назначать
                                 $actionCell = '<small><a href="" class="assign_staff_btn"' .
                                     ' data-uid="' . $planUid[$p] . '"' .
                                     ' data-ins="' . $insIdInt . '"' .
@@ -362,7 +460,7 @@ $gui->set('module_id', 14);
                                 '<td>' . $check_number . '</td>' .
                                 '<td class="insName">' . stripslashes(htmlspecialchars($ins['result'][$ch['institutions']]->short)) . '</td>' .
                                 '<td colspan="5">' . $actionCell . '</td></tr>';
-//print_r($ch);
+
                             $null_ins[] = $ch['institutions'];
                             $cal_resource[] = "{
                                             id: '" . $ch['institutions'] . "',
@@ -388,11 +486,8 @@ $gui->set('module_id', 14);
                                         }';
                             }
                         }
-                        $check_number++;
-                        //}
                     }
-
-
+                    $check_number++;
                 }
             }
 
@@ -404,73 +499,6 @@ $gui->set('module_id', 14);
                     }
                 }
             }
-            //print_r($taskArr);
-
-            /*$taskArr = [];
-            $subTasks = [];
-            $cal_events = [];
-            $cal_resource = [];
-            $allDates = [];
-            reset($checks);
-            if (is_array($checks) && count($checks) > 0) {
-                for ($p = 0; $p < count($checks); $p++) {
-                    $insColor = [];
-                    foreach ($checks[$p] as $ch) {
-                        if (strlen(trim($ch['periods_hidden'])) > 0) {
-                            $dates = $date->getDatesFromMonths(json_decode($ch['periods_hidden']), $planYear[$p]);
-                            $taskArr[] = '{
-                                id: "' . $plan->uid . '_' . $ch['institutions'] . '",
-                                name: "' . htmlspecialchars($ins['result'][$ch['institutions']]->short) . '",
-                                start: "' . $dates['start'] . '",
-                                end: "' . $dates['end'] . '"
-                                }';
-                            $cal_resource[] = "{
-                              id: '" . $ch['institutions'] . "',
-                              title: '" . htmlspecialchars($ins['result'][$ch['institutions']]->short) . "'
-                            }";
-
-                        }
-                    }
-
-                    $tasks = $db->getRegistry('checkstaff', " WHERE check_uid = '" . $planUid[$p] . "'");
-
-                    if (count($tasks) > 0) {
-                        $subTasks = [];
-                        foreach ($tasks['result'] as $task) {
-                            $dateArr = explode(' - ', $task->dates);
-                            $allDates[] = $dateArr[0];
-
-                            $insId = $ins['result'][$task->institution]->id;
-                            if (!isset($insColor[$insId])) {
-                                $insColor[$insId] = $gui->generateDarkHslHexColor();
-                            }
-                            $insName = htmlspecialchars($ins['result'][$task->institution]->short);
-                            $name = $insName . '  <br>Проверяющий: ' . trim($users['array'][$task->user][0])
-                                . ' ' . trim($users['array'][$task->user][1]) . ' ' . trim($users['array'][$task->user][2]);
-                            $executor = 'Проверяющий: ' . trim($users['array'][$task->user][0])
-                                . ' ' . trim($users['array'][$task->user][1]) . ' ' . trim($users['array'][$task->user][2]);
-                            $subTasks[] = '{
-                                id: "' . $plan->uid . '_' . $task->id . '",
-                                name: "' . $name . '",
-                                start: "' . $dateArr[0] . '",
-                                end: "' . $dateArr[1] . '",
-                                dependencies : "' . $plan->uid . '_' . $task->institution . '",
-                                custom_class : "child_task"
-                            }';
-
-                            $cal_events[] = "{
-                                id: '" . $plan->uid . '_' . $task->id . "',
-                                title: '$executor',
-                                start: '" . $dateArr[0] . "',
-                                end: '" . $dateArr[1] . "',
-                                group: '$insName',
-                                resourceId: '" . $insId . "',
-                                color: '$insColor[$insId]'
-                            }";
-                        }
-                    }
-                }
-            }*/
             ?>
             </tbody>
         </table>
@@ -565,10 +593,9 @@ $gui->set('module_id', 14);
             dayMaxEvents: true,
             nowIndicator: true,
             firstDay: 1,
-            initialView: 'resourceTimelineYear',//resourceDayGridMonth dayGridMonth
+            initialView: 'resourceTimelineYear',
             <?=(is_array($allDates) && count($allDates) > 0) ? 'initialDate: "' . min($allDates) . '",' : ''?>
             stickyHeaderDates: true,
-            //multiMonthMaxColumns: 1,
             schedulerLicenseKey: 'CC-Attribution-NonCommercial-NoDerivatives',
             headerToolbar: {
                 left: 'prevYear,prev,next,nextYear today',
@@ -601,9 +628,6 @@ $gui->set('module_id', 14);
             events: [
                 <? echo implode(",\n", $cal_events) ?>
             ],
-            /*eventRender: function(event, element) {
-                element.append('<span class="event-group">' + event.group + '</span>');
-            },*/
             eventDidMount: function (arg) {
                 if (arg.event.extendedProps.org === 'Организация A') {
                     arg.el.style.borderLeft = '4px solid red';
@@ -626,63 +650,8 @@ $gui->set('module_id', 14);
             position: 'right'
         });
 
-
-        /*let ec = EventCalendar.create(document.getElementById('calendar'), {
-            view: 'timeGridWeek',
-            events: [
-                {
-                    title: 'Событие 1',
-                    date: '2023-10-01',
-                    org: 'Организация A'
-                }
-            ],
-            eventRenderer: function(event) {
-                return {
-                    html: `<div class="event-org-${event.org}">${event.title}</div>`
-                };
-            }
-        });*/
-
         tasks = [
             <?
-
-            /*reset($checks);
-            if(is_array($checks) && count($checks) > 0) {
-                for ($p = 0; $p < count($checks); $p++) {
-                    foreach ($checks[$p] as $ch) {
-                        if (strlen(trim($ch['periods_hidden'])) > 0) {
-                            $dates = $date->getDatesFromMonths(json_decode($ch['periods_hidden']), $planYear[$p]);
-                            $taskArr[] = '{
-                                id: "' . $plan->uid . '_' . $ch['institutions'] . '",
-                                name: "' . htmlspecialchars($ins['result'][$ch['institutions']]->short) . '",
-                                start: "' . $dates['start'] . '",
-                                end: "' . $dates['end'] . '"
-                                }';
-                        }
-                    }
-
-                    echo implode(",\n", $taskArr) . ",\n";
-
-
-                    $tasks = $db->getRegistry('checkstaff', " WHERE check_uid = '" . $planUid[$p] . "'");
-                    if (count($tasks) > 0) {
-                        $subTasks = [];//print_r($tasks['result']);
-                        foreach ($tasks['result'] as $task) { //print_r($task);
-                            $dateArr = explode(' - ', $task->dates);
-                            $subTasks[] = '{
-                                    id: "' . $plan->uid . '_' . $task->id . '",
-                                    name: "' . htmlspecialchars($ins['result'][$task->institution]->short) . '  <br>Проверяющий: ' . trim($users['array'][$task->user][0])
-                                . ' ' . trim($users['array'][$task->user][1]) . ' ' . trim($users['array'][$task->user][2]) . '",
-                                    start: "' . $dateArr[0] . '",
-                                    end: "' . $dateArr[1] . '",
-                                    dependencies : "' . $plan->uid . '_' . $task->institution . '",
-                                    custom_class : "child_task"
-                                }';
-                        }
-                        echo implode(",\n", $subTasks);
-                    }
-                }
-            }*/
             echo implode(",\n", $taskArr) . ",\n";
             echo implode(",\n", $subTasks);
             ?>
@@ -691,7 +660,6 @@ $gui->set('module_id', 14);
             language: "ru",
             view_mode: "Day",
             view_mode_select: false,
-            //holidays: 'weekend',
             container_height: "auto",
             auto_move_label: true,
             showProgress: false,
@@ -709,17 +677,9 @@ $gui->set('module_id', 14);
                 let de = new Date(ctx.task._end);
                 let end_date = de.toLocaleDateString('ru-RU');
                 ctx.set_details(
-                    `${start_date} - ${end_date} (${ctx.task.actual_duration} дней${ctx.task.ignored_duration ? ' + ' + ctx.task.ignored_duration + ' excluded' : ''})`,
+                    `${start_date} - ${end_date} (${ctx.task.actual_duration} jours${ctx.task.ignored_duration ? ' + ' + ctx.task.ignored_duration + ' exclus' : ''})`,
                 );
             }
-            /*custom_popup_html: function(tasks) {
-                return '<div class="details-container">' +
-                    '<h5>${process.identify}</h5>' +
-                    '<p>Process began on: ${process._start.getDate()}</p>' +
-                    '<p>Anticipated to complete by ${process._start.getDate()}</p>' +
-                    '<p>${process.progress}% accomplished!</p>' +
-                    '</div>';
-            }*/
         });
         $("#gantt").on('click', function (e) {
             let selfClass = $(e.target).attr('class'),

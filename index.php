@@ -95,9 +95,20 @@ if (isset($_POST['ajax']) && intval($_POST['ajax']) == 1) {
     $path = strtok($path ?: '', '?#');
     $path = trim($path ?: '', '/');
 
-    // Санитизация входных параметров роутера — только буквы, цифры, _ и -
-    // Предотвращает path traversal (../../etc/passwd и подобное)
-    $sanitizePath = fn(string $v): string => preg_replace('/[^a-zA-Z0-9_\-]/', '', $v);
+    // Санитизация входных параметров роутера
+    // Разрешаем слеши для поддержки подмодулей (например, checklists/items)
+    // Предотвращает path traversal атаки
+    $sanitizePath = function(string $v): string {
+        // Удаляем всё кроме букв, цифр, _, -, /
+        $v = preg_replace('/[^a-zA-Z0-9_\-\/]/', '', $v);
+        // Удаляем последовательности .. (path traversal)
+        $v = str_replace('..', '', $v);
+        // Удаляем множественные слеши
+        $v = preg_replace('/\/+/', '/', $v);
+        // Удаляем слеши в начале и конце
+        $v = trim($v, '/');
+        return $v;
+    };
 
     // В зависимости от запрашиваемого режима определяем по какому пути искать и загружать скрипт
     $request_mode = $_POST['mode'] ?? '';

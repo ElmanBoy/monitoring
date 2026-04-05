@@ -27,7 +27,6 @@ window.alert = (message) => {
  * @returns {Promise<boolean>}
  */
 window.confirm = (question) => {
-    console.log('[Custom Confirm] Called with question:', question);
     return new Promise(function (resolve, reject) {
         let confirmResult = false;
 
@@ -62,7 +61,6 @@ window.confirm = (question) => {
         });
 
         PromiseConfirm.on('alert_close', () => {
-            console.log('[Custom Confirm] Resolving with:', confirmResult);
             resolve(confirmResult);
         });
     });

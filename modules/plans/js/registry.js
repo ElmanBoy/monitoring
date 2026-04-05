@@ -381,7 +381,7 @@ var el_plans_registry = {
 
         el_plans_registry.bindSetOrgByType();
         el_plans_registry.bindSetOrgByPlanType();
-        // Если тип уже выбран (форма редактирования) — сразу применяем фильтр
+        // Если тип уже выбран (форма редактирования или создания) — сразу применяем фильтр
         if (parseInt($("select[name='checks']").val()) > 0) {
             $("select[name='checks']").trigger("change.plantype");
         }
@@ -784,9 +784,27 @@ var el_plans_registry = {
                 });
             $(".pop_up_body .institutions:last input[name='check_periods[]'] ~ input")
                 .mask('99.99.9999 - 99.99.9999');
-            setTimeout(function () {
-                $(".pop_up_body .institutions:last [name='institutions[]']").val("0").trigger("chosen:updated").trigger("change");
-            }, 200);
+
+            // Применяем фильтр по типу плана к новому блоку
+            let planCheckType = $("select[name='checks']").val();
+            if (planCheckType && parseInt(planCheckType) > 0) {
+                let $lastInst = $(".pop_up_body .institutions:last [name='institutions[]']");
+                $lastInst.html('<option value="">Загрузка...</option>').trigger("chosen:updated");
+
+                $.post("/", {
+                    ajax: 1,
+                    action: "getOrgByCheckType",
+                    check_type: planCheckType,
+                    selected: 0
+                }, function (data){
+                    $lastInst.html(data).trigger("chosen:updated").trigger("change");
+                    el_app.bindGetUnitsByOrg();
+                });
+            } else {
+                setTimeout(function () {
+                    $(".pop_up_body .institutions:last [name='institutions[]']").val("0").trigger("chosen:updated").trigger("change");
+                }, 200);
+            }
         }
 
         institutions_counter++;

@@ -70,7 +70,15 @@
         //Изменения в нативном input пришли извне
         $this.off("input").on("input", function (e) {
 
-            if(!is_disabled && $this.val().length >= 3) {
+            // Определяем минимальную длину в зависимости от типа данных:
+            // 1 символ для чисел (ID, год, версия), 3 символа для текста
+            let inputValue = $this.val();
+            let columnName = that.metadata ? (that.metadata.column || '') : '';
+            let isNumericField = (columnName === 'id' || columnName === 'year' || columnName === 'version');
+            let isNumericInput = /^\d+$/.test(inputValue); // Проверяем, состоит ли ввод только из цифр
+            let minLength = (isNumericField || isNumericInput) ? 1 : 3;
+
+            if(!is_disabled && inputValue.length >= minLength) {
                 let $selected_option, html,
                     source = that.metadata.source,
                     column = that.metadata.column,
@@ -82,14 +90,26 @@
                 //$el_suggest_list.html("");
                 $.post(that.config.url, {ajax: 1, action: action, source: source,
                     column: column, value: value, search: $this.val(), ext_option: ext_option}, function(data){
-                    $el_suggest_list.html("");
+                    // Удаляем только неотмеченные элементы (результаты предыдущего поиска)
+                    $el_suggest_list.find(".el_option input:not(:checked)").closest(".el_option").remove();
+
                     if(data.length > 0) {
                         let answer = JSON.parse(data);
                         if (typeof answer === "object") {
                             if(!$el_suggest_list.find(".el_multi_bar").is("div"))
-                                $el_suggest_list.html("").append(multi_bar);
+                                $el_suggest_list.prepend(multi_bar);
                             for (let i = 0; i < answer.length; i++) {
-                                if(!$el_suggest_list.find(".el_option[data-value='" + answer[i].value + "']").is("div")) {
+                                // Проверка на дубликаты: регистронезависимый поиск по data-value
+                                let isDuplicate = false;
+                                $el_suggest_list.find(".el_option").each(function() {
+                                    let existingValue = $(this).attr("data-value");
+                                    if (existingValue && existingValue.toLowerCase() === answer[i].value.toLowerCase()) {
+                                        isDuplicate = true;
+                                        return false; // break из each
+                                    }
+                                });
+
+                                if(!isDuplicate) {
                                     let Value = (idAsValue) ? answer[i].id : answer[i].value;
                                     $el_suggest_list.append(buildOption(Value, answer[i].text,
                                         is_multiple, $this.attr("name"), false));
@@ -169,6 +189,9 @@
                 }
             })
         }
+
+        // Загружаем фильтры из URL при инициализации
+        Plugin.prototype._getFilter.apply(this);
     }
 
     Plugin.prototype._bindOption = function(){
@@ -205,7 +228,15 @@
             multi_bar = "",
             q = [];
 
+        // Проверяем, есть ли уже элементы фильтра, добавленные на сервере
+        let hasExistingOptions = $el_suggest_list.find(".el_option").length > 0;
 
+        // Если элементы уже есть (добавлены PHP), не добавляем их повторно
+        if (hasExistingOptions) {
+            // Только привязываем обработчики к существующим элементам
+            Plugin.prototype._bindOption.apply(that);
+            return;
+        }
 
         if (typeof query.filter !== "undefined") {
             q = query.filter.split(";");
@@ -213,16 +244,31 @@
             $.each(q, function (f, v) {
                 let fArr = v.split(":");
 
-                let valArr = fArr[1].split("|");
-                valArr = el_tools.array_clean(valArr);
-                if (valArr.length > 0) {
-                    //$el_suggest_list.append(multi_bar);
-                    for(let i = 0; i < valArr.length; i++){
-                        $el_suggest_list.append(buildOption(valArr[i], valArr[i],
-                            that.params[that.element.id].is_multiple, $(that).attr("name"), true));
+                // Проверяем, что фильтр относится к текущему полю
+                if (fArr[0] === field && fArr[1]) {
+                    let valArr = fArr[1].split("|");
+                    valArr = el_tools.array_clean(valArr);
+
+                    // Удаляем дубликаты с учётом регистра при загрузке из URL
+                    let uniqueValues = [];
+                    let lowerCaseSet = new Set();
+                    for(let i = 0; i < valArr.length; i++) {
+                        let lowerValue = valArr[i].toLowerCase();
+                        if(!lowerCaseSet.has(lowerValue)) {
+                            lowerCaseSet.add(lowerValue);
+                            uniqueValues.push(valArr[i]);
+                        }
                     }
+
+                    if (uniqueValues.length > 0) {
+                        //$el_suggest_list.append(multi_bar);
+                        for(let i = 0; i < uniqueValues.length; i++){
+                            $el_suggest_list.append(buildOption(uniqueValues[i], uniqueValues[i],
+                                that.params[that.element.id].is_multiple, that.params[that.element.id].suggest_name, true));
+                        }
+                    }
+                    Plugin.prototype._bindOption.apply(that);
                 }
-                Plugin.prototype._bindOption.apply(that);
             });
         }
     }
@@ -266,10 +312,11 @@
                         //valArr.splice(valArr.findIndex( item =>  q[i].toLowerCase() === item.toLowerCase()), 1);
                         q.splice(q.findIndex( item =>  q[i].toLowerCase() === item.toLowerCase()), 1);
 
-                        const currValue = {value: ch_value};
+                        // Удаление значения с учётом регистра (регистронезависимое сравнение)
+                        const currValueLower = ch_value.toLowerCase();
                         valArr = valArr.filter(function (item) {
-                            return item !== this.value;
-                        }, currValue);
+                            return item.toLowerCase() !== currValueLower;
+                        });
 
                         valArr = el_tools.array_clean(valArr);
                         valArr = el_tools.array_unique(valArr);
@@ -289,6 +336,30 @@
 
         q = el_tools.array_clean(q);
         q = el_tools.array_unique(q);
+
+        // Дополнительная дедупликация значений в фильтрах с учётом регистра
+        // Обрабатываем каждый элемент фильтра вида "field:value1|value2|value3"
+        for(let i = 0; i < q.length; i++) {
+            let parts = q[i].split(":");
+            if(parts.length === 2 && parts[1]) {
+                let values = parts[1].split("|");
+                // Удаляем дубликаты с учётом регистра
+                let uniqueValues = [];
+                let lowerCaseMap = new Map();
+
+                for(let j = 0; j < values.length; j++) {
+                    let lowerValue = values[j].toLowerCase();
+                    if(!lowerCaseMap.has(lowerValue)) {
+                        lowerCaseMap.set(lowerValue, values[j]);
+                        uniqueValues.push(values[j]);
+                    }
+                }
+
+                if(uniqueValues.length > 0) {
+                    q[i] = parts[0] + ":" + uniqueValues.join("|");
+                }
+            }
+        }
 
         if (q.length > 0) {
             rq.push("filter=" + encodeURIComponent(q.join(";")));
