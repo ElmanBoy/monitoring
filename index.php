@@ -80,7 +80,7 @@ if (isset($_POST['ajax']) && intval($_POST['ajax']) == 1) {
     if (!$isPublicAction) {
         // Проверяем авторизацию, X-Requested-With и CSRF-токен одним методом
         if (!$auth->checkAjax()) {
-            echo '<script>document.location.href="/?session_expired=1"</script>';
+            echo '<script>document.location.href="/?logout"</script>';
             die();
         }
     }
@@ -235,7 +235,9 @@ if (isset($_POST['ajax']) && intval($_POST['ajax']) == 1) {
         $cleanPath = 'https://' . $_SERVER['HTTP_HOST'] . $requestUri;
         setcookie('last_path', $cleanPath, 0, '/', $_SERVER['SERVER_NAME']);
         $_SESSION['login_path'] = $cleanPath;
-    } else {
+    } else { file_put_contents($_SERVER['DOCUMENT_ROOT'].'/logs/PHP_errors.log',
+        date('Y-m-d H:i:s').' URL: '.$_GET['url'],
+    FILE_APPEND);
         $auth->refreshPermissions(); // пересчитываем права из БД при каждой загрузке страницы
         // Получаем начальную страницу в зависимости от роли пользователя
         $default_page = $auth->getDefaultPage();

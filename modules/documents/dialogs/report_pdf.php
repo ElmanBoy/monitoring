@@ -50,9 +50,21 @@ $insNameShort = $ins->name_short ?? $insName;
 // Данные из поля body (сохранены при создании)
 $body = json_decode($rep->body ?? '{}', true) ?: [];
 $actSentDate    = $body['act_sent_date']     ?? ($act->doc_number ?? '');
-$proposalsText  = $body['proposals_text']    ?? '';
 $violationIds   = $body['violation_ids']     ?? [];
 $inclObj        = intval($body['include_objections'] ?? 0);
+
+// Предложения: новый формат (массив) или старый (текст)
+$proposals = [];
+if (isset($body['proposals']) && is_array($body['proposals'])) {
+    // Новый формат - массив
+    $proposals = array_filter($body['proposals'], function($p) { return strlen(trim($p)) > 0; });
+} elseif (isset($body['proposals_text']) && strlen($body['proposals_text']) > 0) {
+    // Старый формат - текст, разбиваем по строкам (обратная совместимость)
+    $proposals = array_filter(
+        array_map('trim', explode("\n", $body['proposals_text'])),
+        function($p) { return strlen($p) > 0; }
+    );
+}
 
 // Нарушения
 $violations = [];
@@ -277,13 +289,10 @@ ob_start();
     <?php endif; ?>
 
     <!-- Предложения -->
-    <?php if (strlen($proposalsText) > 0): ?>
+    <?php if (count($proposals) > 0): ?>
         <div class="proposals-title">Предложения по результатам проверки</div>
-        <?php
-        $lines = array_filter(array_map('trim', explode("\n", $proposalsText)));
-        foreach ($lines as $i => $line):
-            ?>
-            <div class="proposal-item"><?= ($i + 1) . '. ' . htmlspecialchars($line) ?></div>
+        <?php foreach ($proposals as $i => $proposal): ?>
+            <div class="proposal-item"><?= ($i + 1) . '. ' . htmlspecialchars($proposal) ?></div>
         <?php endforeach; ?>
     <?php endif; ?>
 

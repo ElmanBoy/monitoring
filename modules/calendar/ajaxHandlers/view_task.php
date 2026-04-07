@@ -130,6 +130,7 @@ if ($auth->isLogin()) {
                             } else {
                                 $_POST['file_ids'] = json_encode($fileIds['ids']);
                             }
+                            $checkstaffValues['file_ids'] = $_POST['file_ids'];
                             $reg->insertTaskLog($taskId, 'Приложение файлов', 'assigned', 'view_task');
                         } else {
                             echo $fileIds['message'];
@@ -284,7 +285,7 @@ if ($auth->isLogin()) {
                 'act_number'         => '',
                 'act_date'           => '',
                 'institution'        => $insName,
-                'list_executors'     => implode(',<br>', $check_executors),
+                'list_executors'     => implode(',</p><p>', $check_executors),
                 // Руководитель проверяемого учреждения
                 'director_fio'       => $director_fio,
                 'director_short'     => $director_short,
@@ -327,7 +328,7 @@ if ($auth->isLogin()) {
                 'head_position' => $head_position,
                 'act_body' => $act_body_own . $act_body_other,
                 'violations' => $violation_items,
-                'list_executors' => implode(',<br>', $check_executors)
+                'list_executors' => implode(',</p><p>', $check_executors)
             ];
             /*$body_vars['institution'] = $insName;
             $body_vars['act_body'] = $act_body;*/

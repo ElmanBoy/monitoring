@@ -12,6 +12,7 @@ $alert = new Notifications();
 $user_signs = [];
 
 $docId    = intval($_POST['docId']);
+$currentUserId = intval($_SESSION['user_id'] ?? 0); // ID текущего пользователя для проверки уведомлений
 $message  = '';
 $updateData = [];
 $options  = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT;
@@ -342,20 +343,43 @@ function sendNotificationsToNextActors(
             $st = getApproverStatus($section[$i]);
 
             if ($st['status'] === 'redirected' && isset($section[$i]['redirect'])) {
-                foreach ($section[$i]['redirect'] as $rd) {
-                    if (!isset($rd['id'])) continue;
-                    if (getApproverStatus($rd)['status'] !== 'pending') continue;
-                    $targetId = $rd['id'];
-                    $key = $targetId . '_redirect_' . $sectionIndex . '_' . $i;
-                    if ($targetId != $currentUserId && !isset($notified[$key])) {
-                        try {
-                            $alert->notificationSigner($targetId, 4, $docId, $docName);
-                            $notified[$key] = true;
-                        } catch (\Exception $e) {
-                            error_log('Уведомление (перенаправление): ' . $e->getMessage());
+                // Рекурсивная функция для обработки вложенных redirect
+                $processRedirects = function($redirectArr, $depth = 0) use (&$processRedirects, &$notified, $alert, $docId, $docName, $currentUserId, $sectionIndex, $i) {
+                    foreach ($redirectArr as $rd) {
+                        if (!isset($rd['id'])) continue;
+                        $rdStatus = getApproverStatus($rd);
+
+                        // Если pending - отправляем уведомление
+                        if ($rdStatus['status'] === 'pending') {
+                            $targetId = $rd['id'];
+                            $key = $targetId . '_redirect_' . $sectionIndex . '_' . $i . '_d' . $depth;
+                            if ($targetId != $currentUserId && !isset($notified[$key])) {
+                                try {
+                                    // ВАЖНО: Определяем тип уведомления по role перенаправленного
+                                    // Если role=1 - это подписание, иначе - согласование
+                                    $notifType = (isset($rd['role']) && intval($rd['role']) === 1) ? 1 : 4;
+                                    $alert->notificationSigner($targetId, $notifType, $docId, $docName);
+                                    $notified[$key] = true;
+                                    $logMsg = "[" . date('Y-m-d H:i:s') . "] ПРАВИЛО 4 (redirect chain): Отправлено уведомление user=$targetId, doc=$docId, type=$notifType, depth=$depth, currentUser=$currentUserId\n";
+                                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/logs/PHP_errors.log', $logMsg, FILE_APPEND);
+                                } catch (\Exception $e) {
+                                    $logMsg = "[" . date('Y-m-d H:i:s') . "] Уведомление (перенаправление): " . $e->getMessage() . "\n";
+                                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/logs/PHP_errors.log', $logMsg, FILE_APPEND);
+                                }
+                            } else {
+                                $logMsg = "[" . date('Y-m-d H:i:s') . "] ПРАВИЛО 4 (redirect chain): Уведомление НЕ отправлено user=$targetId (current=$currentUserId, alreadyNotified=" . (isset($notified[$key]) ? 'YES' : 'NO') . ")\n";
+                                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/logs/PHP_errors.log', $logMsg, FILE_APPEND);
+                            }
+                        }
+
+                        // Если redirected - рекурсивно обрабатываем вложенный redirect
+                        if ($rdStatus['status'] === 'redirected' && isset($rd['redirect']) && is_array($rd['redirect'])) {
+                            $processRedirects($rd['redirect'], $depth + 1);
                         }
                     }
-                }
+                };
+
+                $processRedirects($section[$i]['redirect']);
             }
 
             // Повторная запись перенаправившего — уведомляем, если redirect завершён
@@ -366,13 +390,19 @@ function sendNotificationsToNextActors(
                         && isset($section[$prev]['redirect'])) {
                         if (isRedirectChainCompleted($section[$prev]['redirect'])) {
                             $key = $redirectorId . '_redirector_back_' . $sectionIndex . '_' . $i;
-                            if (!isset($notified[$key])) {
+                            if ($redirectorId != $currentUserId && !isset($notified[$key])) {
                                 try {
                                     $alert->notificationSigner($redirectorId, 4, $docId, $docName);
                                     $notified[$key] = true;
+                                    $logMsg = "[" . date('Y-m-d H:i:s') . "] ПРАВИЛО 4 (возврат перенаправившему): Отправлено уведомление user=$redirectorId, doc=$docId, currentUser=$currentUserId\n";
+                                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/logs/PHP_errors.log', $logMsg, FILE_APPEND);
                                 } catch (\Exception $e) {
-                                    error_log('Уведомление (возврат перенаправившему): ' . $e->getMessage());
+                                    $logMsg = "[" . date('Y-m-d H:i:s') . "] Уведомление (возврат перенаправившему): " . $e->getMessage() . "\n";
+                                    file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/logs/PHP_errors.log', $logMsg, FILE_APPEND);
                                 }
+                            } else {
+                                $logMsg = "[" . date('Y-m-d H:i:s') . "] ПРАВИЛО 4 (возврат перенаправившему): Уведомление НЕ отправлено user=$redirectorId (current=$currentUserId, alreadyNotified=" . (isset($notified[$key]) ? 'YES' : 'NO') . ")\n";
+                                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/logs/PHP_errors.log', $logMsg, FILE_APPEND);
                             }
                         }
                         break;
@@ -398,7 +428,8 @@ function sendNotificationsToNextActors(
                         $alert->notificationSigner($userId, $notifType, $docId, $docName);
                         $notified[$key] = true;
                     } catch (\Exception $e) {
-                        error_log('Уведомление (параллельное): ' . $e->getMessage());
+                        $logMsg = "[" . date('Y-m-d H:i:s') . "] Уведомление (параллельное): " . $e->getMessage() . "\n";
+                        file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/logs/PHP_errors.log', $logMsg, FILE_APPEND);
                     }
                 }
             }
@@ -418,7 +449,8 @@ function sendNotificationsToNextActors(
                             $alert->notificationSigner($userId, $notifType, $docId, $docName);
                             $notified[$key] = true;
                         } catch (\Exception $e) {
-                            error_log('Уведомление (последовательное): ' . $e->getMessage());
+                            $logMsg = "[" . date('Y-m-d H:i:s') . "] Уведомление (последовательное): " . $e->getMessage() . "\n";
+                            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/logs/PHP_errors.log', $logMsg, FILE_APPEND);
                         }
                     }
                 }
@@ -521,6 +553,7 @@ $finalMessage = $message;
 
 if ($globalStats['rejected'] > 0) {
     // Есть отклонение — документ отклонён
+    $finalStatus   = 0;
     $finalMessage .= '<br>Документ отклонён.';
 
 } elseif ($globalStats['pending'] > 0) {
@@ -541,25 +574,93 @@ if ($globalStats['rejected'] > 0) {
     }
 
 } elseif ($globalStats['approved'] > 0 && $globalStats['pending'] == 0 && $globalStats['rejected'] == 0) {
-    $finalStatus   = 1;
-    $finalMessage .= '<br>Документ согласован.';
-    $updateData['doc_number'] = $newDocNumber;
-    $updateData['docdate']    = date('Y-m-d');
+    // ──────────────────────────────────────────────────────────
+    // СПЕЦИАЛЬНАЯ ЛОГИКА для ДОКЛАДА (documentacial=8):
+    // Если все согласовали, но министра ещё нет — добавляем министра
+    // ──────────────────────────────────────────────────────────
+    if ($docType == 8) {
+        // Проверяем, есть ли уже министр в agreementList
+        $hasMinister = false;
+        foreach ($agreementList as $section) {
+            $startIdx = isset($section[0]['stage']) ? 1 : 0;
+            for ($i = $startIdx; $i < count($section); $i++) {
+                if (!isset($section[$i]['id'])) continue;
+                $userId = intval($section[$i]['id']);
+                // Проверяем, является ли этот пользователь министром
+                $userRec = $db->selectOne('users', ' WHERE id = ?', [$userId]);
+                if ($userRec && strpos($userRec->roles, '2') !== false &&
+                    strpos($userRec->position, 'Министр социального развития') !== false) {
+                    $hasMinister = true;
+                    break 2;
+                }
+            }
+        }
 
-    // Уведомление руководителю при подписании приказа (documentacial=1)
-    if ($docType == 1) {
-        try {
-            $alert->notificationOrder($agr->executors_head, $docId, $agr->name);
-        } catch (\RedBeanPHP\RedException $e) {
-            $finalMessage .= $e->getMessage();
+        // Если министра нет — добавляем и НЕ переводим в finalStatus=1
+        if (!$hasMinister) {
+            // Находим министра
+            $minister = $db->selectOne('users',
+                " WHERE active = 1 AND roles LIKE '%2%' AND position LIKE '%Министр социального развития Московской области%' LIMIT 1");
+
+            if ($minister) {
+                $ministerId = intval($minister->id);
+                // Добавляем секцию с министром (подписант, последовательное согласование)
+                $agreementList[] = [
+                    ['stage' => '', 'list_type' => 1], // stage='' означает подписанты
+                    [
+                        'id'     => $ministerId,
+                        'role'   => 1,  // роль подписанта
+                        'type'   => 1,  // тип: подпись
+                        'result' => null,
+                    ]
+                ];
+
+                // Статус остаётся 0 (на подписи у министра)
+                $finalStatus = 0;
+                $finalMessage = $message . '<br>Доклад согласован. Направлен министру на подпись.';
+
+                // Уведомляем министра
+                try {
+                    $alert->notificationSigner($ministerId, 1, $docId, $agr->name);
+                } catch (\Exception $e) {
+                    error_log('Уведомление министру (доклад): ' . $e->getMessage());
+                }
+            } else {
+                // Министр не найден — всё равно завершаем
+                $finalStatus   = 1;
+                $finalMessage .= '<br>Доклад согласован (министр не найден в системе).';
+                $updateData['doc_number'] = $newDocNumber;
+                $updateData['docdate']    = date('Y-m-d');
+            }
+        } else {
+            // Министр уже есть и подписал — документ полностью согласован
+            $finalStatus   = 1;
+            $finalMessage .= '<br>Доклад подписан министром.';
+            $updateData['doc_number'] = $newDocNumber;
+            $updateData['docdate']    = date('Y-m-d');
+        }
+    } else {
+        // Для всех остальных типов документов — обычная логика
+        $finalStatus   = 1;
+        $finalMessage .= '<br>Документ согласован.';
+        $updateData['doc_number'] = $newDocNumber;
+        $updateData['docdate']    = date('Y-m-d');
+
+        // Уведомление руководителю при подписании приказа (documentacial=1)
+        if ($docType == 1) {
+            try {
+                $alert->notificationOrder($agr->executors_head, $docId, $agr->name);
+            } catch (\RedBeanPHP\RedException $e) {
+                $finalMessage .= $e->getMessage();
+            }
         }
     }
 
     // ──────────────────────────────────────────────────────────
-    // ТРИГГЕР: Доклад министру подписан (documentacial=8)
+    // ТРИГГЕР: Доклад министру ПОДПИСАН (documentacial=8)
     // → создаём график устранения нарушений + уведомляем ОК
     // ──────────────────────────────────────────────────────────
-    if ($docType == 8) {
+    if ($docType == 8 && $finalStatus == 1) {
         $report = $db->selectOne('agreement', ' WHERE id = ?', [$docId]);
         $actId  = intval($report->source_id ?? 0);
         $act    = $actId > 0 ? $db->selectOne('agreement', ' WHERE id = ?', [$actId]) : null;
@@ -568,37 +669,29 @@ if ($globalStats['rejected'] > 0) {
 
         if ($act && $insId > 0) {
 
-            // 1. Нарушения, выбранные при формировании доклада
-            $bodyData     = json_decode($report->body ?? '{}', true) ?: [];
-            $violationIds = $bodyData['violation_ids'] ?? [];
+            // 1. Предложения из доклада (не нарушения!)
+            $bodyData  = json_decode($report->body ?? '{}', true) ?: [];
+            $proposals = [];
 
-            $allViolations = [];
-            if ($planId > 0) {
-                $plan = $db->selectOne('checksplans', ' WHERE id = ?', [$planId]);
-                if ($plan && strlen($plan->uid ?? '') > 0) {
-                    $staffRows = $db->select('checkstaff',
-                        ' WHERE check_uid = ? AND institution = ?', [$plan->uid, $insId]);
-                    if (count($staffRows) > 0) {
-                        $taskIds = array_map(function($r){ return intval($r->id); }, $staffRows);
-                        $rawVio  = $db->db::getAll(
-                            'SELECT * FROM ' . TBL_PREFIX . 'checksviolations WHERE tasks IN (' .
-                            implode(',', $taskIds) . ') ORDER BY id'
-                        );
-                        foreach ((array)$rawVio as $v) {
-                            if (count($violationIds) === 0 || in_array(intval($v['id']), $violationIds)) {
-                                $allViolations[] = $v;
-                            }
-                        }
-                    }
-                }
+            if (isset($bodyData['proposals']) && is_array($bodyData['proposals'])) {
+                // Новый формат - массив
+                $proposals = array_filter($bodyData['proposals'], function($p) {
+                    return strlen(trim($p)) > 0;
+                });
+            } elseif (isset($bodyData['proposals_text']) && strlen($bodyData['proposals_text']) > 0) {
+                // Старый формат - текст (обратная совместимость)
+                $proposals = array_filter(
+                    array_map('trim', explode("\n", $bodyData['proposals_text'])),
+                    function($p) { return strlen($p) > 0; }
+                );
             }
 
-            // 2. Строки графика (одна строка = одно нарушение)
+            // 2. Строки графика (одна строка = одно предложение)
             $scheduleItems = [];
-            foreach ($allViolations as $v) {
+            foreach ($proposals as $idx => $proposalText) {
                 $scheduleItems[] = [
-                    'violation_id'         => intval($v['id']),
-                    'schedule_offers'      => $v['name'] ?? '',
+                    'proposal_index'       => $idx,
+                    'schedule_offers'      => $proposalText,
                     'schedule_actions'     => '',
                     'schedule_deadlines'   => '',
                     'schedule_responsible' => '',
@@ -619,10 +712,10 @@ if ($globalStats['rejected'] > 0) {
                 'created_at'    => date('Y-m-d H:i:s'),
                 'author'        => intval($_SESSION['user_id']),
                 'active'        => 1,
-                'name'          => 'График устранения нарушений — ' . $insName,
+                'name'          => 'График выполнения предложений по результатам проверки — ' . $insName,
                 'documentacial' => 5,
                 'status'        => 0,
-                'source_id'     => $actId,
+                'source_id'     => $docId,  // ссылка на доклад, а не на акт
                 'source_table'  => 'agreement',
                 'ins_id'        => $insId,
                 'plan_id'       => $planId,
@@ -630,7 +723,8 @@ if ($globalStats['rejected'] > 0) {
             ]);
 
             if ($roadmapId > 0) {
-                $finalMessage .= '<br>График устранения нарушений сформирован.';
+                $finalMessage .= '<br>График выполнения предложений сформирован (' . count($proposals) . ' ' .
+                    (count($proposals) == 1 ? 'предложение' : (count($proposals) < 5 ? 'предложения' : 'предложений')) . ').';
             }
 
             // 4. Уведомляем пользователей ОК учреждения (роль 5)
@@ -647,7 +741,7 @@ if ($globalStats['rejected'] > 0) {
                         $okUserId,
                         4,
                         $roadmapId > 0 ? $roadmapId : $docId,
-                        'График устранения нарушений — ' . $insName
+                        'График выполнения предложений — ' . $insName
                     );
                 } catch (\Exception $e) {
                     error_log('Уведомление ОК (доклад): ' . $e->getMessage());
@@ -659,7 +753,7 @@ if ($globalStats['rejected'] > 0) {
                         $okUserId,
                         5,
                         $roadmapId > 0 ? $roadmapId : $docId,
-                        'График устранения нарушений — ' . $insName
+                        'График выполнения предложений — ' . $insName
                     );
                 } catch (\Exception $e) {
                     error_log('Email ОК (доклад): ' . $e->getMessage());

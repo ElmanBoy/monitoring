@@ -51,10 +51,11 @@ $exist_task = $db->select('checkstaff', " WHERE check_uid = '$plan_uid' AND inst
 $inspections = $db->getRegistry('inspections');
 
 // Проверяем что приказ утверждён
-$agreement_data = $db->selectOne('agreement', " WHERE source_table = 'checkinstitutions' AND source_id = " . $insId);
+// ИСПРАВЛЕНО: ищем по ins_id вместо source_id, т.к. source_id указывает на cam_checkinstitutions.id
+$agreement_data = $db->selectOne('agreement', " WHERE documentacial = 1 AND plan_id = (SELECT id FROM cam_checksplans WHERE uid = '$plan_uid' LIMIT 1) AND ins_id = " . $insId);
 // Для внеплановых задач (plan_uid='0') приказ не требуется
 $is_unplanned = ($plan_uid === '0');
-$order_approved = $is_unplanned || (intval($agreement_data->status) == 1 || intval($agreement_data->approved) == 1);
+$order_approved = $is_unplanned || (intval($agreement_data->status ?? 0) == 1);
 
 if ($auth->isLogin()) {
 

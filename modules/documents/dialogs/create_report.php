@@ -165,12 +165,22 @@ $users = $db->getRegistry('users', " WHERE active = 1 AND roles NOT LIKE '%2%'",
                     </div>
                     <div class='group'>
                         <div class='item'>
-                            <div class='el_data'>
-                                <label>Предложения по результатам проверки</label>
-                                <textarea class='el_input' name='params[proposals_text]' rows='6'
-                                          style='width:100%;resize:vertical'
-                                          placeholder='Предложения и рекомендации для ОК...'></textarea>
+                            <label style='font-weight:500;margin-bottom:8px;display:block'>Предложения по результатам проверки</label>
+                            <div id='proposals_container'>
+                                <!-- Первое предложение -->
+                                <div class='proposal_item' style='display:flex;gap:8px;margin-bottom:8px;align-items:flex-start'>
+                                    <span class='proposal_number' style='flex-shrink:0;padding:8px 0;min-width:20px'>1.</span>
+                                    <textarea class='el_input' name='params[proposals][]' rows='2'
+                                              style='width:100%;resize:vertical'
+                                              placeholder='Введите предложение...'></textarea>
+                                    <button type='button' class='button icon remove_proposal' style='flex-shrink:0;visibility:hidden'>
+                                        <span class='material-icons'>close</span>
+                                    </button>
+                                </div>
                             </div>
+                            <button type='button' class='button icon text' id='add_proposal' style='margin-top:8px'>
+                                <span class='material-icons'>add_circle_outline</span>Еще предложение
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -291,6 +301,73 @@ $users = $db->getRegistry('users', " WHERE active = 1 AND roles NOT LIKE '%2%'",
 
 <script>
     (function () {
+        var proposalCounter = 1;
+
+        // Функция обновления нумерации предложений
+        function updateProposalNumbers() {
+            $('#proposals_container .proposal_item').each(function(index) {
+                $(this).find('.proposal_number').text((index + 1) + '.');
+            });
+        }
+
+        // Добавление нового предложения
+        $('#add_proposal').on('click', function() {
+            proposalCounter++;
+
+            var $newProposal = $('<div>', {
+                'class': 'proposal_item',
+                'style': 'display:flex;gap:8px;margin-bottom:8px;align-items:flex-start'
+            });
+
+            $newProposal.append(
+                $('<span>', {
+                    'class': 'proposal_number',
+                    'style': 'flex-shrink:0;padding:8px 0;min-width:20px',
+                    'text': proposalCounter + '.'
+                })
+            );
+
+            $newProposal.append(
+                $('<textarea>', {
+                    'class': 'el_input',
+                    'name': 'params[proposals][]',
+                    'rows': 2,
+                    'style': 'width:100%;resize:vertical',
+                    'placeholder': 'Введите предложение...'
+                })
+            );
+
+            var $removeBtn = $('<button>', {
+                'type': 'button',
+                'class': 'button icon remove_proposal',
+                'style': 'flex-shrink:0',
+                'html': '<span class="material-icons">close</span>'
+            });
+
+            $newProposal.append($removeBtn);
+            $('#proposals_container').append($newProposal);
+
+            // Показываем кнопки удаления, если предложений больше одного
+            if ($('#proposals_container .proposal_item').length > 1) {
+                $('.remove_proposal').css('visibility', 'visible');
+            }
+        });
+
+        // Удаление предложения
+        $(document).on('click', '.remove_proposal', function() {
+            if ($('#proposals_container .proposal_item').length > 1) {
+                $(this).closest('.proposal_item').remove();
+                updateProposalNumbers();
+                proposalCounter = $('#proposals_container .proposal_item').length;
+
+                // Скрываем кнопки удаления, если осталось только одно предложение
+                if ($('#proposals_container .proposal_item').length === 1) {
+                    $('.remove_proposal').css('visibility', 'hidden');
+                }
+            }
+        });
+
+        // Создание доклада
         $('#btn_create_report').on('click', function () {
             var $btn = $(this).prop('disabled', true).find('.material-icons').text('hourglass_empty');
 

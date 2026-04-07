@@ -652,3 +652,4 @@ if ($outputType == 0) {
     document.getElementById('pdf-viewer').src = `data:application/pdf;base64,$pdfData`;
 </script>";
 }
+

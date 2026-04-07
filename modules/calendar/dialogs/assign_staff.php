@@ -67,12 +67,11 @@ if ($auth->isLogin()) {
     }
     //echo $plan_uid;
     // Получаем приказ по учреждению (всегда, не только при наличии назначения)
-    $agreement_data = $db->selectOne('agreement', " WHERE 
-     source_table = 'checkinstitutions' AND source_id = " . $insId
-    );
+    // ИСПРАВЛЕНО: ищем по ins_id вместо source_id, т.к. source_id указывает на cam_checkinstitutions.id
+    $agreement_data = $db->selectOne('agreement', " WHERE documentacial = 1 AND plan_id = (SELECT id FROM cam_checksplans WHERE uid = '$plan_uid' LIMIT 1) AND ins_id = " . $insId);
     // Для внеплановых задач (plan_uid='0') приказ не требуется
     $is_unplanned = ($plan_uid === '0');
-    $order_approved = $is_unplanned || (intval($agreement_data->status) == 1 || intval($agreement_data->approved) == 1);
+    $order_approved = $is_unplanned || (intval($agreement_data->status ?? 0) == 1);
 
     // Если orderId передан напрямую (из ins_info) — берём даты из приказа
     if ($orderId > 0 && empty($minDate)) {
@@ -393,12 +392,13 @@ if ($auth->isLogin()) {
                 el_app.initTabs();
                 //el_calendar_registry.bindCalendar("<?=$minDate?>", "<?=$maxDate?>");
                 // Инициализируем flatpickr на каждом поле дат (в т.ч. предзаполненных при редактировании)
-                $("#check_staff [name='dates[]']").each(function () {
+                /*$("#check_staff [name='dates[]']").each(function () {
                     let inputEl = this;
                     let rawVal = inputEl.value;
                     console.log('dates value:', rawVal);
                     console.log('minDate:', "<?=$minDate?>", 'maxDate:', "<?=$maxDate?>");
                     let defaultDates = rawVal.length > 0 ? rawVal.split(' - ') : [];
+                    console.log('defaultDates:', defaultDates);
                     flatpickr(inputEl, {
                         locale: 'ru',
                         mode: 'range',
@@ -414,7 +414,37 @@ if ($auth->isLogin()) {
                         altInputClass: 'el_input',
                         firstDayOfWeek: 1
                     });
+                });*/
+
+                $("#check_staff [name='dates[]']").each(function () {
+                    let inputEl = this;
+                    let rawVal = inputEl.value;
+
+                    // Сохраняем оригинальное значение
+                    let defaultDates = rawVal.length > 0 ? rawVal.split(' - ') : [];
+
+                    // Сначала создаем flatpickr
+                    let fp = flatpickr(inputEl, {
+                        locale: 'ru',
+                        mode: 'range',
+                        time_24hr: true,
+                        dateFormat: 'Y-m-d',
+                        altFormat: 'd.m.Y',
+                        conjunction: ' - ',
+                        altInput: true,
+                        allowInput: true,
+                        minDate: "<?=$minDate?>",
+                        maxDate: "<?=$maxDate?>",
+                        altInputClass: 'el_input',
+                        firstDayOfWeek: 1
+                    });
+
+                    // Затем устанавливаем даты программно
+                    if (defaultDates.length === 2) {
+                        fp.setDate(defaultDates, true); // true для режима range
+                    }
                 });
+
                 let $staffs = $('.staff');
 
                 $("select[name='institutions[]']").trigger('change');

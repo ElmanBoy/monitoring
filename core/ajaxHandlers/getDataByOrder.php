@@ -23,7 +23,7 @@ if($orderId > 0) {
     $or = $db->selectOne('agreement', " WHERE id = ?", [$orderId]); //print_r($or);
     $tasks = $db->getRegistry('tasks');
 
-    $actionPeriod = json_decode($or->action_period);
+    $actionPeriod = $or->action_period;
     $actionPeriodText = $or->action_period_text;
 
     // Исправляем дублированные даты в action_period_text если они есть
@@ -45,9 +45,9 @@ if($orderId > 0) {
 
     $checkPeriodArr = explode(' - ', $or->check_period);
     $checkPeriod = 'с '.$date->dateToString($checkPeriodArr[0]).' по '.$date->dateToString($checkPeriodArr[1]);
-    $datesArr = $date->getDatesFromMonths($actionPeriod);
-    $minDate = $datesArr['start'];
-    $maxDate = $datesArr['end'];
+    $datesArr = explode(' - ', $actionPeriod);//$date->getDatesFromMonths($actionPeriod);
+    $minDate = $datesArr[0];//$datesArr['start'];
+    $maxDate = end($datesArr);//$datesArr['end'];
     $insId = $or->ins_id;
     $unitId = $or->unit_id;
 

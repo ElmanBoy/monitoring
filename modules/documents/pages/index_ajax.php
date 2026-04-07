@@ -182,8 +182,18 @@ function validateSignersCount(?string $agreementListJson, int $documentType): ar
             foreach ($participants as $p) {
                 if (!is_array($p)) continue;
 
-                // _is_redirector_repeat означает, что участник вернется после перенаправления
-                // Такие участники УЧИТЫВАЮТСЯ при валидации, так как они часть списка
+                // Пропускаем записи с перенаправлением (result.id=4),
+                // НО ТОЛЬКО если это НЕ повторная запись (_is_redirector_repeat)
+                // Повторные записи всегда учитываются, даже если у них есть result
+                $isRepeat = !empty($p['_is_redirector_repeat']);
+                $hasRedirect = isset($p['result']['id']) && intval($p['result']['id']) === 4;
+
+                if ($hasRedirect && !$isRepeat) {
+                    // Обычная запись с перенаправлением - пропускаем
+                    continue;
+                }
+
+                // Учитываем участника первого уровня
                 $firstLevelCount++;
 
                 if (isset($p['role'])) {
@@ -261,13 +271,15 @@ function getDocumentStatusForIcon(int $userId, ?string $agreementListJson, int $
     }
 
     // Функция определения статуса согласующего
-    $getApproverStatus = function($approver, $section = null) use ($user_signs) {
+    // $isInsideRedirect - флаг, что запись находится внутри redirect[] другого участника
+    $getApproverStatus = function($approver, $section = null, $isInsideRedirect = false) use ($user_signs) {
         $result = $approver['result'] ?? null;
 
         // Если result не установлен, проверяем cam_signs
         if (!$result || !is_array($result)) {
-            // Если есть подписи для этого пользователя
-            if (isset($user_signs[$approver['id']])) {
+            // ВАЖНО: НЕ проверяем user_signs для записей внутри redirect,
+            // иначе будет копироваться старый статус того же пользователя
+            if (!$isInsideRedirect && isset($user_signs[$approver['id']])) {
                 // Если указана секция - проверяем её
                 if ($section !== null && isset($user_signs[$approver['id']][$section])) {
                     $signType = intval($user_signs[$approver['id']][$section]['type']);
@@ -460,6 +472,11 @@ function getDocumentStatusForIcon(int $userId, ?string $agreementListJson, int $
         ];
     }
 
+    // DEBUG для документа 181
+    if ($docId == 181) {
+        echo "<!-- DEBUG START Doc 181, User $userId, DocStatus=$documentStatus -->\n";
+    }
+
     // Ищем пользователя во всём дереве согласования.
     // Приоритет: pending > redirected > approved — чтобы не скрывать активную очередь
     // за уже выполненным действием в другой секции.
@@ -468,13 +485,35 @@ function getDocumentStatusForIcon(int $userId, ?string $agreementListJson, int $
     $allFound  = []; // все вхождения пользователя
 
     foreach ($data as $section) {
-        $found = $findUserInSection($section, $userId);
-        if ($found) {
-            $allFound[] = $found;
+        // Ищем ВСЕ вхождения пользователя в секции, включая повторные записи
+        $sectionInfo = $section[0] ?? [];
+        $approvers = array_slice($section, 1);
+
+        foreach ($approvers as $index => $approver) {
+            if (($approver['id'] ?? null) == $userId) {
+                $allFound[] = [
+                    'approver' => $approver,
+                    'section_info' => $sectionInfo,
+                    'list_type' => isset($sectionInfo['list_type']) ? intval($sectionInfo['list_type']) : 1,
+                    'stage' => $sectionInfo['stage'] ?? '',
+                    'index' => $index,
+                    'level' => 0,
+                    'is_redirect' => false,
+                    'section' => $section
+                ];
+                if ($docId == 181) {
+                    echo "<!-- DEBUG: Added main level entry, result.id=" . ($approver['result']['id'] ?? 'NULL') . " -->\n";
+                }
+            }
         }
+
+        // Также ищем в redirect
         $foundInRedirect = $findUserInAllRedirects($section, $userId);
         if ($foundInRedirect) {
             $allFound[] = $foundInRedirect;
+            if ($docId == 181) {
+                echo "<!-- DEBUG: Added redirect entry, result.id=" . ($foundInRedirect['approver']['result']['id'] ?? 'NULL') . ", level=" . ($foundInRedirect['level'] ?? '?') . " -->\n";
+            }
         }
     }
 
@@ -493,17 +532,48 @@ function getDocumentStatusForIcon(int $userId, ?string $agreementListJson, int $
             return true;
         };
 
-        $priority = ['pending' => 0, 'returned' => 0, 'redirected' => 1, 'approved' => 2, 'rejected' => 3];
-        usort($allFound, function($a, $b) use ($getApproverStatus, $priority, $isRedirectChainDone) {
-            $sa = $getApproverStatus($a['approver'])['status'];
-            $sb = $getApproverStatus($b['approver'])['status'];
+        // Функция для проверки, есть ли незавершенный redirect у записи
+        $hasUnfinishedRedirect = function($approver) use ($getApproverStatus) {
+            if (empty($approver['redirect']) || !is_array($approver['redirect'])) {
+                return false;
+            }
+            foreach ($approver['redirect'] as $rd) {
+                if (!isset($rd['id'])) continue;
+                // Передаем true для $isInsideRedirect
+                $st = $getApproverStatus($rd, null, true);
+                if ($st['status'] !== 'approved' && $st['status'] !== 'rejected') {
+                    return true; // Есть незавершенная запись
+                }
+            }
+            return false; // Все завершены
+        };
 
-            // ПРАВИЛО: _is_redirector_repeat имеет наивысший приоритет
-            // (это повторная запись после завершения перенаправления - актуальный статус)
+        // Проверяем, есть ли у пользователя ЛЮБАЯ запись с незавершённым redirect
+        $userHasAnyUnfinishedRedirect = false;
+        foreach ($allFound as $entry) {
+            if ($hasUnfinishedRedirect($entry['approver'])) {
+                $userHasAnyUnfinishedRedirect = true;
+                break;
+            }
+        }
+
+        $priority = ['pending' => 0, 'returned' => 0, 'redirected' => 1, 'approved' => 2, 'rejected' => 3];
+        usort($allFound, function($a, $b) use ($getApproverStatus, $priority, $isRedirectChainDone, $hasUnfinishedRedirect, $userHasAnyUnfinishedRedirect) {
+            // ВАЖНО: Если у записи есть незавершённый redirect, считаем её статус как 'redirected'
+            $aHasUnfinished = $hasUnfinishedRedirect($a['approver']);
+            $bHasUnfinished = $hasUnfinishedRedirect($b['approver']);
+
+            $sa = $aHasUnfinished ? 'redirected' : $getApproverStatus($a['approver'], null, !empty($a['is_redirect']))['status'];
+            $sb = $bHasUnfinished ? 'redirected' : $getApproverStatus($b['approver'], null, !empty($b['is_redirect']))['status'];
+
+            // ПРАВИЛО: _is_redirector_repeat БЕЗ незавершенного redirect имеет наивысший приоритет
+            // НО: Если у пользователя где-то есть незавершённый redirect, repeat НЕ должен получать приоритет
             $aIsRepeat = !empty($a['approver']['_is_redirector_repeat']);
             $bIsRepeat = !empty($b['approver']['_is_redirector_repeat']);
-            if ($aIsRepeat && !$bIsRepeat) return -1; // a (repeat) имеет приоритет
-            if (!$aIsRepeat && $bIsRepeat) return 1;  // b (repeat) имеет приоритет
+
+            // Только если у repeat НЕТ незавершённого redirect И у пользователя НИГДЕ нет незавершённых redirects
+            if ($aIsRepeat && !$aHasUnfinished && !$userHasAnyUnfinishedRedirect && !$bIsRepeat) return -1;
+            if ($bIsRepeat && !$bHasUnfinished && !$userHasAnyUnfinishedRedirect && !$aIsRepeat) return 1;
 
             // ПРАВИЛО: Секция подписантов (stage='') имеет приоритет над этапами согласования
             // Это важно, когда пользователь участвует и в подписантах, и в согласовании
@@ -515,6 +585,11 @@ function getDocumentStatusForIcon(int $userId, ?string $agreementListJson, int $
             // Если один из них - секция подписантов, а другой - этап, приоритет у подписантов
             if ($aIsSigners && !$bIsSigners) return -1; // секция подписантов важнее
             if (!$aIsSigners && $bIsSigners) return 1;  // секция подписантов важнее
+
+            // ПРАВИЛО: Если один pending, другой approved - pending ВСЕГДА имеет приоритет
+            // (даже если approved в секции подписантов)
+            if ($sa === 'pending' && $sb === 'approved') return -1;
+            if ($sa === 'approved' && $sb === 'pending') return 1;
 
             // redirected с незавершённой цепочкой получает наивысший приоритет (выше pending)
             $pa = ($sa === 'redirected' && !$isRedirectChainDone($a['approver'])) ? -1 : ($priority[$sa] ?? 9);
@@ -530,11 +605,39 @@ function getDocumentStatusForIcon(int $userId, ?string $agreementListJson, int $
             return $pa <=> $pb;
         });
         $userInfo = $allFound[0];
+
+        // Временная отладка для документа 181
+        if ($docId == 181) {
+            echo "<!-- DEBUG Doc 181, Current User ID: $userId\n";
+            echo "Total found entries: " . count($allFound) . "\n";
+            foreach ($allFound as $idx => $entry) {
+                $hasUnfin = $hasUnfinishedRedirect($entry['approver']) ? 'YES' : 'NO';
+                $rawStatus = $getApproverStatus($entry['approver'], null, !empty($entry['is_redirect']))['status'];
+                $effectiveStatus = $hasUnfin == 'YES' ? 'redirected' : $rawStatus;
+                $isRepeat = !empty($entry['approver']['_is_redirector_repeat']) ? 'YES' : 'NO';
+                $hasRedirect = !empty($entry['approver']['redirect']) ? 'YES' : 'NO';
+                $resultId = isset($entry['approver']['result']['id']) ? $entry['approver']['result']['id'] : 'NULL';
+                echo "Entry $idx: result.id=$resultId, raw_status=$rawStatus, effective_status=$effectiveStatus, _is_redirector_repeat=$isRepeat, has_redirect=$hasRedirect, has_unfinished=$hasUnfin, is_redirect=" . (!empty($entry['is_redirect']) ? 'YES' : 'NO') . ", level=" . ($entry['level'] ?? 0) . "\n";
+            }
+            $selectedHasUnfin = $hasUnfinishedRedirect($userInfo['approver']) ? 'YES' : 'NO';
+            $selectedRawStatus = $getApproverStatus($userInfo['approver'], null, !empty($userInfo['is_redirect']))['status'];
+            $selectedEffectiveStatus = $selectedHasUnfin == 'YES' ? 'redirected' : $selectedRawStatus;
+            $selectedResultId = isset($userInfo['approver']['result']['id']) ? $userInfo['approver']['result']['id'] : 'NULL';
+            echo "Selected entry: result.id=$selectedResultId, raw_status=$selectedRawStatus, effective_status=$selectedEffectiveStatus, has_unfinished=$selectedHasUnfin\n";
+            echo "-->\n";
+        }
     }
 
     // Если пользователь найден в списке согласования
     if ($userFound) {
-        $userStatus = $getApproverStatus($userInfo['approver']);
+        // Передаем флаг is_redirect, чтобы не проверять user_signs для записей внутри redirect
+        $isInsideRedirect = !empty($userInfo['is_redirect']);
+        $userStatus = $getApproverStatus($userInfo['approver'], null, $isInsideRedirect);
+
+        // DEBUG для документа 181
+        if ($docId == 181) {
+            echo "<!-- DEBUG BEFORE SWITCH: userStatus['status']=" . $userStatus['status'] . ", isInsideRedirect=" . ($isInsideRedirect ? 'YES' : 'NO') . " -->\n";
+        }
 
         switch ($userStatus['status']) {
             case 'approved':
@@ -604,23 +707,108 @@ function getDocumentStatusForIcon(int $userId, ?string $agreementListJson, int $
                 ];
 
             case 'redirected':
+                // DEBUG для документа 181
+                if ($docId == 181) {
+                    echo "<!-- DEBUG IN CASE REDIRECTED -->\n";
+                }
+
                 // Пользователь перенаправил
-                // Проверяем, завершено ли перенаправление
-                $redirectCompleted = true;
-                if (isset($userInfo['approver']['redirect']) && is_array($userInfo['approver']['redirect'])) {
-                    // redirect[] не имеет мета-строки — обходим с индекса 0
-                    foreach ($userInfo['approver']['redirect'] as $redirectApprover) {
-                        if (!isset($redirectApprover['id'])) continue;
-                        $redirectStatus = $getApproverStatus($redirectApprover);
-                        if ($redirectStatus['status'] !== 'approved') {
-                            $redirectCompleted = false;
-                            break;
+                // Проверяем, завершено ли перенаправление РЕКУРСИВНО по всей цепочке
+                $isRedirectCompletedRecursive = function($redirectArr) use (&$isRedirectCompletedRecursive, $getApproverStatus) {
+                    if (!is_array($redirectArr)) return true;
+
+                    foreach ($redirectArr as $rd) {
+                        if (!isset($rd['id'])) continue;
+
+                        $rdStatus = $getApproverStatus($rd, null, true);
+
+                        // Если pending или rejected - цепочка не завершена
+                        if ($rdStatus['status'] === 'pending' || $rdStatus['status'] === 'rejected') {
+                            return false;
                         }
+
+                        // Если redirected - проверяем вложенный redirect рекурсивно
+                        if ($rdStatus['status'] === 'redirected') {
+                            if (isset($rd['redirect']) && is_array($rd['redirect'])) {
+                                if (!$isRedirectCompletedRecursive($rd['redirect'])) {
+                                    return false;
+                                }
+                            } else {
+                                // redirected но нет вложенного redirect - не завершено
+                                return false;
+                            }
+                        }
+
+                        // approved - продолжаем проверку
                     }
+
+                    return true;
+                };
+
+                $redirectCompleted = false;
+                if (isset($userInfo['approver']['redirect']) && is_array($userInfo['approver']['redirect'])) {
+                    $redirectCompleted = $isRedirectCompletedRecursive($userInfo['approver']['redirect']);
                 }
 
                 if ($redirectCompleted) {
-                    // Перенаправление завершено - пользователь должен согласовать заново
+                    // Перенаправление завершено
+                    // ВАЖНО: Проверяем, не завершил ли redirect САМ ПОЛЬЗОВАТЕЛЬ
+                    // Если да - показываем "Вы согласовали", а не "Требуется подпись"
+                    $userApprovedInRedirect = false;
+
+                    $checkUserApprovedInChain = function($redirectArr, $userId) use (&$checkUserApprovedInChain, $getApproverStatus) {
+                        foreach ($redirectArr as $rd) {
+                            if (!isset($rd['id'])) continue;
+
+                            if (intval($rd['id']) === $userId) {
+                                $rdStatus = $getApproverStatus($rd, null, true);
+                                if ($rdStatus['status'] === 'approved') {
+                                    return true;
+                                }
+                            }
+
+                            // Рекурсивно проверяем вложенные redirect
+                            if (isset($rd['redirect']) && is_array($rd['redirect'])) {
+                                if ($checkUserApprovedInChain($rd['redirect'], $userId)) {
+                                    return true;
+                                }
+                            }
+                        }
+                        return false;
+                    };
+
+                    if (isset($userInfo['approver']['redirect']) && is_array($userInfo['approver']['redirect'])) {
+                        $userApprovedInRedirect = $checkUserApprovedInChain($userInfo['approver']['redirect'], $userId);
+                    }
+
+                    if ($userApprovedInRedirect) {
+                        // Пользователь уже согласовал в цепочке redirect
+                        // Показываем статус "Вы согласовали"
+                        if ($documentStatus == 0) {
+                            // Документ ещё на согласовании (есть другие ожидающие)
+                            $title = 'Вы согласовали (ожидание других)';
+                            return [
+                                'icon_class' => 'hourglass_top',
+                                'color' => 'var(--color_02)',
+                                'title' => $title,
+                                'status_text' => 'На согласовании',
+                                'can_approve' => false,
+                                'status_type' => 'user_approved'
+                            ];
+                        } else {
+                            // Документ полностью согласован
+                            return [
+                                'icon_class' => 'task_alt',
+                                'color' => 'var(--green)',
+                                'title' => 'Документ согласован (вы участвовали)',
+                                'status_text' => 'Согласован',
+                                'can_approve' => false,
+                                'status_type' => 'document_approved_user_participated'
+                            ];
+                        }
+                    }
+
+                    // Пользователь НЕ согласовал в redirect - требуется его действие
                     // Проверяем, может ли он действовать сейчас
                     $canActAfterRedirect = true;
 
@@ -671,18 +859,76 @@ function getDocumentStatusForIcon(int $userId, ?string $agreementListJson, int $
                     }
                 } else {
                     // Перенаправление ещё не завершено
-                    return [
-                        'icon_class' => 'forward',
-                        'color' => 'var(--color_02)',
-                        'title' => 'Вы перенаправили',
-                        'can_approve' => false,
-                        'status_type' => 'user_redirected',
-                        'status_text' => 'На согласовании',
-                        'stage' => $userInfo['stage'] ?? ''
-                    ];
+                    // ВАЖНО: Проверяем, есть ли в цепочке redirect запись текущего пользователя со статусом pending
+                    // Если да - показываем "Требуется действие", а не "Вы перенаправили"
+                    $userPendingInRedirect = false;
+
+                    $findUserInRedirectChain = function($redirectArr, $userId) use (&$findUserInRedirectChain, $getApproverStatus) {
+                        foreach ($redirectArr as $rd) {
+                            if (!isset($rd['id'])) continue;
+
+                            if (intval($rd['id']) === $userId) {
+                                $rdStatus = $getApproverStatus($rd, null, true);
+                                if ($rdStatus['status'] === 'pending') {
+                                    return true;
+                                }
+                            }
+
+                            // Рекурсивно проверяем вложенные redirect
+                            if (isset($rd['redirect']) && is_array($rd['redirect'])) {
+                                if ($findUserInRedirectChain($rd['redirect'], $userId)) {
+                                    return true;
+                                }
+                            }
+                        }
+                        return false;
+                    };
+
+                    if (isset($userInfo['approver']['redirect']) && is_array($userInfo['approver']['redirect'])) {
+                        $userPendingInRedirect = $findUserInRedirectChain($userInfo['approver']['redirect'], $userId);
+                    }
+
+                    if ($userPendingInRedirect) {
+                        // Пользователь ожидает в цепочке redirect - требуется его действие
+                        $type = intval($userInfo['approver']['type'] ?? 1);
+                        $title = $type == 1 ? 'Требуется ваша подпись' : 'Требуется ваше согласование';
+
+                        if (!empty($userInfo['stage'])) {
+                            $title .= " (этап {$userInfo['stage']})";
+                        }
+
+                        return [
+                            'icon_class' => 'radio_button_unchecked',
+                            'color' => 'var(--blue)', // СИНИЙ - требуется действие
+                            'title' => $title,
+                            'can_approve' => true,
+                            'status_type' => 'requires_action',
+                            'status_text' => $type == 1 ? 'Требуется подпись' : 'На согласовании',
+                            'stage' => $userInfo['stage'] ?? '',
+                            'urgent' => $userInfo['section_info']['urgent'] ?? '',
+                            'list_type' => $userInfo['list_type'],
+                            'is_redirect' => true
+                        ];
+                    } else {
+                        // Перенаправление активно, но пользователь не ожидает в цепочке
+                        return [
+                            'icon_class' => 'forward',
+                            'color' => 'var(--color_02)',
+                            'title' => 'Вы перенаправили',
+                            'can_approve' => false,
+                            'status_type' => 'user_redirected',
+                            'status_text' => 'На согласовании',
+                            'stage' => $userInfo['stage'] ?? ''
+                        ];
+                    }
                 }
 
             case 'pending':
+                // DEBUG для документа 181
+                if ($docId == 181) {
+                    echo "<!-- DEBUG IN CASE PENDING -->\n";
+                }
+
                 // Пользователь ожидает согласования
                 // Проверяем, может ли пользователь действовать сейчас
                 $canAct = true;
@@ -1002,11 +1248,23 @@ $regs = $gui->getTableData($table->table_name);
                 $agrStatus = getDocumentStatusForIcon($_SESSION['user_id'],
                     $reg->agreementlist, $reg->status, $reg->id);
 
+                // Временная отладка для документа 181
+                if ($reg->id == 181) {
+                    echo "<!-- DOC 181 RENDER: User=" . $_SESSION['user_id'] . ", status_type=" . $agrStatus['status_type'] . ", status_text=" . $agrStatus['status_text'] . " -->\n";
+                }
+
                 // Проверяем количество подписантов
                 $signersValidation = validateSignersCount($reg->agreementlist, intval($reg->documentacial));
 
-                // Если валидация не прошла - всегда показываем предупреждение
-                if (!$signersValidation['valid']) {
+                // ВАЖНО: Если документ отклонён - показываем статус отклонения, даже если валидация не прошла
+                if ($agrStatus['status_type'] == 'user_rejected' || $agrStatus['status_type'] == 'document_rejected') {
+                    $icon = $agrStatus['icon_class'];
+                    $statusText = $agrStatus['status_text'];
+                    $class = 'redText';
+                    $style = ' style="color:var(--red); display: inline;vertical-align: bottom;"';
+                    $title = ' title="' . $agrStatus['title'] . '"';
+                } elseif (!$signersValidation['valid']) {
+                    // Если валидация не прошла - показываем предупреждение
                     $icon = 'warning';
                     $statusText = $signersValidation['error'];
                     $class = 'orange';

@@ -1,27 +1,44 @@
 AddType application/x-font-ttf .ttf
 ErrorDocument 404 /
-
-RewriteEngine On
-
-# Исключить ВСЕ файлы внутри pwa/ и cache/
-RewriteCond %{REQUEST_URI} ^/(pwa|cache)/ [NC]
-RewriteRule ^ - [L]
-
-RewriteBase /
-
-RewriteCond %{REQUEST_FILENAME} !-f
-RewriteCond %{REQUEST_FILENAME} !-d
-
-
-#RewriteRule ^get_file/([0-9]+)/?$ /files/download.php?id=$1 [L,QSA,NC]
-RewriteRule ^(.*)$ index.php?url=$1 [L,QSA]
-#RewriteRule ^([0-9a-zA-Z/_-]+)$ index.php?url=$1 [QSA]
-RewriteRule (.*)\/([^/]+)\.html$ $1/?path=$2 [QSA]
-RewriteRule ([^/]+)\.site$ /site/?id=$1 [QSA]
-RewriteRule ^([0-9a-zA-Z/_-]+)/page([0-9]+)/ $1?pn=$2&%{QUERY_STRING} [QSA]
-
+Options -Indexes
 php_flag display_startup_errors on
 php_flag display_errors on
 php_flag html_errors on
 php_flag log_errors on
 php_value error_log /var/www/html/logs/PHP_errors.log
+
+RewriteEngine On
+
+# Исключить ВСЕ файлы внутри pwa/ и cache/ (отдаём как есть)
+RewriteCond %{REQUEST_URI} ^/(pwa|cache)/ [NC]
+RewriteRule ^ - [L]
+
+RewriteBase /
+
+# Существующие файлы отдаём напрямую (CSS, JS, картинки и т.д.)
+RewriteCond %{REQUEST_FILENAME} -f
+RewriteRule ^ - [L]
+
+# Существующие папки отдаём напрямую (без редиректа)
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+# Специальные правила должны идти ДО основного
+RewriteRule ^get_file/([0-9]+)/?$ /files/download.php?id=$1 [L,QSA,NC]
+
+# Правило для .html файлов
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteRule (.*)\/([^/]+)\.html$ $1/?path=$2 [QSA,L]
+
+# Правило для .site
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteRule ([^/]+)\.site$ /site/?id=$1 [QSA,L]
+
+# Правило для пагинации
+RewriteRule ^([0-9a-zA-Z/_-]+)/page([0-9]+)/$ $1?pn=$2 [QSA,L]
+
+# ОСНОВНОЕ ПРАВИЛО (все остальные запросы в index.php)
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_URI} !^/index\.php
+RewriteRule ^(.*)$ index.php?url=$1 [L,QSA]

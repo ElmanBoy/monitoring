@@ -201,14 +201,62 @@ $units = $db->getRegistry('units');
 // Функция для проверки завершенности этапа
 function checkStageComplete(array $itemArr): bool
 {
+    // Рекурсивная проверка завершённости redirect
+    $isRedirectCompleted = function($redirectArr) use (&$isRedirectCompleted) {
+        if (!is_array($redirectArr) || empty($redirectArr)) return true;
+
+        foreach ($redirectArr as $rd) {
+            if (!isset($rd['id'])) continue;
+            $result = $rd['result'] ?? null;
+
+            if (!$result || !is_array($result)) return false; // Нет результата - незавершено
+
+            $resultId = intval($result['id'] ?? 0);
+
+            if ($resultId === 4) {
+                // Перенаправление - проверяем вложенное
+                if (isset($rd['redirect']) && is_array($rd['redirect'])) {
+                    if (!$isRedirectCompleted($rd['redirect'])) return false;
+                } else {
+                    return false; // Перенаправление без цепочки - незавершено
+                }
+            } elseif ($resultId === 5) {
+                // Отклонение - считаем завершённым
+                continue;
+            } elseif ($resultId === 6) {
+                // Возврат - незавершено
+                return false;
+            } elseif (!in_array($resultId, [1, 2, 3])) {
+                // Неизвестный статус или pending
+                return false;
+            }
+        }
+        return true;
+    };
+
     $itemUsers = [];
     $itemResults = [];
     foreach ($itemArr as $item) {
         if (is_array($item) && isset($item['id'])) {
+            // Пропускаем _is_redirector_repeat записи
+            if (!empty($item['_is_redirector_repeat'])) continue;
+
             $itemUsers[] = $item['id'];
             if (isset($item['result']) && is_array($item['result']) && isset($item['result']['id'])) {
                 $resultId = intval($item['result']['id']);
-                if (!in_array($resultId, [4, 5, 6])) {
+
+                if ($resultId === 4) {
+                    // Перенаправление - проверяем цепочку
+                    if (isset($item['redirect']) && $isRedirectCompleted($item['redirect'])) {
+                        $itemResults[] = $item['result']; // Считаем завершённым
+                    }
+                } elseif ($resultId === 5) {
+                    // Отклонение - прерывает согласование, но этап считается завершённым
+                    $itemResults[] = $item['result'];
+                } elseif ($resultId === 6) {
+                    // Возврат - не считаем завершённым
+                } else {
+                    // 1, 2, 3 - согласовано/подписано
                     $itemResults[] = $item['result'];
                 }
             }

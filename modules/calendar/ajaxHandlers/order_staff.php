@@ -319,7 +319,7 @@ if ($auth->isLogin()) {
             $body_vars['action_period_start'] = $action_period_start;
             $body_vars['action_period_end'] = $action_period_end;
             $body_vars['executor_head'] = $executor_head;//$temp->phraseToGenitive($executor_head, 'nominative');
-            $body_vars['executors'] = implode(";<br>", $executors);
+            $body_vars['executors'] = implode(";</p><p>", $executors);
             //print_r($body_vars);
             $agreement_body = $temp->twig_parse($tmpl->body, $body_vars);
 

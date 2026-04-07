@@ -421,7 +421,9 @@ class Auth
 	 */
 	public function getDefaultPage(): string
     {
-        $last_path = preg_replace('/^\/+|\/+$/', '', $_COOKIE['last_path']);//$_SESSION['login_path']
+        // Декодируем URL из cookie и удаляем слеши в начале/конце
+        $last_path = urldecode($_COOKIE['last_path'] ?? '');
+        $last_path = preg_replace('/^\/+|\/+$/', '', $last_path);
 
         // Очищаем URL от некорректных параметров
         if (strlen($last_path) > 0) {
@@ -432,11 +434,12 @@ class Auth
             $last_path = preg_replace('/[?&]module=(&|$)/', '$1', $last_path);
             $last_path = preg_replace('/[?&]mode=(&|$)/', '$1', $last_path);
 
-            // Удаляем параметр open_dialog=undefined
-            $last_path = preg_replace('/[?&]open_dialog=undefined/', '', $last_path);
+            // Удаляем параметр open_dialog с любым значением (включая JSON)
+            $last_path = preg_replace('/[?&]open_dialog=[^&]*/', '', $last_path);
 
             // Убираем лишние ? и & в конце или начале
             $last_path = preg_replace('/[?&]+$/', '', $last_path);
+            $last_path = preg_replace('/^\?+/', '', $last_path);
             $last_path = preg_replace('/\?&/', '?', $last_path);
 
             // Если остался только домен или пустая строка, выбираем страницу по умолчанию
@@ -454,7 +457,17 @@ class Auth
             return 'roadmap';
         }
 
-        return strlen($last_path) > 0 ? $last_path : 'dashboard';
+        // ВАЖНО: Защита от циклического редиректа - никогда не возвращаем "/" или пустую строку
+        // Всегда возвращаем конкретный модуль
+        if (empty($last_path) || $last_path === '/') {
+            // Для сотрудников объектов контроля (роль ОК, role=5) - roadmap
+            if ($this->haveUserRole(5)) {
+                return 'roadmap';
+            }
+            return 'dashboard';
+        }
+
+        return $last_path;
     }
 
     public function isAdmin(): bool

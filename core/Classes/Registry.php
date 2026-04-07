@@ -1365,6 +1365,7 @@ class Registry
     public function buildAgreementList($itemArr, $section, $users, $urgent_types, $user_signs, $reg, $level = 0, $allSections = null, $initiatorId = 0): string
     {
         $html = '';
+        $html .= "<!-- buildAgreementList v2.1 level=$level -->";
         static $rowNumber = 1;
         $processedUsers = [];
         $level = intval($level);
@@ -1417,21 +1418,38 @@ class Registry
         };
 
         // Функция для проверки, завершено ли перенаправление
-        $isRedirectCompleted = function ($redirectArr) use (&$isRedirectCompleted, $getApproverStatus) {
-            if (!is_array($redirectArr)) return true;
+        $isRedirectCompleted = function ($redirectArr, $debugPrefix = '') use (&$isRedirectCompleted, $getApproverStatus) {
+            $logFile = $_SERVER['DOCUMENT_ROOT'] . '/logs/PHP_errors.log';
+
+            if (!is_array($redirectArr)) {
+                file_put_contents($logFile, "[" . date('Y-m-d H:i:s') . "] " . $debugPrefix . "redirect IS NOT array, returning true\n", FILE_APPEND);
+                return true;
+            }
+
+            if (empty($redirectArr)) {
+                file_put_contents($logFile, "[" . date('Y-m-d H:i:s') . "] " . $debugPrefix . "redirect IS EMPTY, returning true\n", FILE_APPEND);
+                return true;
+            }
 
             // Пропускаем заголовок секции (если есть)
             $startIdx = isset($redirectArr[0]['stage']) ? 1 : 0;
+            file_put_contents($logFile, "[" . date('Y-m-d H:i:s') . "] " . $debugPrefix . "redirect array count=" . count($redirectArr) . ", startIdx=$startIdx, data=" . json_encode($redirectArr) . "\n", FILE_APPEND);
 
             for ($i = $startIdx; $i < count($redirectArr); $i++) {
                 $approver = $redirectArr[$i];
-                if (!isset($approver['id'])) continue;
+                if (!isset($approver['id'])) {
+                    file_put_contents($logFile, "[" . date('Y-m-d H:i:s') . "] " . $debugPrefix . "  [$i] no id, skipping\n", FILE_APPEND);
+                    continue;
+                }
+
+                file_put_contents($logFile, "[" . date('Y-m-d H:i:s') . "] " . $debugPrefix . "  [$i] checking user id=" . $approver['id'] . "\n", FILE_APPEND);
 
                 // ПРОВЕРЯЕМ ТОЛЬКО ПОЛЕ result, БЕЗ user_signs!
                 $result = $approver['result'] ?? null;
 
                 if (!$result || !is_array($result)) {
                     // Нет результата - ждём
+                    file_put_contents($logFile, "[" . date('Y-m-d H:i:s') . "] " . $debugPrefix . "  [$i] NO result, returning FALSE\n", FILE_APPEND);
                     return false;
                 }
 
@@ -1476,7 +1494,29 @@ class Registry
         $sectionUrgent = isset($stageInfo['urgent']) ? $stageInfo['urgent'] : '0';
 
         // Определяем, является ли это секцией подписантов
-        $isSignersSection = ($level == 0 && isset($itemArr[0]['stage']) && $itemArr[0]['stage'] === '');
+        // ВАЖНО: Секция подписантов определяется по stage='', независимо от уровня вложенности
+        // При рекурсивном вызове для redirect нужно проверить stage в $allSections
+        $isSignersSection = false;
+        if ($level == 0) {
+            // На первом уровне проверяем stage в текущей секции
+            $isSignersSection = (isset($itemArr[0]['stage']) && $itemArr[0]['stage'] === '');
+        } elseif ($allSections !== null && is_array($allSections)) {
+            // На вложенных уровнях (redirect) проверяем stage в родительской секции
+            // $section - это индекс секции в $allSections
+            if (isset($allSections[$section][0]['stage'])) {
+                $isSignersSection = ($allSections[$section][0]['stage'] === '');
+            }
+        }
+
+        // DEBUG для level > 0
+        if ($level > 0) {
+            $debugInfo = "<!-- DEBUG isSignersSection: level=$level, section=$section, allSections=" . ($allSections !== null ? 'EXISTS' : 'NULL');
+            if ($allSections !== null && isset($allSections[$section][0]['stage'])) {
+                $debugInfo .= ", stage='" . $allSections[$section][0]['stage'] . "'";
+            }
+            $debugInfo .= ", isSignersSection=" . ($isSignersSection ? 'YES' : 'NO') . " -->";
+            $html .= $debugInfo;
+        }
 
         // Подсчитываем участников первого уровня в секции подписантов (для ограничения добавления)
         $firstLevelCount = 0;
@@ -1785,7 +1825,18 @@ class Registry
                 }
             }
 
-            $html .= '<td' . $padding . $userTitle . ' data-user-id="' . $userId . '">' . $userIcon . $userFio . $editBtn . '</td>';
+            // Добавляем информацию о роли для секции подписантов
+            $roleText = '';
+            if ($isSignersSection && isset($item['role'])) {
+                $role = intval($item['role']);
+                if ($role === 1) {
+                    $roleText = ' <span style="color:#086a9b;font-size:0.9em">(подписывает)</span>';
+                } elseif ($role === 0) {
+                    $roleText = ' <span style="color:#2e7d32;font-size:0.9em">(утверждает)</span>';
+                }
+            }
+
+            $html .= '<td' . $padding . $userTitle . ' data-user-id="' . $userId . '">' . $userIcon . $userFio . $roleText . $editBtn . '</td>';
             $html .= '<td>' . ($urgent_types[$urgent] ?? 'Обычная') . '</td>';
             $html .= '<td>';
 
@@ -1824,6 +1875,17 @@ class Registry
                 if ($isCurrentUser) {
                     $canAct = false;
                     $redirectCompleted = false;
+
+                    // DEBUG: Информация о текущей записи
+                    $isRepeat = !empty($item['_is_redirector_repeat']);
+                    $html .= "<!-- DEBUG CURRENT USER: userId=$userId, isRepeat=" . ($isRepeat ? 'YES' : 'NO') . ", isSignersSection=" . ($isSignersSection ? 'YES' : 'NO') . ", itemIndex=$i -->";
+
+                    // Логируем всю секцию для текущего пользователя
+                    if ($userId == 2) {
+                        $logFile = $_SERVER['DOCUMENT_ROOT'] . '/logs/PHP_errors.log';
+                        file_put_contents($logFile, "[" . date('Y-m-d H:i:s') . "] FULL SECTION for userId=2, itemIndex=$i:\n" . json_encode($itemArr, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT) . "\n", FILE_APPEND);
+                    }
+
                     if ($isAfterRedirect) {
                         // Проверяем, завершено ли перенаправление
                         if (isset($seenUsers[$userId])) {
@@ -1836,12 +1898,31 @@ class Registry
 
                     // ============ СЕКЦИЯ ПОДПИСАНТОВ ============
                     if ($isSignersSection) {
+                        // DEBUG: Проверка условий для показа кнопок
+                        $html .= "<!-- DEBUG SIGNERS: allPreviousStagesCompleted=" . ($allPreviousStagesCompleted ? 'YES' : 'NO') . ", hasAnyRejection=" . ($hasAnyRejection ? 'YES' : 'NO') . " -->";
+
                         // КНОПКИ ПОЯВЛЯЮТСЯ ТОЛЬКО ЕСЛИ ВСЕ ПРЕДЫДУЩИЕ ЭТАПЫ ЗАВЕРШЕНЫ
                         if ($allPreviousStagesCompleted && !$hasAnyRejection) {
                             if ($listType == 1) {
                                 // ПОСЛЕДОВАТЕЛЬНОЕ - проверяем предыдущих подписантов
                                 $canSign = true;
+                                $html .= "<!-- DEBUG SEQ: listType=1, i=$i, startIndex=$startIndex -->";
+
                                 if ($i > $startIndex) {
+                                    // Если это _is_redirector_repeat, находим ПОСЛЕДНЮЮ запись этого пользователя с redirected
+                                    $lastRedirectedIndex = -1;
+                                    if (!empty($item['_is_redirector_repeat'])) {
+                                        for ($k = $i - 1; $k >= $startIndex; $k--) {
+                                            if (isset($itemArr[$k]['id']) && $itemArr[$k]['id'] == $userId && empty($itemArr[$k]['_is_redirector_repeat'])) {
+                                                $kStatus = $getApproverStatus($itemArr[$k]);
+                                                if ($kStatus['status'] === 'redirected') {
+                                                    $lastRedirectedIndex = $k;
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                    }
+
                                     for ($j = $startIndex; $j < $i; $j++) {
                                         if (isset($itemArr[$j]['id'])) {
                                             // Пропускаем оригинальную строку перенаправившего
@@ -1851,15 +1932,25 @@ class Registry
                                                 && empty($itemArr[$j]['_is_redirector_repeat'])) {
                                                 $prevStatus = $getApproverStatus($itemArr[$j]);
                                                 if ($prevStatus['status'] === 'redirected') {
-                                                    if (!$isRedirectCompleted($itemArr[$j]['redirect'] ?? [])) {
-                                                        $canSign = false;
+                                                    // ВАЖНО: Проверяем только ПОСЛЕДНЮЮ запись с redirected
+                                                    if ($j == $lastRedirectedIndex) {
+                                                        $redirectCompleted = $isRedirectCompleted($itemArr[$j]['redirect'] ?? [], "REPEAT_CHECK userId=$userId, index=$j: ");
+                                                        if (!$redirectCompleted) {
+                                                            $canSign = false;
+                                                            $html .= "<!-- DEBUG REPEAT CHECK: userId=$userId, lastRedirectedIndex=$lastRedirectedIndex, redirect NOT completed, canSign=false -->";
+                                                        } else {
+                                                            $html .= "<!-- DEBUG REPEAT CHECK: userId=$userId, lastRedirectedIndex=$lastRedirectedIndex, redirect IS completed, canSign=true -->";
+                                                        }
                                                     }
                                                     continue;
                                                 }
                                             }
                                             $prevStatus = $getApproverStatus($itemArr[$j]);
+                                            $html .= "<!-- DEBUG CHECK PREV j=$j, id=" . ($itemArr[$j]['id'] ?? 'NULL') . ", status=" . $prevStatus['status'] . " -->";
+
                                             if ($prevStatus['status'] !== 'approved' && $prevStatus['status'] !== 'redirected') {
                                                 $canSign = false;
+                                                $html .= "<!-- DEBUG: canSign=false because prev[$j] status=" . $prevStatus['status'] . " -->";
                                                 break;
                                             }
                                             if ($prevStatus['status'] === 'redirected') {
@@ -1876,20 +1967,33 @@ class Registry
                                     }
                                 }
 
+                                $html .= "<!-- DEBUG AFTER CHECKS: canSign=" . ($canSign ? 'YES' : 'NO') . " -->";
+
                                 if ($canSign) {
                                     $canAct = true;
+                                    $html .= "<!-- DEBUG: Rendering buttons for userId=$userId -->";
                                     $html .= "<div class='actions' data-section='" . $section . "'>";
 
-                                    // ПРАВИЛО: подписанты первого уровня могут только подписывать,
-                                    // перенаправленные (level > 0 или isAfterRedirect) могут утверждать
-                                    $isFirstLevelSigner = ($level == 0 && !$isAfterRedirect);
+                                    // ПРАВИЛО: В секции подписантов (stage=''):
+                                    //   - ВСЕ пользователи первого уровня (level=0) → ПОДПИСЫВАЮТ (независимо от role)
+                                    //   - Перенаправленные (level>0) → УТВЕРЖДАЮТ (на выбор: с ЭП или без)
+                                    // В других секциях:
+                                    //   - Все пользователи → УТВЕРЖДАЮТ или ПОДПИСЫВАЮТ по полю type
+                                    $shouldSign = false;
+                                    if ($isSignersSection && $level == 0) {
+                                        // В секции подписантов на первом уровне - всегда подписывают
+                                        $shouldSign = true;
+                                    }
 
-                                    if ($isFirstLevelSigner) {
+                                    // DEBUG
+                                    $html .= "<!-- DEBUG BLOCK1: userId=$userId, level=$level, isSignersSection=" . ($isSignersSection ? 'YES' : 'NO') . ", shouldSign=" . ($shouldSign ? 'YES' : 'NO') . " -->";
+
+                                    if ($shouldSign) {
                                         // Подписант первого уровня: только Подписать, Отклонить, Перенаправить
                                         $html .= "<button class='button icon text green setSign'>" .
                                             "<span class='material-icons'>verified</span>Подписать</button>";
                                     } else {
-                                        // Перенаправленный: Утвердить, Утвердить с ЭП, Отклонить, Перенаправить
+                                        // Перенаправленный или не в секции подписантов: Утвердить, Утвердить с ЭП, Отклонить, Перенаправить
                                         $html .= "<button class='button icon text blue setAgree'>" .
                                             "<span class='material-icons'>task_alt</span>Утвердить</button>";
                                         $html .= "<button class='button icon text green setAgreeSign'>" .
@@ -1900,7 +2004,7 @@ class Registry
                                         "<span class='material-icons'>cancel</span>Отклонить</button>";
 
                                     if ($level > 0) {
-                                        $html .= "<button class='button icon text setReturn' style='color: #e67e22'>" .
+                                        $html .= "<button class='button icon text orange setReturn' style='color: #e67e22'>" .
                                             "<span class='material-icons'>undo</span>Вернуть</button>";
                                     }
 
@@ -1920,6 +2024,7 @@ class Registry
                                         '<span class="material-icons">forward</span>Перенаправить</button>';
                                     $html .= '</div></div><div class="action_result" id="agResult' . $section . '"></div>';
                                 } else {
+                                    $html .= "<!-- DEBUG: NOT rendering buttons, showing wait message -->";
                                     $html .= "<span style='color: #9e9e9e'>Ожидание предыдущего подписанта</span>";
                                 }
                             } else {
@@ -1927,16 +2032,28 @@ class Registry
                                 $canAct = true;
                                 $html .= "<div class='actions' data-section='" . $section . "'>";
 
-                                // ПРАВИЛО: подписанты первого уровня могут только подписывать,
-                                // перенаправленные (level > 0 или isAfterRedirect) могут утверждать
-                                $isFirstLevelSigner = ($level == 0 && !$isAfterRedirect);
+                                // ПРАВИЛО: В секции подписантов (stage=''):
+                                //   - ВСЕ пользователи первого уровня (level=0) → ПОДПИСЫВАЮТ (независимо от role)
+                                //   - Перенаправленные (level>0) → УТВЕРЖДАЮТ (на выбор: с ЭП или без)
+                                // В других секциях:
+                                //   - Все пользователи → УТВЕРЖДАЮТ или ПОДПИСЫВАЮТ по полю type
+                                $shouldSign = false;
+                                if ($isSignersSection && $level == 0) {
+                                    // В секции подписантов на первом уровне - всегда подписывают
+                                    $shouldSign = true;
+                                }
 
-                                if ($isFirstLevelSigner) {
+                                // DEBUG
+                                if ($level > 0) {
+                                    $html .= "<!-- DEBUG BLOCK2: userId=$userId, level=$level, isSignersSection=" . ($isSignersSection ? 'YES' : 'NO') . ", shouldSign=" . ($shouldSign ? 'YES' : 'NO') . " -->";
+                                }
+
+                                if ($shouldSign) {
                                     // Подписант первого уровня: только Подписать, Отклонить, Перенаправить
                                     $html .= "<button class='button icon text green setSign'>" .
                                         "<span class='material-icons'>verified</span>Подписать</button>";
                                 } else {
-                                    // Перенаправленный: Утвердить, Утвердить с ЭП, Отклонить, Перенаправить
+                                    // Перенаправленный или не в секции подписантов: Утвердить, Утвердить с ЭП, Отклонить, Перенаправить
                                     $html .= "<button class='button icon text blue setAgree'>" .
                                         "<span class='material-icons'>task_alt</span>Утвердить</button>";
                                     $html .= "<button class='button icon text green setAgreeSign'>" .
@@ -1947,7 +2064,7 @@ class Registry
                                     "<span class='material-icons'>cancel</span>Отклонить</button>";
 
                                 if ($level > 0) {
-                                    $html .= "<button class='button icon text setReturn' style='color: #e67e22'>" .
+                                    $html .= "<button class='button icon text orange setReturn' style='color: #e67e22'>" .
                                         "<span class='material-icons'>undo</span>Вернуть</button>";
                                 }
 
@@ -2040,14 +2157,36 @@ class Registry
                         if ($canAct && !$hasAnyRejection) {
                             $html .= "<div class='actions' data-section='" . $section . "'>";
 
-                            if ($actionType == 1) {
+                            // ПРАВИЛО: В секции подписантов (stage=''):
+                            //   - ВСЕ пользователи первого уровня (level=0) → ПОДПИСЫВАЮТ (независимо от role)
+                            //   - Перенаправленные (level>0) → УТВЕРЖДАЮТ (на выбор: с ЭП или без)
+                            // В других секциях:
+                            //   - Все пользователи → УТВЕРЖДАЮТ или ПОДПИСЫВАЮТ по полю type
+                            $shouldSign = false;
+                            if ($isSignersSection && $level == 0) {
+                                // В секции подписантов на первом уровне - всегда подписывают
+                                $shouldSign = true;
+                            } elseif (!$isSignersSection && $actionType == 1) {
+                                // Не в секции подписантов, но type=1 - подписание
+                                $shouldSign = true;
+                            }
+
+                            // DEBUG
+                            if ($level > 0) {
+                                $html .= "<!-- DEBUG BLOCK3: userId=$userId, level=$level, isSignersSection=" . ($isSignersSection ? 'YES' : 'NO') .
+                                    ", actionType=$actionType, isAfterRedirect=" . ($isAfterRedirect ? 'YES' : 'NO') .
+                                    ", shouldSign=" . ($shouldSign ? 'YES' : 'NO') . " -->";
+                            }
+
+                            if ($shouldSign) {
                                 $html .= "<button class='button icon text green setSign'>" .
                                     "<span class='material-icons'>verified</span>Подписать</button>";
                             } else {
+                                // Утверждение (с ЭП или без)
                                 $html .= "<button class='button icon text blue setAgree'>" .
-                                    "<span class='material-icons'>task_alt</span>Согласовать</button>";
+                                    "<span class='material-icons'>task_alt</span>Утвердить</button>";
                                 $html .= "<button class='button icon text green setAgreeSign'>" .
-                                    "<span class='material-icons'>verified</span>Согласовать с ЭП</button>";
+                                    "<span class='material-icons'>verified</span>Утвердить с ЭП</button>";
                             }
 
                             $html .= "<button class='button icon text red setReject'>" .
@@ -2055,7 +2194,7 @@ class Registry
 
                             // Кнопка «Вернуть» — только для получателя перенаправления (level > 0)
                             if ($level > 0) {
-                                $html .= "<button class='button icon text setReturn' style='color: #e67e22'>" .
+                                $html .= "<button class='button icon text orange setReturn' style='color: #e67e22'>" .
                                     "<span class='material-icons'>undo</span>Вернуть</button>";
                             }
 

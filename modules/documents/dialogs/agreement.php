@@ -201,7 +201,7 @@ $initialAgreementList = json_decode($tmpl->agreementlist, true) ?? [];
         vertical-align: middle;
     }
     .agreement_list table tbody.notComplete ~ tbody {
-        opacity: .2;
+        opacity: .5;
         cursor: n-resize;
     }
     .agreement_list table tbody.notComplete ~ tbody td .actions,
@@ -322,9 +322,9 @@ $initialAgreementList = json_decode($tmpl->agreementlist, true) ?? [];
                     const isRepeat = agj[i]._is_redirector_repeat;
 
                     // Обрабатываем действие текущего пользователя
-                    // _is_redirector_repeat строки пропускаем только при перенаправлении (result_type=4)
-                    // При подписании/согласовании они должны обрабатываться
-                    const skipRepeat = isRepeat && parseInt(result_type) === 4;
+                    // _is_redirector_repeat строки с result НЕ трогаем при перенаправлении
+                    // Но если у _is_redirector_repeat НЕТ result (pending) - обрабатываем перенаправление
+                    const skipRepeat = isRepeat && hasResult && parseInt(result_type) === 4;
 
                     if (isCurrentUser && !skipRepeat && !appliedViaRedirect) {
                         // Для result_type=6 (возврат) — только если у строки НЕТ result
@@ -353,7 +353,15 @@ $initialAgreementList = json_decode($tmpl->agreementlist, true) ?? [];
                                         const exists = agj[i].redirect.some(
                                             item => parseInt(item.id) === parseInt(vals[v])
                                         );
-                                        if (!exists) agj[i].redirect.push({id: parseInt(vals[v]), type: agj[i].type});
+                                        if (!exists) {
+                                            // ВАЖНО: Передаем role перенаправившего, чтобы перенаправленный
+                                            // выполнял ту же функцию (подписание/утверждение)
+                                            agj[i].redirect.push({
+                                                id: parseInt(vals[v]),
+                                                type: agj[i].type,
+                                                role: agj[i].role || '0'
+                                            });
+                                        }
                                     }
                                     if (level === 0) pendingRepeats.push({index: i, data: originalData});
                                 }
@@ -464,6 +472,11 @@ $initialAgreementList = json_decode($tmpl->agreementlist, true) ?? [];
                         // Обновляем значение скрытого поля актуальными данными с сервера
                         $ag.val(JSON.stringify(answer.resultAgreement[section]));
                         refreshAgreementTable(answer.resultAgreement);
+
+                        // Обновляем главный список документов для отображения актуального статуса
+                        if (typeof el_app !== 'undefined' && typeof el_app.reloadMainContent === 'function') {
+                            el_app.reloadMainContent();
+                        }
                     } else {
                         el_tools.notify('error', 'Ошибка', answer.resultText);
                     }
@@ -618,8 +631,11 @@ $initialAgreementList = json_decode($tmpl->agreementlist, true) ?? [];
                         el_tools.notify('error', 'Ошибка', 'Выберите сотрудника для перенаправления');
                         return;
                     }
+                    // Сразу скрываем кнопки и показываем статус (до отправки запроса)
+                    $actions.hide();
+                    $('#agResult' + section).html("<span style='color: #ff9800'>Перенаправлено<br>" + getActionTime() + '</span>');
+
                     getAgreementData(section, 4);
-                    $('#agResult' + section).html("<span style='color: #086a9b'>Перенаправлено<br>" + getActionTime() + '</span>');
                     inform('Перенаправление', 'Документ перенаправлен. Повторная запись появится после согласования цепочки.');
                 });
 

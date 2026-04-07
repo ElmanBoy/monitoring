@@ -28,7 +28,13 @@ $docNumber      = trim($_POST['params']['doc_number']         ?? '');
 $docDate        = trim($_POST['params']['doc_date']           ?? date('Y-m-d'));
 $actSentDate    = trim($_POST['params']['act_sent_date']      ?? '');
 $introText      = trim($_POST['params']['intro_text']         ?? '');
-$proposalsText  = trim($_POST['params']['proposals_text']     ?? '');
+
+// Получаем предложения как массив и фильтруем пустые
+$proposals      = array_filter(
+    array_map('trim', (array)($_POST['params']['proposals'] ?? [])),
+    function($val) { return strlen($val) > 0; }
+);
+
 $signers        = array_map('intval', (array)($_POST['params']['signers']       ?? []));
 $violationIds   = array_map('intval', (array)($_POST['params']['violation_ids'] ?? []));
 $listType       = intval($_POST['params']['list_type']        ?? 2);
@@ -53,17 +59,10 @@ if ($existReport) {
     die();
 }
 
-// ── Находим министра (роль 6 или первый в иерархии) ──────────
-// Ищем пользователя с ролью министра. Уточните role_id под вашу БД.
-$minister = $db->selectOne('users', " WHERE active = 1 AND roles LIKE '%6%' LIMIT 1");
-// Если министр не найден — берём первого администратора
-if (!$minister) {
-    $minister = $db->selectOne('users', " WHERE active = 1 AND roles LIKE '%1%' LIMIT 1");
-}
-$ministerId = intval($minister->id ?? 0);
-
 // ── Формируем agreementlist ───────────────────────────────────
-// Структура: [[stage_meta, signer1, signer2, ...], [minister_meta, minister]]
+// ВАЖНО: Министр НЕ добавляется при создании!
+// Министр будет добавлен АВТОМАТИЧЕСКИ после полного согласования
+// (см. updateAgreement.php, documentacial=8, finalStatus=1)
 $agreementList = [];
 
 // Секция 1: согласующие (если есть)
@@ -82,18 +81,6 @@ if (count($signers) > 0) {
     if (count($section) > 1) {
         $agreementList[] = $section;
     }
-}
-
-// Секция 2: министр (подпись)
-if ($ministerId > 0) {
-    $agreementList[] = [
-        ['list_type' => 1],
-        [
-            'id'     => $ministerId,
-            'type'   => 1,  // подпись
-            'result' => null,
-        ]
-    ];
 }
 
 // ── Формируем name доклада ────────────────────────────────────
@@ -118,7 +105,7 @@ $reportData = [
     'brief'         => $introText,
     'body'          => json_encode([
         'act_sent_date'     => $actSentDate,
-        'proposals_text'    => $proposalsText,
+        'proposals'         => $proposals,
         'violation_ids'     => $violationIds,
         'include_objections'=> $inclObj,
     ], JSON_UNESCAPED_UNICODE),

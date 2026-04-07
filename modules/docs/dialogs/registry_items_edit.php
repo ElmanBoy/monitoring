@@ -23,7 +23,7 @@ if($busy != []){
 $registrys = $db->getRegistry('registry');
 
 ?>
-<div class="pop_up drag" style='width: 65vw;'>
+<div class="pop_up drag" style='width: 75vw;'>
     <div class="title handle">
 
         <div class="name">Редактировать шаблон документа &laquo;<?=$registry->name?>&raquo;</div>
