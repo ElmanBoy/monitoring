@@ -1110,10 +1110,13 @@ $regs = $gui->getTableData($table->table_name);
 ?>
 <style>
     .tab-pane{
-        z-index: 2;
+        top: 53px !important;
     }
     #button_nav_create{
         display: none;
+    }
+    .main_data, .scroll_wrap{
+        overflow: unset;
     }
 </style>
 <div class="nav">
@@ -1332,8 +1335,8 @@ $regs = $gui->getTableData($table->table_name);
                     <td>'.$documentacial['array'][$reg->documentacial].'</td>
                     <td>' . $reg->comment . '</td>
                     <td class="link" style="justify-content: end;">'.
-                    (($allowEdit) ? '
-                        <span class="material-icons doc_edit" data-plan="'.$edit_plan_id.'" data-ins="'.$edit_ins.'" 
+                    (($allowEdit && intval($reg->documentacial) != 2) ? '
+                        <span class="material-icons doc_edit" data-plan="'.$edit_plan_id.'" data-ins="'.$edit_ins.'"
                         data-id="'.$reg->id.'" data-doctype="'.$reg->documentacial.'" title="Редактирование документа">edit</span>' : '').'
                         <span class="material-icons agreementDoc" data-id="'.$reg->id.'" title="Согласование документа">verified</span>
                         <span class="material-icons viewDoc" data-id="'.$reg->id.'" title="Просмотр документа">picture_as_pdf</span>

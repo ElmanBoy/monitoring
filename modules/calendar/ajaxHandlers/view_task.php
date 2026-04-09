@@ -70,14 +70,6 @@ if ($auth->isLogin()) {
                 }
             }
 
-            // Валидация листа согласования
-            $agCheck = $reg->checkAgreementList($_POST['agreementlist'] ?? [], 'приказа');
-            if (!$agCheck['result']) {
-                $err++;
-                $errStr[]      = $agCheck['message'];
-                $errorFields[] = $agCheck['errField'];
-            }
-
             if (count($checklistValues) > 0 && $err == 0) {
                 $checklistValues['active'] = 1;
                 $checklistValues['author'] = $_SESSION['user_id'];
@@ -175,6 +167,38 @@ if ($auth->isLogin()) {
                     $act_body_own .= $reg->renderCheckResult($ch_table->id, $checklistValues, $block_number);
                     $block_number++;
 
+                    // Проверяем, заполнены ли все чек-листы группы (для уведомления руководителя)
+                    if ($check->is_head != 1) {
+                        // Получаем все задачи группы по данной проверке
+                        $groupTasks = $db->select('checkstaff',
+                            ' WHERE check_uid = ? AND institution = ?',
+                            [$check->check_uid, $insId]
+                        );
+                        $allFilled = true;
+                        foreach ($groupTasks as $gt) {
+                            if (intval($gt->record_id) == 0) {
+                                $allFilled = false;
+                                break;
+                            }
+                        }
+                        // Если все чек-листы заполнены, уведомляем руководителя
+                        if ($allFilled) {
+                            // Находим руководителя проверки
+                            $headTask = $db->selectOne('checkstaff',
+                                ' WHERE check_uid = ? AND institution = ? AND is_head = 1',
+                                [$check->check_uid, $insId]
+                            );
+                            if ($headTask && $headTask->user) {
+                                $ins_name = $ins->name ?? 'учреждению';
+                                $alert->addRecordToPanel(
+                                    intval($headTask->user),
+                                    'Все чек-листы по проверке ' . $ins_name . ' заполнены. Требуется подписание акта.',
+                                    intval($headTask->id),
+                                    'calendar'
+                                );
+                            }
+                        }
+                    }
 
                     //Перестраиваем кэш заданий
                     $reg->buildTasksListsToCache($check->user);
@@ -193,6 +217,15 @@ if ($auth->isLogin()) {
         if (isset($_POST['sign']) && strlen($_POST['sign']) > 0) {
 
             $reg->insertTaskLog($taskId, 'Подписание выполнения');
+
+            // Если file_ids не были установлены в цикле выше (т.е. пользователь сразу нажал "Подписать"),
+            // получаем их из существующей записи checkstaff
+            if (!isset($checkstaffValues['file_ids']) || empty($checkstaffValues['file_ids'])) {
+                $existingCheckstaff = $db->selectOne('checkstaff', ' WHERE id = ?', [$taskId]);
+                if ($existingCheckstaff && !empty($existingCheckstaff->file_ids)) {
+                    $checkstaffValues['file_ids'] = $existingCheckstaff->file_ids;
+                }
+            }
 
             //Получаем данные плана, в рамках которого делается акт
             $plan = $db->selectOne('checksplans', ' WHERE uid = ? ORDER BY version DESC LIMIT 1', [$check->check_uid]);
@@ -274,6 +307,9 @@ if ($auth->isLogin()) {
                 $director_position = trim($directorUser->position);
             }
 
+            // Декодируем HTML-сущности в названии учреждения
+            $insName = html_entity_decode($insName, ENT_QUOTES, 'UTF-8');
+
             $agreement_header = '';
             $header_vars = [
                 'order_date'         => $date->correctDateFormatFromMysql($order_date),
@@ -293,6 +329,21 @@ if ($auth->isLogin()) {
             ];
             $agreement_header .= $temp->twig_parse($tmpl->header, $header_vars);
 
+            // Формируем результаты чек-листа руководителя (если еще не сформированы)
+            if (empty($act_body_own)) {
+                $head_task = $db->selectOne('tasks', ' WHERE id = ?', [$check->task_id]);
+                $head_checklists = $db->select('checklists', ' WHERE id IN (' .
+                    implode(', ', json_decode($head_task->sheet)) . ')'
+                );
+                $head_block_number = 1;
+                foreach ($head_checklists as $hch) {
+                    $head_data = $db->selectOne($hch->table_name, ' WHERE id = ?', [$check->record_id]);
+                    if ($head_data) {
+                        $act_body_own .= $reg->renderCheckResult($hch->id, (array)$head_data, $head_block_number);
+                        $head_block_number++;
+                    }
+                }
+            }
 
             //Получение результатов чек-листов остальных сотрудников
             //Находим задачу в checkstaff
@@ -316,6 +367,19 @@ if ($auth->isLogin()) {
             }
 
 
+            // Отладка: логируем содержимое act_body
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/logs/PHP_errors.log',
+                "[" . date('Y-m-d H:i:s') . "] ACT BODY DEBUG:\n" .
+                "act_body_own length: " . strlen($act_body_own) . "\n" .
+                "act_body_other length: " . strlen($act_body_other) . "\n" .
+                "Total act_body length: " . strlen($act_body_own . $act_body_other) . "\n" .
+                "globalMin: " . $globalMin . "\n" .
+                "globalMax: " . $globalMax . "\n" .
+                "check_period_start: " . $check_period_start . "\n" .
+                "check_period_end: " . $check_period_end . "\n\n",
+                FILE_APPEND
+            );
+
             $body_vars = [
                 'institution' => $insName,
                 'check_period_start' => $globalMin,
@@ -323,11 +387,11 @@ if ($auth->isLogin()) {
                 'verifiable_start' => $date->correctDateFormatFromMysql($check_period_start),
                 'verifiable_end' => $date->correctDateFormatFromMysql($check_period_end),
                 'order_number' => $order_number,
-                'order_date' => $order_date,
+                'order_date' => $date->correctDateFormatFromMysql($order_date),
                 'head_fio' => $head_fio,
                 'head_position' => $head_position,
                 'act_body' => $act_body_own . $act_body_other,
-                'violations' => $violation_items,
+                'violations' => $violation_items ?? [],
                 'list_executors' => implode(',</p><p>', $check_executors)
             ];
             /*$body_vars['institution'] = $insName;
@@ -403,8 +467,19 @@ if ($auth->isLogin()) {
             $_POST['agreementtemplate'] = null;  // шаблон согласования не нужен для акта
             $_POST['check_period']      = $check_period_start . ' - ' . $check_period_end;
             $_POST['action_period']     = $check_period_start . ' - ' . $check_period_end;
-            $_POST['file_ids']          = $_POST['file_ids'] ?? '[]';
+            // Передаем file_ids, которые были сохранены в checkstaff (строки 116-138)
+            $_POST['file_ids']          = $checkstaffValues['file_ids'] ?? ($_POST['file_ids'] ?? '[]');
             $_POST['executors_list']    = $_POST['executors_list'] ?? [];
+
+            // Отладка: записываем в лог, что приходит в agreementlist
+            file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/logs/PHP_errors.log',
+                "[" . date('Y-m-d H:i:s') . "] view_task.php agreementlist DEBUG:\n" .
+                "isset: " . (isset($_POST['agreementlist']) ? 'YES' : 'NO') . "\n" .
+                "is_array: " . (is_array($_POST['agreementlist'] ?? null) ? 'YES' : 'NO') . "\n" .
+                "count: " . (isset($_POST['agreementlist']) ? count($_POST['agreementlist']) : '0') . "\n" .
+                "content: " . print_r($_POST['agreementlist'] ?? 'NULL', true) . "\n\n",
+                FILE_APPEND
+            );
 
             $docCreateResult = $reg->createDocument($_POST, $existingActId);
 

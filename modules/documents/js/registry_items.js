@@ -105,7 +105,8 @@ var el_documents_registry = {
 
         $(".viewDoc").off("click").on("click", function () {
             let taskId = $(this).data("id");
-            el_app.dialog_open("planPdf", {docId: taskId}, "documents");
+            let docType = $(this).data("doctype"); // Получаем тип документа
+            el_app.dialog_open("planPdf", {docId: taskId, docType: docType}, "documents");
         });
         $(".agreementDoc").off("click").on("click", function () {
             let taskId = $(this).data("id");

@@ -105,9 +105,9 @@ if($orderId > 0) {
                            value='" . $dates . "'>
                 </div>
             </div>
-            <div class='item w_50'>
-                <select data-label='Шаблон задачи' name='tasks[]'>
-                    " . $gui->buildSelectFromRegistry($tasks['result'], [$task], true)."
+            <div class='item w_100'>
+                <select data-label='Шаблоны задач' name='tasks[]' multiple class='chosen-select'>
+                    " . $gui->buildSelectFromRegistry($tasks['result'], [$task], false)."
                 </select>
             </div>
             <div class='item w_50'>

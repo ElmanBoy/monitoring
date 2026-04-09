@@ -43,17 +43,17 @@ if($err == 0) {
         $registry[$f['field_name']] = $value;
     }
 
-    $result = $db->update($table->table_name, $rowId, $registry);
+    $updateResult = $db->update($table->table_name, $rowId, $registry);
+    $result = $updateResult['result'];
 
-    try {
+    if ($result) {
         $message = 'Пользователь успешно изменён.
         <script>
         el_app.reloadMainContent();
         el_app.dialog_close("registry_items_edit");
         </script>';
-    } catch (\RedBeanPHP\RedException $e) {
-        $result = false;
-        $message = $e->getMessage();
+    } else {
+        $message = $updateResult['resultText'];
     }
 }else{
     $message = '<strong>Ошибка:</strong>&nbsp; '.implode('<br>', $errStr);

@@ -461,6 +461,7 @@ select.error~.el_data .el_input{
     padding: 0 0 0 33px;
     width: 100%;
     position: sticky;
+    top: 0;
     z-index: 100;
     background: #fff;
 }

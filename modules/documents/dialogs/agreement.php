@@ -234,7 +234,7 @@ $initialAgreementList = json_decode($tmpl->agreementlist, true) ?? [];
         <div class="button icon close"><span class="material-icons">close</span></div>
     </div>
     <div class="pop_up_body">
-        <ul class="tab-pane">
+        <ul class="tab-pane" style="top:48px">
             <li id="tab_agreement" class="active">Согласование</li>
             <li id="tab_preview">Предпросмотр</li>
         </ul>

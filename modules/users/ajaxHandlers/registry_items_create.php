@@ -87,7 +87,8 @@ if($err == 0) {
             </script>';
         } catch (\RedBeanPHP\RedException $e) {
             $result = false;
-            $message = $db->handleDbException($e);
+            $error = $db->handleDbException($e);
+            $message = $error['resultText'];
             error_log("[REGISTRY_CREATE] Exception: " . $e->getMessage());
         }
     } else {

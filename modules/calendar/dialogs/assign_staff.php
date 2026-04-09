@@ -265,6 +265,7 @@ if ($auth->isLogin()) {
                                 $staff_number = 1;
                                 foreach ($exist_task as $chStaff) {
                                     $staffDates = $chStaff->dates;
+                                    // task_id теперь jsonb - получаем массив ID
                                     $staffTask = $chStaff->task_id;
                                     $staffFio = trim($users['array'][$chStaff->user][0]) . ' '
                                         . trim($users['array'][$chStaff->user][1]) . ' '
@@ -293,9 +294,18 @@ if ($auth->isLogin()) {
                                                        value="<?= $staffDates ?>">
                                             </div>
                                         </div>
-                                        <div class='item w_50'>
-                                            <select data-label='Шаблон задачи' name='tasks[]'>
-                                                <?= $gui->buildSelectFromRegistry($tasks['result'], [$staffTask], true) ?>
+                                        <div class='item w_100'>
+                                            <select data-label='Шаблоны задач' name='tasks[]' multiple class='chosen-select'>
+                                                <?php
+                                                // Преобразуем task_id из jsonb в массив для множественного выбора
+                                                $selectedTasks = [];
+                                                if (is_string($staffTask) && substr($staffTask, 0, 1) === '[') {
+                                                    $selectedTasks = json_decode($staffTask, true) ?: [];
+                                                } elseif (is_numeric($staffTask)) {
+                                                    $selectedTasks = [$staffTask];
+                                                }
+                                                echo $gui->buildSelectFromRegistry($tasks['result'], $selectedTasks, false);
+                                                ?>
                                             </select>
                                         </div>
                                         <div class='item w_50'>

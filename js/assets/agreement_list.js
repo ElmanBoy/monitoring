@@ -307,6 +307,22 @@ var agreement_list = {
                         $(this).closest(".sections").find("[name^='urgent[']:checked").val(),
                     sign_type = stage === "" ? 1 : 2;
 
+                // Определяем роль для нового участника
+                let defaultRole = "1"; // По умолчанию "Подписывает"
+                let existingSigners = $agreement_list.find("li");
+
+                // Если это секция подписантов и уже есть участники
+                if (stage === "" && existingSigners.length > 0 && !oneSignOnly) {
+                    // Получаем роль первого участника
+                    let firstRole = existingSigners.first().find("select.role").val();
+                    // Новому участнику назначаем противоположную роль
+                    if (firstRole === "1") {
+                        defaultRole = "0"; // Утверждает
+                    } else if (firstRole === "0") {
+                        defaultRole = "1"; // Подписывает
+                    }
+                }
+
                 $agreement_list.append("<li data-id='" + $users.val() + "' data-type='" + sign_type + "' data-urgent='"
                     + approve_types + "'>"
                     + "<ruby title='" + user_title + "'>" + $users.find('option:selected').html() + "</ruby>" +
@@ -317,6 +333,12 @@ var agreement_list = {
                         "<option value='1'>Подписывает</option></select>" : "") +
                     "<span class='material-icons drag_handler' title='Переместить'>drag_handle</span>" +
                     "<span class='material-icons clear' title='Удалить'>close</span></li>");
+
+                // Устанавливаем роль для нового участника
+                if (stage === "" && !oneSignOnly) {
+                    $agreement_list.find("li:last select.role").val(defaultRole);
+                }
+
                 if (stage === "" && oneSignOnly){
                     agreement_list.signersCount++;
                     let ministryHead = "Министр социального развития Московской области",
@@ -539,6 +561,64 @@ var agreement_list = {
             }
         }
         return false;
+    },
+
+    /**
+     * Проверяет корректность ролей в списке подписантов
+     * Для документов с несколькими подписантами должен быть 1 утверждающий и 1 подписывающий
+     * @returns {object} {valid: boolean, message: string}
+     */
+    validateSignerRoles: function() {
+        let documentacial = parseInt($("[name=documentacial]").val());
+        let oneSignOnly = $.inArray(documentacial, agreement_list.oneSignerDocumentacial) > -1;
+
+        // Для документов с одним подписантом проверка не требуется
+        if (oneSignOnly) {
+            return {valid: true, message: ''};
+        }
+
+        // Проверяем секцию подписантов
+        let $signersSection = $(".sections.signers");
+        if ($signersSection.length === 0) {
+            return {valid: true, message: ''};
+        }
+
+        let $roles = $signersSection.find(".role");
+        if ($roles.length < 2) {
+            // Если меньше двух подписантов, проверка не требуется
+            return {valid: true, message: ''};
+        }
+
+        let approvers = 0;  // Утверждает (role=0)
+        let signers = 0;    // Подписывает (role=1)
+
+        $roles.each(function() {
+            let roleVal = $(this).val();
+            if (roleVal === "0") {
+                approvers++;
+            } else if (roleVal === "1") {
+                signers++;
+            }
+        });
+
+        // Должно быть ровно 1 утверждающий и 1 подписывающий
+        if (approvers === 0 && signers === 0) {
+            return {valid: false, message: 'Не указаны роли подписантов. Должен быть один утверждающий и один подписывающий.'};
+        }
+        if (approvers === 0) {
+            return {valid: false, message: 'Не указан утверждающий. Один из подписантов должен утверждать документ.'};
+        }
+        if (signers === 0) {
+            return {valid: false, message: 'Не указан подписывающий. Один из подписантов должен подписывать документ.'};
+        }
+        if (approvers > 1) {
+            return {valid: false, message: 'Утверждающий может быть только один.'};
+        }
+        if (signers > 1) {
+            return {valid: false, message: 'Подписывающий может быть только один.'};
+        }
+
+        return {valid: true, message: ''};
     }
 
 }

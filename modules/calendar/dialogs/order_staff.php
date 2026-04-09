@@ -252,7 +252,7 @@ if ($auth->isLogin()) {
                     <input type='hidden' name='checkPeriod' value="<?= $checkPeriod ?>">
                     <input type="hidden" name="doc_status" value="<?= $doc_status ?>">
 
-                    <ul class='tab-pane' style=''>
+                    <ul class='tab-pane' style='top:48px'>
                         <li id='tab_order' class='active'>Приказ</li>
                         <li id='tab_agreement'>Согласование</li>
                         <li id='tab_preview' style="display: none">Предпросмотр</li>

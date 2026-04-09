@@ -267,7 +267,8 @@
     overflow-y: auto;
     /*! height: 100vh; */
     overflow-x: hidden;
-    scrollbar-width: thin;
+    /*scrollbar-width: thin;
+     scrollbar-color: #03314b #096f9d;*/
     max-height: 95vh;
     height: 100vh;
     margin-top: 52px;
@@ -275,50 +276,50 @@
 
 
 .main_nav .item a {
-    text-align: center;
-    padding: 1rem 0.5rem;
-    font-size: 0.75rem;
-    position: relative;
+text-align: center;
+padding: 1rem 0.5rem;
+font-size: 0.75rem;
+position: relative;
 }
 
 .main_nav .item a .alert{
-    height: 20px;
-    width: 20px;
-    position: absolute;
-    top: 4px;
-    right: 4px;
-    background: #78909d;
-    border-radius: 16px;
-    line-height: 20px;
-    color: #fff;
+height: 20px;
+width: 20px;
+position: absolute;
+top: 4px;
+right: 4px;
+background: #78909d;
+border-radius: 16px;
+line-height: 20px;
+color: #fff;
 }
 
 .link .alert{
-    height: 20px;
-    width: 20px;
-    position: absolute;
-    top: 0px;
-    right: -10px;
-    background: #78909d;
-    border-radius: 16px;
-    line-height: 20px;
-    color: #fff;
-    text-align: center;
+height: 20px;
+width: 20px;
+position: absolute;
+top: 0px;
+right: -10px;
+background: #78909d;
+border-radius: 16px;
+line-height: 20px;
+color: #fff;
+text-align: center;
 }
 
 .main_nav .item:hover {
-    color: var(--color_01);
+color: var(--color_01);
 }
 
 .main_nav .item .active {
-    background: var(--color_04);
-    color: var(--color_01);
+background: var(--color_04);
+color: var(--color_01);
 }
 .main_nav .item a:focus{
-	background: var(--color_04);
+background: var(--color_04);
 }
 .main_nav .logo {
-    /*! margin: 0 0 2rem 0; */
+/*! margin: 0 0 2rem 0; */
     /*! position: sticky; */
     /*! top: 0; */
     /*! z-index: 3; */

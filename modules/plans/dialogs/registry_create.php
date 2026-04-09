@@ -33,7 +33,7 @@ $reg = new Registry();
     <div class="pop_up_body">
         <form class="ajaxFrm" id="registry_create" onsubmit="return false">
             <input type='hidden' name='documentacial' value='3'>
-            <ul class='tab-pane' style=''>
+            <ul class='tab-pane' style='top: 48px;'>
                 <li id='tab_plan' class='active'>План</li>
                 <li id='tab_agreement'>Согласование</li>
                 <li id='tab_preview' style='display: none'>Предпросмотр</li>

@@ -534,9 +534,17 @@ class Notifications
                     'text' => $letterText . '<p>&nbsp;</p><p><a href="https://monitoring.msr.mosreg.ru/documents?open_dialog=' . $documentId . '">Открыть лист согласования</a></p>'
                 ]
             );
-            return $this->mail->send($executorEmail, $caption,
+            $mailSent = $this->mail->send($executorEmail, $caption,
                 $letter_body, 'noreply@mosreg.ru', 'html', 'smtp', '', 'noreply@mosreg.ru'
             );
+
+            if (!$mailSent) {
+                error_log('[УВЕДОМЛЕНИЕ] Ошибка отправки email для пользователя ' . $signerId . ' (' . $executorFIO . ') на ' . $executorEmail);
+            }
+
+            return $mailSent;
+        } else {
+            error_log('[УВЕДОМЛЕНИЕ] Email не указан для пользователя ' . $signerId . ' (' . $executorFIO . '). Уведомление отправлено только в панель.');
         }
 
         return true;

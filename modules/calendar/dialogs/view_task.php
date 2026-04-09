@@ -38,10 +38,31 @@ if ($chStaff->object_type == 1) {
 //Справочник ОУСР (если они задействованы)
 $ousr = $db->getRegistry('ousr');
 
-//Получение id чек-листов из задачи
-$task = $db->selectOne('tasks', ' WHERE id = ?', [$chStaff->task_id]);
+//Получение id чек-листов из задач (теперь массив задач)
+$taskIds = json_decode($chStaff->task_id, true);
+if (!is_array($taskIds)) {
+    $taskIds = [$chStaff->task_id]; // обратная совместимость
+}
+
+// Собираем все чек-листы из всех задач
+$allChecklistIds = [];
+foreach ($taskIds as $singleTaskId) {
+    $task = $db->selectOne('tasks', ' WHERE id = ?', [intval($singleTaskId)]);
+    if ($task && $task->sheet) {
+        $sheetIds = json_decode($task->sheet, true);
+        if (is_array($sheetIds)) {
+            $allChecklistIds = array_merge($allChecklistIds, $sheetIds);
+        }
+    }
+}
+$allChecklistIds = array_unique($allChecklistIds);
+
 //Получение чек-листов
-$checklist = $db->select('checklists', ' WHERE id IN (' . implode(', ', json_decode($task->sheet)) . ')');
+if (count($allChecklistIds) > 0) {
+    $checklist = $db->select('checklists', ' WHERE id IN (' . implode(', ', $allChecklistIds) . ')');
+} else {
+    $checklist = [];
+}
 //Получаем тип проверки для данного учреждения из плана
 $plan_uid = $chStaff->check_uid;
 $plan = $db->selectOne('checksplans', ' WHERE uid = ? ORDER BY version DESC LIMIT 1', [$plan_uid]);
@@ -68,8 +89,8 @@ $users = $db->getRegistry('users', "where roles <> '2' ORDER BY surname, name, m
 //echo '<pre>'.$taskId;print_r($editData);echo '</pre>';
 
 //Если такой акт уже есть
-$agreement_data = $db->selectOne('agreement', " WHERE documentacial = 2 AND 
-source_table = 'checkinstitutions' AND source_id = " . $insId
+$agreement_data = $db->selectOne('agreement', " WHERE documentacial = 2 AND
+source_table = 'checkinstitutions' AND source_id = ? AND plan_id = ?", [$insId, $plan->id]
 );
 $objections_data   = json_decode($agreement_data->objections ?? '{}', true);
 $objections_text   = $objections_data['text']  ?? '';
@@ -132,7 +153,7 @@ if ($auth->isLogin()) {
                     <?
                     if (intval($chStaff->is_head) == 1) {
                         ?>
-                        <ul class='tab-pane'>
+                        <ul class='tab-pane' style="top:48px">
                             <li id='tab_my' class='active'>Мой чек-лист</li>
                             <li id='tab_otherCheckLists'>Остальные чек-листы</li>
                             <li id='tab_act'>Акт</li>
@@ -171,15 +192,38 @@ if ($auth->isLogin()) {
                                     $users['array'][$other->user][1] . ' ' .
                                     $users['array'][$other->user][2] .
                                     '</span></div>';
-                                $otherTask = $db->selectOne('tasks', ' WHERE id = ?', [$other->task_id]);
-                                $otherChecklist = $db->select('checklists', ' WHERE id IN (' . implode(', ',
-                                        json_decode($otherTask->sheet)
-                                    ) . ')'
-                                );
+
+                                // Получаем все задачи для этого проверяющего
+                                $otherTaskIds = json_decode($other->task_id, true);
+                                if (!is_array($otherTaskIds)) {
+                                    $otherTaskIds = [$other->task_id];
+                                }
+
+                                // Собираем все чек-листы из задач
+                                $otherChecklistIds = [];
+                                foreach ($otherTaskIds as $otherSingleTaskId) {
+                                    $otherTask = $db->selectOne('tasks', ' WHERE id = ?', [intval($otherSingleTaskId)]);
+                                    if ($otherTask && $otherTask->sheet) {
+                                        $sheetIds = json_decode($otherTask->sheet, true);
+                                        if (is_array($sheetIds)) {
+                                            $otherChecklistIds = array_merge($otherChecklistIds, $sheetIds);
+                                        }
+                                    }
+                                }
+                                $otherChecklistIds = array_unique($otherChecklistIds);
+
+                                $otherChecklist = [];
+                                if (count($otherChecklistIds) > 0) {
+                                    $otherChecklist = $db->select('checklists', ' WHERE id IN (' . implode(', ', $otherChecklistIds) . ')');
+                                }
                                 $ovi = 0;
                                 $otherVioArr = [];
                                 foreach ($otherChecklist as $index => $ch) {
                                     $otherEditData = $db->selectOne($ch->table_name, ' WHERE id = ? LIMIT 1', [$other->record_id]);
+                                    // Добавляем файлы из checkstaff к данным чек-листа
+                                    if (!is_null($other->file_ids)) {
+                                        $otherEditData->file_ids = json_decode($other->file_ids);
+                                    }
                                     $otherViolations = $db->select('checksviolations',
                                         'WHERE tasks = ? AND checklist = ?', [$id, $index]
                                     );
@@ -204,6 +248,10 @@ if ($auth->isLogin()) {
                                     echo $reg->buildChecklist($ch->id, [], (array)$otherEditData,
                                         'result', $otherBlockNumber
                                     );
+                                    // Добавляем отображение файлов для чек-листа другого проверяющего
+                                    if (isset($otherEditData->file_ids) && is_array($otherEditData->file_ids) && count($otherEditData->file_ids) > 0) {
+                                        echo $reg->renderFileInput([], ['file_ids' => $otherEditData->file_ids], 'result');
+                                    }
                                     $otherBlockNumber++;
                                 }
                             }
@@ -310,8 +358,9 @@ if ($auth->isLogin()) {
                                 </h3>
                             </div>
                             <?
-                            $doc = $db->selectOne('agreement', " WHERE source_table = 'checkstaff' AND source_id = ?", [$taskId]);
-                            echo $reg->buildForm(67, [], (array)$doc);
+                            // Используем $agreement_data, который уже загружен выше (строка 71-73)
+                            // Это акт для данного учреждения (source_table = 'checkinstitutions')
+                            echo $reg->buildForm(67, [], (array)$agreement_data);
                             ?>
                         </div>
                         <?
@@ -534,7 +583,7 @@ if ($auth->isLogin()) {
                 </form>
             </div>
         </div>
-        <!--script src="/modules/calendar/js/registry.js"></script-->
+        <script src="/modules/calendar/js/registry.js"></script>
         <script src='/js/assets/agreement_list.js'></script>
         <script>
             $(document).trigger('task_viewed', [{taskId: <?=$taskId?>}]);
@@ -593,6 +642,78 @@ if ($auth->isLogin()) {
                     return allFilled;
                 }
 
+                // Проверка заполненности листа согласования (для руководителя)
+                function agreementListFilled() {
+                    // Проверяем скрытое поле agreementlist[]
+                    let $agreementFields = $('[name="agreementlist[]"]');
+                    let hasSigners = false;
+                    let totalParticipants = 0;
+
+                    console.log('Checking agreement list, found fields:', $agreementFields.length);
+
+                    // Проверяем каждую секцию
+                    $agreementFields.each(function() {
+                        let value = $(this).val();
+                        console.log('Agreement field value:', value);
+
+                        if (!value || value.trim() === '') {
+                            return true; // continue
+                        }
+
+                        try {
+                            let section = JSON.parse(value);
+                            if (!Array.isArray(section)) {
+                                return true; // continue
+                            }
+
+                            console.log('Parsed section:', section);
+
+                            // Проходим по участникам секции
+                            for (let i = 0; i < section.length; i++) {
+                                let item = section[i];
+                                // Пропускаем мета-строки (stage, list_type)
+                                if (!item.id) {
+                                    continue;
+                                }
+                                totalParticipants++;
+                                // Проверяем наличие подписантов (type=1)
+                                if (parseInt(item.type) === 1) {
+                                    hasSigners = true;
+                                }
+                            }
+                        } catch (e) {
+                            console.error('Error parsing agreementlist:', e);
+                        }
+                    });
+
+                    console.log('Total participants:', totalParticipants, 'Has signers:', hasSigners);
+
+                    if (totalParticipants === 0) {
+                        console.log('Failed: no participants');
+                        return false;
+                    }
+
+                    if (!hasSigners) {
+                        console.log('Failed: no signers');
+                        return false;
+                    }
+
+                    // Проверяем корректность ролей подписантов
+                    let roleValidation = agreement_list.validateSignerRoles();
+                    console.log('Role validation:', roleValidation);
+
+                    if (!roleValidation.valid) {
+                        // Если роли некорректны, показываем конкретное сообщение
+                        setTimeout(function() {
+                            el_tools.notify(false, 'Ошибка', roleValidation.message);
+                        }, 100);
+                        return false;
+                    }
+
+                    console.log('Agreement list validation passed');
+                    return true;
+                }
+
                 $('#task_save').on('click', function (e) {
                     if (!checklistFilled()) {
                         e.preventDefault();
@@ -625,6 +746,14 @@ if ($auth->isLogin()) {
                         e.preventDefault();
                         e.stopImmediatePropagation();
                         el_tools.notify(false, 'Ошибка', 'Не все члены группы заполнили свои чек-листы. Подписание невозможно.');
+                        return false;
+                    }
+                    // Проверяем заполненность листа согласования
+                    if (!agreementListFilled()) {
+                        e.preventDefault();
+                        e.stopImmediatePropagation();
+                        el_tools.notify(false, 'Ошибка', 'Укажите список согласующих и подписантов для акта.');
+                        $('#tab_agreement').trigger('click');
                         return false;
                     }
                     <?php endif; ?>

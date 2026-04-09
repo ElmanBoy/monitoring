@@ -197,6 +197,15 @@ if ($auth->isLogin()) {
                                                 <div class="ins-tree__label">План проверок</div>
                                                 <a href="" class="viewDocument ins-tree__title" data-id="<?= $id ?>"
                                                    data-type="3"><?= $name ?></a>
+                                                <?php if (!isset($ordersNames[$id])): ?>
+                                                    <div class="ins-tree__actions">
+                                                        <a href="" class="create_order" data-plan="<?= $id ?>"
+                                                           data-ins="<?= $insId ?>" data-uid="<?= $plan_uid[$id] ?>">
+                                                            <span class="material-icons">add_circle</span>
+                                                            Создать приказ
+                                                        </a>
+                                                    </div>
+                                                <?php endif; ?>
                                             </div>
                                         </div>
 
@@ -576,6 +585,14 @@ if ($auth->isLogin()) {
                 let taskId = $(this).data('id'),
                     docType = $(this).data("type");
                 el_app.dialog_open('planPdf', {docId: taskId, docType: docType}, 'documents');
+            });
+
+            $('.create_order').off('click').on('click', function (e) {
+                e.preventDefault();
+                let planId = $(this).data('plan'),
+                    insId = $(this).data('ins'),
+                    uid = $(this).data('uid');
+                el_app.dialog_open('order_staff', {plan_id: planId, ins_id: insId, uid: uid});
             });
 
             $(document).on("files_has_added", function () {

@@ -92,10 +92,22 @@ if ($auth->isLogin()) {
                     $errStr[] = 'Укажите даты проверки для сотрудника №' . ($i + 1);
                     $errorFields[] = 'dates[' . $i . ']';
                 }
-                if (intval($_POST['tasks'][$i]) == 0) {
+                // Проверяем что выбрана хотя бы одна задача
+                if (!isset($_POST['tasks'][$i]) || !is_array($_POST['tasks'][$i]) || count($_POST['tasks'][$i]) == 0) {
                     $err++;
-                    $errStr[] = 'Укажите шаблон задачи для сотрудника №' . ($i + 1);
+                    $errStr[] = 'Укажите хотя бы одну задачу для сотрудника №' . ($i + 1);
                     $errorFields[] = 'tasks[' . $i . ']';
+                } else {
+                    // Валидация: проверяем что все выбранные задачи существуют в БД
+                    foreach ($_POST['tasks'][$i] as $taskId) {
+                        $taskExists = $db->selectOne('tasks', ' WHERE id = ?', [intval($taskId)]);
+                        if (!$taskExists) {
+                            $err++;
+                            $errStr[] = 'Задача с ID ' . intval($taskId) . ' не найдена в базе данных';
+                            $errorFields[] = 'tasks[' . $i . ']';
+                            break;
+                        }
+                    }
                 }
                 if (isset($_POST['is_head'][$i]) && intval($_POST['is_head'][$i]) == 1) {
                     $is_head_count++;
@@ -192,6 +204,10 @@ if ($auth->isLogin()) {
                 $remindDateTime = str_replace('T', ' ', $remindDateRaw);
                 $remindComment = htmlspecialchars($_POST['comment'][$i] ?? '');
 
+                // Преобразуем массив task_id в jsonb
+                $taskIds = is_array($_POST['tasks'][$i]) ? $_POST['tasks'][$i] : [$_POST['tasks'][$i]];
+                $taskIds = array_map('intval', $taskIds);
+
                 $ans = [
                     'created_at' => date('Y-m-d H:i:s'),
                     'author' => intval($_SESSION['user_id']),
@@ -200,7 +216,7 @@ if ($auth->isLogin()) {
                     'order_id' => $orderId,//Это приходит из формы
                     'user' => intval($_POST['executors'][$i]),//Это приходит из формы
                     'dates' => $_POST['dates'][$i],//Это приходит из формы
-                    'task_id' => intval($_POST['tasks'][$i]),//Это приходит из формы
+                    'task_id' => json_encode($taskIds),//Массив ID задач в формате jsonb
                     'institution' => $insId,//Это приходит из формы
                     'is_head' => intval($_POST['is_head'][$i]),//Это приходит из формы
                     //'ministry' => intval($_POST['ministries'][$i]),
@@ -260,7 +276,7 @@ if ($auth->isLogin()) {
                         // Уведомление по email — только если изменились значимые поля задания
                         $hasChanges = (
                             trim($oldRecord->dates ?? '') !== trim($ans['dates']) ||
-                            intval($oldRecord->task_id ?? 0) !== intval($ans['task_id'])
+                            $oldRecord->task_id !== $ans['task_id']
                         );
                         if ($hasChanges) {
                             if ($alert->notificationTask($_SESSION['user_id'], intval($_POST['executors'][$i]), $userTaskId, 'update', false, '', '')) {

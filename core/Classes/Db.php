@@ -291,7 +291,8 @@ class Db
         $result = $this->db::load(TBL_PREFIX . $tableName, intval($update_id));
 
         foreach ($values as $field => $value) {
-            if (strlen($value) > 0 || is_object($value)) {
+            // Разрешаем null значения для foreign key полей
+            if ($value === null || strlen($value) > 0 || is_object($value)) {
                 $result->{$field} = $value;
             }
         }
@@ -305,7 +306,8 @@ class Db
             return ['result' => true, 'resultText' => 'Изменения успешно сохранены'];
         } catch (\Exception $e) {
             $this->db::rollback();
-            return ['result' => false, 'resultText' => 'Ошибка сохранения в базе данных. '.$this->handleDbException($e)];
+            $error = $this->handleDbException($e);
+            return $error;
         }
     }
 

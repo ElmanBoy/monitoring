@@ -105,9 +105,12 @@ if (isset($_POST['data']) && strlen($_POST['data']) > 0) { //Предпросм�
     $outputType = 0;
 } elseif ($planId > 0) { //Просмотр документа из базы данных
     $subQuery = '';
-    if ($docType > 0) {
-        // Для планов ищем по source_id + source_table + documentacial
+    if ($docType == 3) {
+        // Для планов (docType=3) ищем по source_id + source_table
         $subQuery = "source_id = ? AND source_table = 'checksplans' AND documentacial = " . $docType;
+    } elseif ($docType > 0) {
+        // Для остальных документов (приказы, акты и т.д.) ищем по id
+        $subQuery = 'id = ? AND documentacial = ' . $docType;
     } else {
         $subQuery = 'id = ?';
     }
@@ -337,6 +340,56 @@ if (isset($_POST['data']) && strlen($_POST['data']) > 0) { //Предпросм�
                 }
             }
 
+            // Формируем результаты чек-листов (act_body)
+            $act_body_r = '';
+            $block_number_r = 1;
+            foreach ($staffRows as $sr) {
+                // task_id теперь jsonb массив - декодируем и берём все задачи
+                $taskIds = json_decode($sr->task_id, true);
+                if (!is_array($taskIds)) {
+                    $taskIds = [$sr->task_id];
+                }
+
+                // Собираем чек-листы из всех задач проверяющего
+                $allChecklistIds = [];
+                foreach ($taskIds as $singleTaskId) {
+                    $task_r = $db->selectOne('tasks', ' WHERE id = ?', [intval($singleTaskId)]);
+                    if ($task_r && $task_r->sheet) {
+                        $sheetIds = json_decode($task_r->sheet, true);
+                        if (is_array($sheetIds)) {
+                            $allChecklistIds = array_merge($allChecklistIds, $sheetIds);
+                        }
+                    }
+                }
+                $allChecklistIds = array_unique($allChecklistIds);
+
+                if (empty($allChecklistIds)) continue;
+
+                // Получаем чек-листы
+                $checklists_r = $db->select('checklists', ' WHERE id IN (' . implode(', ', $allChecklistIds) . ')');
+                foreach ($checklists_r as $ch_r) {
+                    // Получаем сохраненные данные чек-листа
+                    $checklist_data_r = $db->selectOne($ch_r->table_name, ' WHERE id = ?', [$sr->record_id]);
+                    if ($checklist_data_r) {
+                        $act_body_r .= $reg->renderCheckResult($ch_r->id, (array)$checklist_data_r, $block_number_r);
+                        $block_number_r++;
+                    }
+                }
+            }
+
+            // Получаем фактические даты проведения проверки из checkstaff.dates
+            $dateResults_r = [];
+            foreach ($staffRows as $sr) {
+                $dateResults_r[] = $date->getMinMaxDates($sr->dates);
+            }
+            $allMinDates_r = array_column($dateResults_r, 'min');
+            $allMaxDates_r = array_column($dateResults_r, 'max');
+            $check_period_start_r = $date->dateToString(min($allMinDates_r));
+            $check_period_end_r = $date->dateToString(max($allMaxDates_r));
+
+            // Декодируем HTML-сущности в названии учреждения
+            $ins_name_r = html_entity_decode($ins['array'][$insId] ?? '', ENT_QUOTES, 'UTF-8');
+
             $doc_data['head_fio'] = $head_fio_r;
             $doc_data['head_position'] = $head_position_r;
             $doc_data['head_short'] = $head_short_r;
@@ -344,6 +397,10 @@ if (isset($_POST['data']) && strlen($_POST['data']) > 0) { //Предпросм�
             $doc_data['verifiable_start'] = $verifiable_start_r;
             $doc_data['verifiable_end'] = $verifiable_end_r;
             $doc_data['violations'] = $violation_items_r;
+            $doc_data['act_body'] = $act_body_r;
+            $doc_data['check_period_start'] = $check_period_start_r;
+            $doc_data['check_period_end'] = $check_period_end_r;
+            $doc_data['institution'] = $ins_name_r;
             // Перезаписываем order_date/order_number из приказа если нашли
             if (!empty($order_number_r)) $doc_data['order_number'] = $order_number_r;
             if (!empty($order_date_r)) $doc_data['order_date'] = $date->dateToString($order_date_r);
@@ -600,27 +657,188 @@ if ($documentacial == 3 || $documentacial == 0) {
     $orientation = 'portrait';
     $footer_position = 820;
 }
-$html .= $reg->buildPlanDocument($data, $docId);
 
-$html .= '</main>
+// Сначала генерируем только body+bottom для подсчёта страниц приложения (АКТа)
+// Используем точно такой же CSS как в основном документе
+$actHtml = '<html lang="ru">
+    <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+        <style>
+
+        @font-face {
+            font-family: "Times New Roman";
+            font-style: normal;
+            font-weight: 400;
+            src: url("/fonts/timesnrcyrmt.ttf") format("truetype");
+        }
+        @font-face {
+            font-family: "Times New Roman";
+            font-style: italic;
+            font-weight: 400;
+            src: url("/fonts/timesnrcyrmt_inclined.ttf") format("truetype");
+        }
+        @font-face {
+            font-family: "Times New Roman";
+            font-style: normal;
+            font-weight: 700;
+            src: url("/core/vendor/dompdf/dompdf/lib/fonts/Times-Bold.ttf") format("truetype");/*/fonts/timesnrcyrmt_bold.ttf*/
+        }
+        @font-face {
+            font-family: "Times New Roman";
+            font-style: italic;
+            font-weight: 700;
+            src: url("/fonts/timesnrcyrmt_boldinclined.ttf") format("truetype");
+        }
+            .page, .page-break {
+                break-after: page;
+                clear: both;
+                page-break-after: always;
+            }
+            body {
+                /*font-family: "Jost", sans-serif;
+                font-size: 3.5mm;*/
+                font-family: "Times-Roman", "Times New Roman", serif;
+                font-weight: normal;
+                font-size: 14pt;
+                font-kerning: auto;
+                hyphens: auto;
+                line-height: 1.15;
+                text-align: justify;
+            }
+            table, table tr, table tr td, table tr th{
+                border: 1px solid #000;
+                border-collapse: collapse;
+                padding: 10px;
+            }
+            table tr td.group{
+                border: none;
+            }
+            p {
+                text-indent: 1.25cm;
+                margin: 0 0 0 0;
+            }
+            p[style*="text-align: center"],
+            p[style*="text-align: right"] {
+                text-indent: 0;
+            }
+            strong, b{
+                font-weight: 900;
+            }
+            main{
+                margin: 0;
+            }
+            footer {
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                text-align: left;
+                font-size: 11px;
+                line-height: 14px;
+                color: #000;
+                padding: 5px 0 0 12px;
+                border-top: 1px solid #000;
+                height: .1cm;
+            }
+            footer img{
+                position: absolute;
+                bottom: -30px;
+                right: 10px;
+                width: 100px;
+            }
+            @page {
+                margin: 20mm 10mm 20mm 30mm;
+            }
+            .agreement_list{
+                background-color: #dde8f7;
+                padding: 10px;
+                margin: 10px 0;
+                font-size: 95%;
+            }
+            .agreement_list h4{
+                font-weight: 600;
+                font-size: 14px;
+                margin: 0;
+            }
+            .agreement_list table{
+                width: 100%;
+                margin: 0;
+            }
+            .agreement_list table,
+            .agreement_list table td,
+            .agreement_list table th{
+                background-color: #fff;
+                border-collapse: collapse;
+                border: 1px solid #c5d4fc;
+                font-size: 95%;
+                vertical-align: middle;
+            }
+            .agreement_list table td{
+                padding: 5px;
+                line-height: 10px;
+            }
+            .agreement_list table th{
+                padding: 5px;
+            }
+            .agreement_list table th{
+                background-color: #e5e5e5;
+                color:  #4f6396;
+                font-size: 95%;
+                text-align: center;
+            }
+            .agreement_list table td.divider{
+                font-size: 80%;
+                background-color: #dde8f7;
+                padding: 0 2px;
+                line-height: 10px;
+            }
+            .agreement_list table td.center{
+                text-align: center;
+            }
+            .agreement_list .list_type{
+                text-align: right;
+                margin-top: -25px;
+            }
+        </style>
+
+        <title>Документ</title>
+    </head>
+    <body><footer>Документ создан в электронной форме. №&nbsp;' . $doc_data['doc_number'] . ' от ' .
+    $date->correctDateFormatFromMysql(date('Y-m-d H:i:s')) . '.
+    Исполнитель: ' . $initiator_fio . '<img src="data:image/png;base64,' . $temp->bottom_logo . '"></footer><main>';
+
+// Генерируем только body и bottom без header для подсчёта страниц АКТа
+$actHtml .= $reg->buildPlanDocumentBodyOnly($data, $docId);
+$actHtml .= '</main>
         </body>
         </html>';
-//echo $html;
+
 $options = new Options();
 $options->set('isHtml5ParserEnabled', true);
 $options->set('defaultFont', 'Times-Roman');
 $options->set('defaultEncoding', 'UTF-8');
 $options->set('isRemoteEnabled', true);
-//$options->set('isFontSubsettingEnabled', true);
+
 $dompdf = new Dompdf($options);
+$dompdf->loadHtml(mb_convert_encoding($actHtml, 'HTML-ENTITIES', 'UTF-8'));
+$dompdf->setPaper('A4', $orientation);
+$dompdf->render();
 
+// Получаем количество страниц АКТа (приложения)
+$canvas = $dompdf->getCanvas();
+$pageCount = $canvas->get_page_count();
 
+// Теперь генерируем полный документ с правильным количеством страниц
+$data['pages_count'] = $pageCount;
+$html .= $reg->buildPlanDocument($data, $docId);
+$html .= '</main>
+        </body>
+        </html>';
+
+// Финальная генерация PDF с правильным количеством страниц
+$dompdf = new Dompdf($options);
 $dompdf->loadHtml(mb_convert_encoding($html, 'HTML-ENTITIES', 'UTF-8'));
-
-// (Optional) Setup the paper size and orientation
-$dompdf->setPaper('A4', $orientation);//landscape
-
-// Render the HTML as PDF
+$dompdf->setPaper('A4', $orientation);
 $dompdf->render();
 /*$fontMetrics = $dompdf->getFontMetrics();
 $fontFamilies = $fontMetrics->getFontFamilies();

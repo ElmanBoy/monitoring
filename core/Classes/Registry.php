@@ -2401,7 +2401,7 @@ class Registry
                 'author' => $_SESSION['user_id'],
                 'source_id' => intval($_POST['source_id']),
                 'source_table' => $_POST['source_table'],
-                'file_ids' => $_POST['file_ids'],
+                'file_ids' => $_POST['file_ids'] ?? null,
                 'prev_ins_id' => intval($_POST['ins']) > 0 ? intval($_POST['ins']) : null,
                 'executors_list' => json_encode($_POST['executors_list']),
                 'executors_head' => intval($_POST['executors_head']) > 0 ? intval($_POST['executors_head']) : null,
@@ -2414,6 +2414,31 @@ class Registry
                 'action_period_text' => !empty($_POST['action_period_text']) ? $_POST['action_period_text'] : $_POST['action_period']
             ];
 
+            // Добавляем agreementlist, если он передан
+            if (isset($_POST['agreementlist']) && is_array($_POST['agreementlist'])) {
+                // Очищаем массив от пустых элементов
+                $cleanedAgreementList = array_filter($_POST['agreementlist'], function($item) {
+                    return !empty(trim($item));
+                });
+                // Сохраняем как JSON
+                $registry['agreementlist'] = !empty($cleanedAgreementList)
+                    ? json_encode(array_values($cleanedAgreementList), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+                    : null;
+
+                // Отладка
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/logs/PHP_errors.log',
+                    "[" . date('Y-m-d H:i:s') . "] Registry::createDocument agreementlist DEBUG:\n" .
+                    "Original count: " . count($_POST['agreementlist']) . "\n" .
+                    "Cleaned count: " . count($cleanedAgreementList) . "\n" .
+                    "JSON to save: " . ($registry['agreementlist'] ?? 'NULL') . "\n\n",
+                    FILE_APPEND
+                );
+            } else {
+                file_put_contents($_SERVER['DOCUMENT_ROOT'] . '/logs/PHP_errors.log',
+                    "[" . date('Y-m-d H:i:s') . "] Registry::createDocument agreementlist NOT SET or NOT ARRAY\n\n",
+                    FILE_APPEND
+                );
+            }
 
             foreach ($regProps as $f) {
                 $value = $this->prepareValues($f, $_POST);
@@ -2678,6 +2703,7 @@ class Registry
         //print_r($data); echo $doc_id;
         if (is_array($data) && count($data) > 0) {
             $tmpl = $this->db->selectOne('documents', ' where id = ?', [intval($data['document'])]);
+
             $inst = $this->db->getRegistry('institutions');
             $mins = $this->db->getRegistry('ministries');
             $insp = $this->db->getRegistry('inspections');
@@ -2780,6 +2806,154 @@ class Registry
             $html .= $temp->twig_parse($tmpl->header, $header_vars);
 
             //$html .= $temp->twig_parse($data['longname'], ['curr_year' => date('Y')]);
+
+            $body_vars = [];
+            $check_number = 1;
+            if (is_array($insArr) && count($insArr) > 0) {
+                foreach ($insArr as $ch) {
+                    $ch_period = explode(' - ', $ch['check_periods']);
+                    $ch_period_start = $this->date->correctDateFormatFromMysql($ch_period[0]);
+                    $ch_period_end = $this->date->correctDateFormatFromMysql($ch_period[1]);
+                    $mothsArr = is_string($ch['periods_hidden'])
+                        ? json_decode($ch['periods_hidden'])
+                        : $ch['periods_hidden'];
+                    $years = $date->getYearsFromPeriod($ch['check_periods']);
+                    $action_start = $date->getMonthNameByNumber(intval($mothsArr[0]));
+                    $body_vars[] = [
+                        'check_number' => $check_number,
+                        'institution' => stripslashes($inst['result'][$ch['institutions']]->name),
+                        'unit' => stripslashes($units['array'][$ch['units']]),
+                        'inspections' => stripslashes($insp['result'][$ch['inspections'][0]]->name),
+                        'period' => $ch['periods'],
+                        'start_month' => $action_start,
+                        'check_periods' => $ch_period_start . ' - ' . $ch_period_end,
+                        'check_periods_years' => $years
+                    ];
+                    $check_number++;
+                }
+
+            }
+            $body_vars = array_merge($data, ['checks' => $body_vars]); //print_r($body_vars);
+            $html .= $temp->twig_parse($tmpl->body, $body_vars);
+
+            $bottom_vars = [
+                'agreement_date' => $agreement_date,
+                'sign_2' => $sign[1],
+                'signer_2' => $signers[1],
+                'signer_2_position' => $signers_position[1]
+            ];
+            $bottom_vars = array_merge($bottom_vars, $data);
+            $html .= $temp->twig_parse($tmpl->bottom, $bottom_vars);
+        }
+        //echo $html;
+        return $html;
+    }
+
+    public function buildPlanDocumentBodyOnly(array $data, ?int $doc_id = 0): string
+    {
+        $insArr = [];
+        $clear_agreement = [];
+        $signers = [];
+        $signers_position = [];
+        $sign = [];
+        $signs = [];
+        $html = '';
+        $agreement_date = $data['agreement_date'] ?? '_________';
+        //print_r($data); echo $doc_id;
+        if (is_array($data) && count($data) > 0) {
+            $tmpl = $this->db->selectOne('documents', ' where id = ?', [intval($data['document'])]);
+
+            $inst = $this->db->getRegistry('institutions');
+            $mins = $this->db->getRegistry('ministries');
+            $insp = $this->db->getRegistry('inspections');
+            $units = $this->db->getRegistry('units');
+            $users = $this->db->getRegistry('users', '', [], ['surname', 'name', 'middle_name',
+                    'institution', 'ministries', 'division', 'position']
+            );
+            $temp = new Templates();
+            $date = new \Core\Date();
+            if (is_array($data['institutions']) && count($data['institutions']) > 0) {
+                for ($i = 0; $i < count($data['institutions']); $i++) {
+                    $mothsArr = is_string($data['periods_hidden'][$i])
+                        ? json_decode($data['periods_hidden'][$i])
+                        : $data['periods_hidden'][$i];
+                    $action_start = $date->getMonthNameByNumber(intval($mothsArr[0]));
+                    $insArr[$i] = [
+                        'check_types' => $data['checks'],
+                        'institutions' => $data['institutions'][$i],
+                        'units' => $data['units'][$i],
+                        'periods' => $data['periods'][$i],
+                        'periods_hidden' => $data['periods_hidden'][$i],
+                        'start_month' => $action_start,
+                        'inspections' => $data['inspections'],
+                        'check_periods' => $data['check_periods'][$i],
+                    ];
+                }
+            }
+
+            $data['agreementlist'] = $this->fixJsonArray($data['agreementlist']);
+            //print_r($data['agreementlist']);
+            if (is_array($data['agreementlist']) && count($data['agreementlist']) > 0
+                && !$this->allValuesEmpty($data['agreementlist'])) {
+                for ($s = 0; $s < count($data['agreementlist']); $s++) {
+                    //print_r($data['agreementlist'][$s]);
+                    if (is_array($data['agreementlist'][$s])) {
+                        $clear_agreement[] = $data['agreementlist'][$s];
+
+                        //Выявляем подписантов
+                        $sections = $data['agreementlist'][$s];//json_decode($data['agreementlist'][$s]);
+
+                        if (isset($sections[0]['stage']) && $sections[0]['stage'] == '') { //Секция подписантов
+                            $count = 0;
+                            foreach ($sections as $sec) {
+                                //print_r($sec);
+                                //if (intval($sec['type']) == 2) { //подписание
+                                if ($doc_id > 0) {
+                                    $signs = $this->db->selectOne('signs',
+                                        ' where user_id = ? AND doc_id = ? AND type = 1
+                                             ORDER BY section DESC LIMIT 1', [$sec['id'], $doc_id]
+                                    ); //print_r($signs);
+                                } //echo ' where user_id = '.$sec['id'].' AND doc_id = '.$doc_id;
+                                $role = intval($sec['role']);
+
+                                $userItem = $users['result'][$sec['id']];
+
+                                $signers[$role] = $userItem->surname . ' ' .
+                                    mb_substr($userItem->name, 0, 1) . '. ' .
+                                    (strlen($userItem->middle_name) > 0 ? mb_substr($userItem->middle_name, 0, 1) . '.' : '');
+
+                                $position = $userItem->position;
+                                if (intval($sec['vrio']) > 0) {
+                                    $position = 'И.О. ' . $users['result'][$sec['vrio']]->position;
+                                }
+
+                                $signers_position[$role] = $position;/*$inst['array'][$userItem->institution].' '.
+                                    (intval($userItem->ministries) > 0 ? '<br>'.$mins['array'][$userItem->ministries] : '').
+                                    (intval($userItem->division) > 0 ? '<br>'.$units['array'][$userItem->division] : '').
+                                    (strlen($userItem->position) > 0 ? '<br>'.$userItem->position : '');*/
+
+                                $sign[$role] = is_object($signs) ?
+                                    $temp->getSign(json_decode($signs->sign, true)['certificate_info']) : '';
+
+                                $count++;
+                                //}
+                            }
+                        }
+                    }
+                }
+
+                $data['agreementlist'] = $clear_agreement;
+                $data['agreement_date'] = $agreement_date;
+                $data['sign_1'] = $sign[0];
+                $data['signer_1'] = $signers[0];
+                $data['signer_1_position'] = $signers_position[0];
+                $data['sign_2'] = $sign[1];
+                $data['signer_2'] = $signers[1];
+                $data['signer_2_position'] = $signers_position[1];
+            }
+
+            // НЕ генерируем header - это сопроводительное письмо
+            // Генерируем только body (АКТ) и bottom (подписи)
 
             $body_vars = [];
             $check_number = 1;
@@ -2980,6 +3154,81 @@ class Registry
             ];
         }
 
+        // Проверка ролей подписантов (для документов с несколькими подписантами)
+        // Ищем секцию подписантов (stage = "" или не установлен)
+        $signerSection = null;
+        foreach ($filtered as $section) {
+            if (is_string($section)) {
+                $section = json_decode($section, true);
+            }
+            if (is_array($section) && count($section) > 0) {
+                $firstRow = $section[0];
+                // Секция подписантов имеет пустой stage
+                if (isset($firstRow['stage']) && $firstRow['stage'] === '') {
+                    $signerSection = $section;
+                    break;
+                }
+            }
+        }
+
+        if ($signerSection !== null) {
+            $approvers = 0;  // role = 0 (Утверждает)
+            $signers = 0;    // role = 1 (Подписывает)
+            $totalSigners = 0;
+
+            foreach ($signerSection as $row) {
+                if (!isset($row['id'])) {
+                    continue; // мета-строка
+                }
+                $totalSigners++;
+                $role = $row['role'] ?? null;
+                if ($role === '0' || $role === 0) {
+                    $approvers++;
+                } elseif ($role === '1' || $role === 1) {
+                    $signers++;
+                }
+            }
+
+            // Если подписантов больше одного, проверяем роли
+            if ($totalSigners >= 2) {
+                if ($approvers === 0 && $signers === 0) {
+                    return [
+                        'result' => false,
+                        'message' => 'Не указаны роли подписантов для ' . $docLabel . '. Должен быть один утверждающий и один подписывающий.',
+                        'errField' => 'agreementlist',
+                    ];
+                }
+                if ($approvers === 0) {
+                    return [
+                        'result' => false,
+                        'message' => 'Не указан утверждающий для ' . $docLabel . '. Один из подписантов должен утверждать документ.',
+                        'errField' => 'agreementlist',
+                    ];
+                }
+                if ($signers === 0) {
+                    return [
+                        'result' => false,
+                        'message' => 'Не указан подписывающий для ' . $docLabel . '. Один из подписантов должен подписывать документ.',
+                        'errField' => 'agreementlist',
+                    ];
+                }
+                if ($approvers > 1) {
+                    return [
+                        'result' => false,
+                        'message' => 'Утверждающий для ' . $docLabel . ' может быть только один.',
+                        'errField' => 'agreementlist',
+                    ];
+                }
+                if ($signers > 1) {
+                    return [
+                        'result' => false,
+                        'message' => 'Подписывающий для ' . $docLabel . ' может быть только один.',
+                        'errField' => 'agreementlist',
+                    ];
+                }
+            }
+        }
+
         return ['result' => true, 'message' => '', 'errField' => ''];
     }
 
@@ -3047,12 +3296,14 @@ class Registry
         } else {
             $value = $var[$f['field_name']];
         }
-        if ($f['type'] == 'password' && strlen(trim($var[$f['field_name']])) > 0) {
+        if (($f['type'] == 'password' || $f['field_name'] == 'password') &&
+            strlen(trim($var[$f['field_name']])) > 0) {
             $value = str_replace('$1$', '', crypt(md5($var[$f['field_name']]), '$1$'));
         }
         switch ($this->getTypeColumn($f['type'])) {
             case 'INTEGER':
-                $value = intval($value);
+                // Если значение пустое или 0, возвращаем null для полей с foreign key
+                $value = (!empty($value) && intval($value) > 0) ? intval($value) : null;
                 break;
             case 'REAL':
                 $value = floatval($value);
@@ -3064,7 +3315,7 @@ class Registry
             default:
                 $value = trim(str_replace('  ', ' ', $value));
         }
-        return strlen(trim($value)) > 0 ? $value : '';
+        return (strlen(trim($value)) > 0 || $value === null) ? $value : '';
     }
 
     /**
@@ -3772,12 +4023,8 @@ class Registry
 
     public function renderCheckResult(int $regId, array $editData = null, $blockNumber = 1): string
     {
-        $propsIds = [];
         $regProps = [];
-        $html = [];
-        $first_block = '';
-        $second_block = '';
-        $out = '';
+        $output = '';
 
         if ($regId > 0) {
             //Построение формы существующего справочника
@@ -3785,108 +4032,96 @@ class Registry
             ' . TBL_PREFIX . 'checkitems.*,
             ' . TBL_PREFIX . 'checkfields.prop_id AS fId,
             ' . TBL_PREFIX . 'checkfields.label,
-            ' . TBL_PREFIX . 'checkfields.row_behaviour 
+            ' . TBL_PREFIX . 'checkfields.row_behaviour
             FROM ' . TBL_PREFIX . 'checkfields, ' . TBL_PREFIX . 'checkitems
-            WHERE ' . TBL_PREFIX . 'checkfields.prop_id = ' . TBL_PREFIX . 'checkitems.id AND 
+            WHERE ' . TBL_PREFIX . 'checkfields.prop_id = ' . TBL_PREFIX . 'checkitems.id AND
             ' . TBL_PREFIX . 'checkfields.reg_id = ? ORDER BY ' . TBL_PREFIX . 'checkfields.sort', [$regId]
             );
         }
 
-        $table_html = '<table class="group checklist"><th>№</th><th>Вопросы проверки</th><th>Результат</th>' . "\n";
+        $currentBlockTitle = '';
+        $currentBlockRows = '';
         $itemNumber = 1;
-        $row_number = 0;
+
         foreach ($regProps as $f) {
             if ($f['type'] == 'block') {
-                //Если это название блока
-                $html[] = '<p>&nbsp;</p><h3>' . $blockNumber . '. ' . $f['name'] . '</h3>' . "\n";
+                // Сохраняем предыдущий блок, если в нём есть строки
+                if (!empty($currentBlockRows)) {
+                    $output .= $currentBlockTitle;
+                    $output .= '<table class="group checklist"><tr><th>№</th><th>Вопросы проверки</th><th>Результат</th></tr>' . "\n";
+                    $output .= $currentBlockRows;
+                    $output .= '</table>' . "\n";
+                }
+
+                // Начинаем новый блок
+                $currentBlockTitle = '<p>&nbsp;</p><h3>' . $blockNumber . '. ' . $f['name'] . '</h3>' . "\n";
+                $currentBlockRows = '';
+                $itemNumber = 1;
+                $blockNumber++;
             } else {
                 //Если это строка таблицы (пункт чек-листа)
                 if ($f['item_type'] == 0) {
-                    $table_html .= '<tr><td>' . ($blockNumber - 1) . '.' . $itemNumber . '</td><td>' . $f['name'] . '</td>';
+                    $cellValue = '';
+
+                    // Определяем значение ячейки
                     switch ($f['type']) {
-                        case 'block':
-                            //$html[] = '';
-                            break;
-                        /*case 'textarea':
-                        case 'html':
-                            $html .= $this->renderTextarea($f, $editData, $mode);
-                            break;
-                        case 'select':
-                        case 'multiselect':
-                        case 'years':
-                            $html .= $this->renderSelect($f, $editData, $mode);
-                            break;
-                        case 'list_fromdb':
-                            $html .= $this->renderListFromDB($f, $editData, $mode);
-                            break;
-                        case 'quarterSelect':
-                            $html .= $this->renderQuarter($f, $editData, $mode);
-                            break;
-                        case 'addInstitution':
-                            $html .= $this->renderAddInstitution($f, $editData, $mode);
-                            break;
-                        case 'addObject':
-                            $html .= $this->renderAddObject($f, $editData, $mode);
-                            break;
-                        case 'addSignatory':
-                            $html .= $this->renderAddSignatory($f, $editData, $mode);
-                            break;
-                        case 'addAligner':
-                            $html .= $this->renderAddAligner($f, $editData, $mode);
-                            break;
-                        case 'calendar':
-                        case 'time':
-                        case 'datetime':
-                        case 'multi_date':
-                        case 'range_date':
-                            ###################################################
-                            break;
-                        case 'checkbox':
-                            $html .= $this->renderCheckbox($f, $editData, $mode);
-                            break;*/
                         case 'radio':
                             $items = json_decode($f['radio_values'], true);
-                            for ($r = 0; $r < count($items); $r++) {
-                                if ($items[$r]['value'] == $editData[$f['field_name']]) {
-                                    $table_html .= '<td>' . $items[$r]['label'] . '</td></tr>' . "\n";
+                            if (is_array($items)) {
+                                foreach ($items as $item) {
+                                    if (isset($item['value']) && $item['value'] == ($editData[$f['field_name']] ?? '')) {
+                                        $cellValue = $item['label'] ?? '';
+                                        break;
+                                    }
                                 }
                             }
                             break;
-                        case 'text':
-                            $table_html .= '<td>' . $editData[$f['field_name']] . '</td></tr>' . "\n";
-                            break;
-                        default:
-                            if (strlen(trim($editData[$f['field_name']])) > 0) {
-                                $html[] = $editData[$f['field_name']];
+                        case 'list_fromdb':
+                            // Получаем значение из справочника
+                            $fieldValue = $editData[$f['field_name']] ?? '';
+                            if (!empty($fieldValue) && !empty($f['from_db'])) {
+                                $registry = $this->db->getRegistry($f['from_db']);
+                                $cellValue = $registry[$fieldValue] ?? $fieldValue;
                             }
                             break;
+                        case 'calendar':
+                            // Форматируем дату
+                            $fieldValue = $editData[$f['field_name']] ?? '';
+                            if (!empty($fieldValue)) {
+                                $date = new \Core\Date();
+                                $cellValue = $date->correctDateFormatFromMysql($fieldValue);
+                            }
+                            break;
+                        case 'text':
+                        case 'integer':
+                        case 'html':
+                            $cellValue = $editData[$f['field_name']] ?? '';
+                            break;
+                        default:
+                            // Для неизвестных типов - пустая ячейка
+                            $cellValue = '';
+                            break;
                     }
-                } else {
-                    //Если это произвольное поле
-                    //if(strlen(trim($editData[$f['field_name']])) > 0) {
-                    $html[] = $editData[$f['field_name']];
-                    // }
-                    $itemNumber--;
+
+                    // Добавляем только заполненные строки
+                    if (!empty($cellValue) || $cellValue === '0') {
+                        $currentBlockRows .= '<tr><td>' . ($blockNumber - 1) . '.' . $itemNumber . '</td><td>' . $f['name'] . '</td>';
+                        $currentBlockRows .= '<td>' . htmlspecialchars($cellValue, ENT_QUOTES, 'UTF-8') . '</td></tr>' . "\n";
+                        $itemNumber++;
+                    }
                 }
-
             }
-
-            if ($f['is_block'] == '1') {
-                $blockNumber++;
-            } else {
-                $itemNumber++;
-            }
-            $row_number++;
         }
-        /*print_r($html);
-        echo $table_html;*/
 
-        $table_html .= '</table>' . "\n";
+        // Сохраняем последний блок, если в нём есть строки
+        if (!empty($currentBlockRows)) {
+            $output .= $currentBlockTitle;
+            $output .= '<table class="group checklist"><tr><th>№</th><th>Вопросы проверки</th><th>Результат</th></tr>' . "\n";
+            $output .= $currentBlockRows;
+            $output .= '</table>' . "\n";
+        }
 
-        $first_block = array_shift($html);
-        $second_block = array_shift($html);
-
-        return $first_block . $second_block . $table_html . implode('<br>', $html);
+        return $output;
     }
 
     /*******************Чек-листы Конец**************************/
@@ -4057,10 +4292,18 @@ class Registry
             $ins->name = $ins->surname . ' ' . $ins->first_name . ' ' . $ins->middle_name . ' ' .
                 (strlen($ins->birth) > 0 ? $this->date->correctDateFormatFromMysql($ins->birth) : '');
         }
-        $tasks = $this->db->selectOne('tasks', ' WHERE id = ?', [$chStaff->task_id]);
+
+        // task_id теперь jsonb массив - получаем первую задачу для обратной совместимости
+        $taskIdArray = json_decode($chStaff->task_id, true);
+        if (!is_array($taskIdArray)) {
+            $taskIdArray = [$chStaff->task_id];
+        }
+        $firstTaskId = !empty($taskIdArray) ? intval($taskIdArray[0]) : 0;
+        $tasks = $firstTaskId > 0 ? $this->db->selectOne('tasks', ' WHERE id = ?', [$firstTaskId]) : null;
+
         $html = '<div class="group" id="taskContainer">';
         //Если есть координаты и нужен чекин по адресу
-        if (strlen($ins->geo_lat) > 0 && $tasks->finding == 1) {
+        if ($tasks && strlen($ins->geo_lat) > 0 && $tasks->finding == 1) {
             $html .= '
             <script>
             var geo_lat = "' . $ins->geo_lat . '";
@@ -4085,7 +4328,8 @@ class Registry
         $user = $this->db->selectOne('users', ' WHERE id = ?', [$chStaff->user]);
         $userFio = $user->surname . ' ' . $user->name . ' ' . $user->middle_name;
 
-        $task = $this->db->selectOne('tasks', ' WHERE id = ?', [$chStaff->task_id]);
+        // Используем уже полученную задачу вместо повторного запроса
+        $task = $tasks;
         $executor = $this->db->selectOne('institutions', ' WHERE id = ?', [$user->institution]);
         $ministries = $this->db->selectOne('ministries', ' WHERE id = ?', [$user->ministries]);
         $division = $this->db->selectOne('units', ' WHERE id = ?', [$user->division]);
@@ -4142,7 +4386,8 @@ class Registry
                 '</strong></div>';
         }
 
-        $taskContent = $this->buildTask($chStaff->task_id, $view_result);
+        // Передаем ID первой задачи вместо jsonb массива
+        $taskContent = $this->buildTask($firstTaskId, $view_result);
         $html .= $taskContent['html'];
         $out['task'] = $taskContent['array'];
 

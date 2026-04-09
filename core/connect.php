@@ -8,6 +8,15 @@ date_default_timezone_set('Europe/Moscow');
 
 define('ROOT', $_SERVER['DOCUMENT_ROOT']);
 
+// Настройка логирования ошибок
+$logDir = ROOT . '/logs';
+if (!is_dir($logDir)) {
+    @mkdir($logDir, 0755, true);
+}
+$logFile = $logDir . '/PHP_errors.log';
+ini_set('log_errors', 'On');
+ini_set('error_log', $logFile);
+
 // --- Загрузка .env ---
 require_once ROOT . '/core/vendor/autoload.php';
 

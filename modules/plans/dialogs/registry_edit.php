@@ -50,7 +50,7 @@ if ($busy != []) {
                 <input type="hidden" name="trans_id" value="<?= $trans_id ?>">
                 <input type="hidden" name="parent" value="<?= intval($_POST['params'][1]) ?>">
                 <input type='hidden' name='uid' value="<?= $registry->uid ?>">
-                <ul class='tab-pane'>
+                <ul class='tab-pane' style="top: 48px">
                     <li id='tab_plan' class='active'>План</li>
                     <li id='tab_agreement'>Согласование</li>
                     <li id='tab_preview' style="display: none">Предпросмотр</li>

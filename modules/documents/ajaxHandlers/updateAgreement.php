@@ -621,9 +621,14 @@ if ($globalStats['rejected'] > 0) {
 
                 // Уведомляем министра
                 try {
-                    $alert->notificationSigner($ministerId, 1, $docId, $agr->name);
+                    $emailSent = $alert->notificationSigner($ministerId, 1, $docId, $agr->name);
+                    if (!$emailSent) {
+                        error_log('[ДОКЛАД] Email министру не отправлен (возможно не указан email). ID министра: ' . $ministerId);
+                    } else {
+                        error_log('[ДОКЛАД] Уведомление министру отправлено успешно. ID: ' . $ministerId . ', Доклад: ' . $docId);
+                    }
                 } catch (\Exception $e) {
-                    error_log('Уведомление министру (доклад): ' . $e->getMessage());
+                    error_log('[ДОКЛАД] Ошибка отправки уведомления министру: ' . $e->getMessage());
                 }
             } else {
                 // Министр не найден — всё равно завершаем
