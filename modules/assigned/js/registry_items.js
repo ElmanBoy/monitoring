@@ -31,6 +31,11 @@ var el_assigned_registry = {
             let taskId = $(this).data("id");
             el_app.dialog_open("view_task", {taskId: taskId, view_result: 0}, "calendar");
         });
+
+        $(".view_staff_btn").off("click").on("click", function (){
+            let taskStr = $(this).data("task-str");
+            el_app.dialog_open("view_staff", {taskId: taskStr}, "calendar");
+        });
         $(".link a").off("click").on("click", function (e) {
             el_app.setMainContent('/registry');
             return false;
@@ -112,6 +117,52 @@ var el_assigned_registry = {
         el_assigned_registry.bindDadata();
         el_app.sort_init();
         el_app.filter_init();
+        el_assigned_registry.date_filter_init();
+    },
+
+    date_filter_init: function () {
+        function applyDateFilter() {
+            let query = el_tools.getUrlVar(decodeURIComponent(document.location.href)),
+                rq = [],
+                q = [];
+
+            // Сохраняем все параметры кроме sort и filter
+            for (let param in query) {
+                if (param !== "sort" && param !== "filter")
+                    rq.push(param + "=" + query[param]);
+            }
+            if (typeof query.sort !== "undefined") {
+                rq.push("sort=" + query.sort);
+            }
+
+            // Берём существующие фильтры, удаляем date_from и date_to
+            if (typeof query.filter !== "undefined") {
+                q = query.filter.split(";").filter(function (v) {
+                    return v !== "" && v.indexOf("date_from:") !== 0 && v.indexOf("date_to:") !== 0;
+                });
+            }
+
+            let from = $("input[name=filter_date_from]").val(),
+                to   = $("input[name=filter_date_to]").val();
+
+            if (from) q.push("date_from:" + from);
+            if (to)   q.push("date_to:" + to);
+
+            q = q.filter(Boolean);
+            if (q.length > 0) rq.push("filter=" + encodeURIComponent(q.join(";")));
+
+            el_app.setMainContent(document.location.pathname, rq.join("&"));
+        }
+
+        $(".date_filter_input").off("change").on("change", function () {
+            applyDateFilter();
+        });
+
+        $(".date_filter_reset").off("click").on("click", function () {
+            $("input[name=filter_date_from]").val("");
+            $("input[name=filter_date_to]").val("");
+            applyDateFilter();
+        });
     },
 
     bindDadata: function (){

@@ -20,6 +20,18 @@ var el_archive = {
             }
         });
 
+        // Безвозвратное удаление
+        $("#button_nav_delete").on("click", async function () {
+            if (!$(this).hasClass("disabled")) {
+                let $checked = $("#registry_items_delete_real").find("input[name='reg_id[]']:checked");
+                if ($checked.length === 0) return;
+                let ok = await confirm("Удалить выбранные записи безвозвратно? Это действие нельзя отменить.");
+                if (ok) {
+                    $("form#registry_items_delete_real").trigger("submit");
+                }
+            }
+        });
+
         // Чекбокс "выделить все"
         $("#check_all").off("change").on("change", function () {
             let checked = $(this).is(":checked");

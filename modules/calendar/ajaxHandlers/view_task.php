@@ -275,8 +275,10 @@ if ($auth->isLogin()) {
                     $head_position = $head->position;
                     $institutionsArr = $db->selectOne('institutions', ' WHERE id = ?', [$head->institution]);
                     $head_institution = $institutionsArr->name;
-                    $ministriesArr = $db->selectOne('ministries', ' WHERE id = ?', [$head->ministries]);
-                    $head_ministries = $ministriesArr->name;
+                    $headMinistriesIds = json_decode($head->ministries, true) ?? [];
+                    $headMinistryId = intval($headMinistriesIds[0] ?? 0);
+                    $ministriesArr = $headMinistryId > 0 ? $db->selectOne('ministries', ' WHERE id = ?', [$headMinistryId]) : null;
+                    $head_ministries = $ministriesArr ? $ministriesArr->name : '';
                     $unitsArr = $db->selectOne('units', ' WHERE id = ?', [$head->division]);
                     $head_unit = $unitsArr->name;
                 } else {

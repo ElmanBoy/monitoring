@@ -16,9 +16,10 @@
                     <?php
                     $status = '<span class="greyText">Ожидает назначения</span>';
                     if (strlen($tasks_info[$uid]['dates']) > 0) {
-                        $status = '<span class="blueText">Назначена</span>';
-                        if ($tasks_info[$uid]['status'] == 1) {
+                        if ($check_done) {
                             $status = '<span class="greenText">Выполнена</span>';
+                        } else {
+                            $status = '<span class="blueText">Назначена</span>';
                         }
                     }
                     ?>

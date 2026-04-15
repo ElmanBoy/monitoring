@@ -38,7 +38,15 @@ if ($is_object) {
     }
 }
 
-$regs = $gui->getTableData($table->table_name, ' AND (documentacial = 2 OR documentacial = 5)' . $insFilter);
+$_ministryFilter = '';
+if (!$is_object) {
+    $_activeMinistries = $auth->getActiveMinistries();
+    if (!empty($_activeMinistries)) {
+        $ids = implode(',', $_activeMinistries);
+        $_ministryFilter = ' AND (ministry_id IN (' . $ids . ') OR ministry_id IS NULL)';
+    }
+}
+$regs = $gui->getTableData($table->table_name, ' AND (documentacial = 2 OR documentacial = 5)' . $insFilter . $_ministryFilter);
 
 // Загружаем учреждения для отображения в списке
 $institutions = $db->getRegistry('institutions', '', [], ['short', 'name']);
@@ -58,6 +66,25 @@ if (!empty($actIds)) {
     $acts = $db->select('agreement', ' WHERE id IN (' . implode(',', array_unique($actIds)) . ')');
     foreach ($acts as $act) {
         $actsMap[$act->id] = $act;
+    }
+}
+
+// Загружаем согласованные доклады (documentacial=8, status=1) для актов одним запросом
+// Доклад создаётся ПОСЛЕ согласования акта — его наличие разрешает создание графика
+$reportActIds = [];
+foreach ($regs as $r) {
+    $r = (object)$r;
+    if (intval($r->documentacial) === 2) {
+        $reportActIds[] = intval($r->id);
+    }
+}
+$reportsMap = []; // act_id => report
+if (!empty($reportActIds)) {
+    $reports = $db->select('agreement',
+        ' WHERE documentacial = 8 AND status = 1 AND source_id IN (' . implode(',', array_unique($reportActIds)) . ')'
+    );
+    foreach ($reports as $rep) {
+        $reportsMap[intval($rep->source_id)] = $rep;
     }
 }
 
@@ -115,10 +142,11 @@ foreach ($regs as $r) {
     <div class="nav_01">
         <?
         echo $gui->buildTopNav([
-            'title' => 'Акты и Графики устранения нарушений',
-            'renew' => 'Сбросить все фильтры',
-            'filter_panel' => 'Открыть панель фильтров',
-            'logout' => 'Выйти'
+            'title'           => 'Акты и Графики устранения нарушений',
+            'renew'           => 'Сбросить все фильтры',
+            'filter_panel'    => 'Открыть панель фильтров',
+            'ministry_filter' => 'Фильтр по управлению',
+            'logout'          => 'Выйти'
         ]
         );
         ?>
@@ -273,14 +301,21 @@ foreach ($regs as $r) {
                     <td>' . $progressHtml . '</td>
                     <td class="link">';
 
-                // Кнопка создать/открыть график — только для актов у которых ОК ознакомился
+                // Кнопка создать/открыть график — только для актов у которых ОК ознакомился И есть согласованный доклад
                 if (intval($reg->documentacial) === 2) {
                     if (intval($reg->act_agree) > 0 && !isset($roadIds[$reg->id])) {
-                        // Акт подписан, графика ещё нет — показываем создать
-                        echo '<span class="material-icons addRoad"
-                                data-id="' . $reg->id . '"
-                                data-ins="' . $reg->source_id . '"
-                                title="Создать график устранения нарушений">add_road</span> ';
+                        if (isset($reportsMap[$reg->id])) {
+                            // Доклад согласован — можно создать график
+                            echo '<span class="material-icons addRoad"
+                                    data-id="' . $reg->id . '"
+                                    data-ins="' . $reg->ins_id . '"
+                                    data-report="' . $reportsMap[$reg->id]->id . '"
+                                    title="Создать график устранения нарушений">add_road</span> ';
+                        } else {
+                            // Доклад ещё не согласован — показываем неактивную иконку с пояснением
+                            echo '<span class="material-icons" style="color:#aaa;cursor:default"
+                                    title="Сначала необходимо согласовать доклад о результатах проверки">add_road</span> ';
+                        }
                     } elseif (isset($roadIds[$reg->id])) {
                         // График уже есть — открыть просмотр
                         echo '<span class="material-icons viewRoad"

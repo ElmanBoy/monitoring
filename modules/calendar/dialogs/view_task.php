@@ -77,13 +77,22 @@ if ($plan) {
     }
 }
 //Справочник шаблонов актов — фильтруем по типу проверки, если он известен
+$_ministryFilter = $auth->getDocumentMinistryFilter();
 if ($check_type_id > 0) {
-    $orders = $db->getRegistry('documents', ' WHERE documentacial = 2 AND checks = ' . $check_type_id);
+    $orders = $db->getRegistry('documents', ' WHERE documentacial = 2 AND checks = ' . $check_type_id . $_ministryFilter);
 } else {
-    $orders = $db->getRegistry('documents', ' WHERE documentacial = 2');
+    $orders = $db->getRegistry('documents', ' WHERE documentacial = 2' . $_ministryFilter);
 }
 //Справочник пользователей (для выбора подписантов)
-$users = $db->getRegistry('users', "where roles <> '2' ORDER BY surname, name, middle_name", [], ['surname', 'name', 'middle_name']);
+$staffMinistryFilter = '';
+if (!$auth->isAdmin() && !$auth->haveUserRole(2)) {
+    $userMinistries = $_SESSION['user_ministry'] ?? [];
+    if (!empty($userMinistries)) {
+        $ministryConds = array_map(fn($id) => "ministries @> '[" . intval($id) . "]'", $userMinistries);
+        $staffMinistryFilter = " AND (roles @> '[\"2\"]' OR " . implode(' OR ', $ministryConds) . ")";
+    }
+}
+$users = $db->getRegistry('users', "where roles <> '2'" . $staffMinistryFilter . " ORDER BY surname, name, middle_name", [], ['surname', 'name', 'middle_name']);
 
 
 //echo '<pre>'.$taskId;print_r($editData);echo '</pre>';

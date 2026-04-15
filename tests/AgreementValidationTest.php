@@ -74,24 +74,24 @@ class AgreementValidationTest
             $hasValidationBlock ? 'Валидация найдена' : 'Валидация ОТСУТСТВУЕТ'
         );
 
-        // Проверка правила: максимум 2 участника
-        $hasMaxParticipants = preg_match('/participantCount\s*>\s*2/', $content);
+        // Проверка правила: ровно 2 участника в секции подписантов (реализовано через != 2)
+        $hasMaxParticipants = preg_match('/participantCount\s*!=\s*2/', $content);
         $this->assert(
             'Правило: максимум 2 участника в секции подписантов',
             $hasMaxParticipants,
             $hasMaxParticipants ? 'Правило реализовано' : 'Правило ОТСУТСТВУЕТ'
         );
 
-        // Проверка правила: максимум 1 подписант
-        $hasMaxSigners = preg_match('/signerCount\s*>\s*1/', $content);
+        // Проверка правила: ровно 1 подписант (реализовано через != 1)
+        $hasMaxSigners = preg_match('/signerCount\s*!=\s*1/', $content);
         $this->assert(
             'Правило: максимум 1 подписант (type=1)',
             $hasMaxSigners,
             $hasMaxSigners ? 'Правило реализовано' : 'Правило ОТСУТСТВУЕТ'
         );
 
-        // Проверка правила: максимум 1 утверждающий
-        $hasMaxApprovers = preg_match('/approverCount\s*>\s*1/', $content);
+        // Проверка правила: ровно 1 утверждающий (реализовано через != 1)
+        $hasMaxApprovers = preg_match('/approverCount\s*!=\s*1/', $content);
         $this->assert(
             'Правило: максимум 1 утверждающий (type=2)',
             $hasMaxApprovers,

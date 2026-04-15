@@ -205,6 +205,18 @@ class Db
 
         $result = $this->db::xdispense(TBL_PREFIX . $tableName);
 
+        // Для cam_agreement и cam_checksplans автоматически проставляем ministry_id из управления автора
+        if (in_array($tableName, ['agreement', 'checksplans', 'tasks']) && !isset($values['ministry_id'])) {
+            $authorId = intval($values['author'] ?? $_SESSION['user_id'] ?? 0);
+            if ($authorId > 0) {
+                $authorUser = $this->db::getRow('SELECT ministries FROM ' . TBL_PREFIX . 'users WHERE id = ?', [$authorId]);
+                $ministries = json_decode($authorUser['ministries'] ?? 'null', true);
+                if (!empty($ministries)) {
+                    $values['ministry_id'] = intval($ministries[0]);
+                }
+            }
+        }
+
         foreach ($values as $field => $value) {
             if (strlen($value) > 0) {
                 $result->{$field} = trim($value);
@@ -471,7 +483,7 @@ class Db
     }
 
     /**
-     * Получение инофрмации о типах столбцов в таблице
+     * Получение информации о типах столбцов в таблице
      * @param string $table_name - имя таблицы без префикса
      * @return array|int|\RedBeanPHP\Cursor|NULL
      */

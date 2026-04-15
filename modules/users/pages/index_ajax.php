@@ -210,7 +210,11 @@ $regs = $gui->getTableData($table->table_name);
                     <td>' . implode(';<br>', $user_roles_arr) . '</td>
                     <td class="group">' . trim($reg->surname) . ' ' . trim($reg->name) . ' ' . trim($reg->middle_name) . '</td>
                     <td>' . $institution['result'][$reg->institution]->short . '</td>
-                    <td>' . $ministries['array'][$reg->ministries] . '</td>
+                    <td>' . (function() use ($reg, $ministries) {
+                        $mIds = json_decode($reg->ministries, true) ?? [];
+                        $mNames = array_filter(array_map(fn($id) => $ministries['array'][$id] ?? '', $mIds));
+                        return implode(';<br>', $mNames);
+                    })() . '</td>
                     <td>' . $units['array'][$reg->division] . '</td>
                     <td>' . $reg->position . '</td>
                     <td>' . $reg->comment . '</td>

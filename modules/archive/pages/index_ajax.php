@@ -19,15 +19,21 @@ $documentacial = $db->getRegistry('documentdocuments');
 $items         = $db->getRegistry($table->table_name);
 
 $regs = $gui->getTableData($table->table_name, 'AND active = -1', true);
+
+$canDelete = (bool)($auth->checkModulePermissions(25)['delete'] ?? false);
 ?>
 <div class="nav">
     <div class="nav_01">
         <?
-        echo $gui->buildTopNav([
+        $navButtons = [
             'title'   => 'Архив документов',
             'renew'   => 'Сбросить все фильтры',
             'restore' => 'Восстановить из архива',
-        ]);
+        ];
+        if ($canDelete) {
+            $navButtons['delete'] = 'Удалить безвозвратно';
+        }
+        echo $gui->buildTopNav($navButtons);
         ?>
     </div>
 </div>

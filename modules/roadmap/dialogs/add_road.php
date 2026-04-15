@@ -20,14 +20,45 @@ $html        = '';
 $html_header = '';
 $user_signs  = [];
 
-$docId = intval($_POST['params']['docId']);
-$insId = intval($_POST['params']['insId']);
+$docId    = intval($_POST['params']['docId']);
+$insId    = intval($_POST['params']['insId']);
+$reportId = intval($_POST['params']['reportId'] ?? 0);
 
 // Проверяем что график для этого акта ещё не создан
 $existRoad = $db->selectOne('agreement', ' WHERE documentacial = 5 AND source_id = ?', [$docId]);
 if ($existRoad) {
-    // Уже создан — перенаправляем на просмотр
     echo '<script>el_app.dialog_open("view_road", {roadId: ' . $existRoad->id . '}, "roadmap");</script>';
+    exit;
+}
+
+// Получаем предложения из согласованного доклада
+$report    = $reportId > 0 ? $db->selectOne('agreement', ' WHERE id = ? AND documentacial = 8 AND status = 1', [$reportId]) : null;
+if (!$report) {
+    // Доклад не найден или не согласован — создание невозможно
+    echo '<div class="pop_up" style="width:400px">
+        <div class="title"><div class="name">Ошибка</div><div class="button icon close"><span class="material-icons">close</span></div></div>
+        <div class="pop_up_body" style="padding:20px">
+            Невозможно создать график: сначала необходимо согласовать доклад о результатах проверки.
+        </div>
+    </div>';
+    exit;
+}
+
+$bodyData  = json_decode($report->body ?? '{}', true) ?: [];
+$proposals = [];
+if (isset($bodyData['proposals']) && is_array($bodyData['proposals'])) {
+    $proposals = array_values(array_filter(array_map('trim', $bodyData['proposals']), fn($p) => strlen($p) > 0));
+} elseif (isset($bodyData['proposals_text']) && strlen($bodyData['proposals_text']) > 0) {
+    $proposals = array_values(array_filter(array_map('trim', explode("\n", $bodyData['proposals_text'])), fn($p) => strlen($p) > 0));
+}
+
+if (empty($proposals)) {
+    echo '<div class="pop_up" style="width:400px">
+        <div class="title"><div class="name">Ошибка</div><div class="button icon close"><span class="material-icons">close</span></div></div>
+        <div class="pop_up_body" style="padding:20px">
+            В докладе не указаны предложения по устранению нарушений. Отредактируйте доклад и добавьте предложения.
+        </div>
+    </div>';
     exit;
 }
 
@@ -80,20 +111,7 @@ if (strlen($tmpl->bottom ?? '') > 0) {
     $html .= $temp->twig_parse($tmpl->bottom, $header_vars);
 }
 
-// Нарушения — берём по учреждению через checkstaff (исправлен hardcode [5])
-$tids = [];
-$taskRows = $db->select('checkstaff', ' WHERE institution = ?', [$insId]);
-if ($taskRows) {
-    foreach ($taskRows as $task) {
-        $tids[] = $task->id;
-    }
-}
-$violations = [];
-if (count($tids) > 0) {
-    $violations = $db->db::getAll(
-        'SELECT * FROM ' . TBL_PREFIX . 'checksviolations WHERE tasks IN (' . implode(',', $tids) . ') ORDER BY id'
-    );
-}
+// Предложения берутся из согласованного доклада (уже заполнены выше в $proposals)
 ?>
 <style>
     .schedule_tbl, .schedule_tbl tr td, .schedule_tbl tr th {
@@ -124,56 +142,26 @@ if (count($tids) > 0) {
                     </div>
                 </div>
 
+                <p style="color:var(--color_04);font-size:13px;margin:4px 0 8px">
+                    Предложения по устранению взяты из согласованного доклада и не могут быть изменены.
+                    Заполните действия, сроки и ответственных.
+                </p>
                 <table class="schedule_tbl" style="width:100%">
                     <tr>
                         <th style="width:30px">№</th>
-                        <th style="width:28%">Нарушение / Предложения по устранению</th>
+                        <th style="width:35%">Предложение по устранению (из доклада)</th>
                         <th>Действия, необходимые для устранения</th>
                         <th style="width:110px">Срок устранения</th>
                         <th style="width:18%">Ответственный</th>
-                        <th style="width:24px"></th>
                     </tr>
-                    <?php if (!empty($violations)):
-                        $num = 1;
-                        foreach ($violations as $v): ?>
-                            <tr class="schedule_row">
-                                <td><div class="el_data"><?= $num ?></div></td>
-                                <td>
-                                    <div class="el_data">
-                                        <input type="hidden" name="violation_id[]" value="<?= intval($v['id']) ?>">
-                                        <input type="hidden" name="schedule_offers[]" value="<?= htmlspecialchars($v['name']) ?>">
-                                        <?= htmlspecialchars($v['name']) ?>
-                                    </div>
-                                </td>
-                                <td>
-                                    <div class="el_data">
-                                        <textarea class="el_input" name="schedule_actions[]"></textarea>
-                                    </div>
-                                </td>
-                                <td>
-                                    <div class="el_data">
-                                        <input type="date" class="el_input" name="schedule_deadlines[]">
-                                    </div>
-                                </td>
-                                <td>
-                                    <div class="el_data">
-                                        <input type="text" class="el_input" name="schedule_responsible[]" placeholder="ФИО">
-                                    </div>
-                                </td>
-                                <td>
-                                    <div class="button icon clear" style="display:none">
-                                        <span class="material-icons">close</span>
-                                    </div>
-                                </td>
-                            </tr>
-                            <?php $num++; endforeach;
-                    else: ?>
+                    <?php foreach ($proposals as $num => $proposal): ?>
                         <tr class="schedule_row">
-                            <td><div class="el_data">1</div></td>
+                            <td><div class="el_data"><?= $num + 1 ?></div></td>
                             <td>
                                 <div class="el_data">
                                     <input type="hidden" name="violation_id[]" value="">
-                                    <textarea class="el_input" name="schedule_offers[]" placeholder="Нарушение"></textarea>
+                                    <input type="hidden" name="schedule_offers[]" value="<?= htmlspecialchars($proposal) ?>">
+                                    <?= htmlspecialchars($proposal) ?>
                                 </div>
                             </td>
                             <td>
@@ -191,20 +179,9 @@ if (count($tids) > 0) {
                                     <input type="text" class="el_input" name="schedule_responsible[]" placeholder="ФИО">
                                 </div>
                             </td>
-                            <td>
-                                <div class="button icon clear" style="display:none">
-                                    <span class="material-icons">close</span>
-                                </div>
-                            </td>
                         </tr>
-                    <?php endif; ?>
+                    <?php endforeach; ?>
                 </table>
-
-                <?php if (empty($violations)): ?>
-                    <button class="button icon text new_schedule_row" style="margin-top:6px">
-                        <span class="material-icons">add</span>Ещё строка
-                    </button>
-                <?php endif; ?>
             </div>
 
             <div class="confirm">

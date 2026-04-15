@@ -8,11 +8,13 @@
 
 use Core\Db;
 use Core\Auth;
+use Core\Registry;
 
 require_once $_SERVER['DOCUMENT_ROOT'] . '/core/connect.php';
 
 $db   = new Db();
 $auth = new Auth();
+$reg  = new Registry();
 
 $result     = false;
 $resultText = '';
@@ -30,15 +32,24 @@ $actSentDate    = trim($_POST['params']['act_sent_date']      ?? '');
 $introText      = trim($_POST['params']['intro_text']         ?? '');
 
 // Получаем предложения как массив и фильтруем пустые
-$proposals      = array_filter(
+$proposals      = array_values(array_filter(
     array_map('trim', (array)($_POST['params']['proposals'] ?? [])),
     function($val) { return strlen($val) > 0; }
-);
+));
 
-$signers        = array_map('intval', (array)($_POST['params']['signers']       ?? []));
-$violationIds   = array_map('intval', (array)($_POST['params']['violation_ids'] ?? []));
-$listType       = intval($_POST['params']['list_type']        ?? 2);
-$inclObj        = intval($_POST['params']['include_objections'] ?? 0);
+// violation_ids — индексы отмеченных чекбоксов, violation_texts — тексты нарушений
+$checkedIds      = array_map('intval', (array)($_POST['params']['violation_ids']    ?? []));
+$violationTexts  = array_map('trim',   (array)($_POST['params']['violation_texts']  ?? []));
+// Оставляем только отмеченные нарушения
+$violations      = array_values(array_filter($violationTexts, function($text, $idx) use ($checkedIds) {
+    return in_array($idx, $checkedIds) && strlen($text) > 0;
+}, ARRAY_FILTER_USE_BOTH));
+$inclObj         = intval($_POST['params']['include_objections'] ?? 0);
+
+// agreementlist от компонента agreement_list
+$rawAgreementList = (array)($_POST['agreementlist'] ?? []);
+$clearAgreement = array_filter($rawAgreementList, function($s) { return strlen(trim($s)) > 0; });
+$agreementListParsed = $reg->fixJsonArray(array_values($clearAgreement));
 
 if ($actId === 0) {
     echo json_encode(['result' => false, 'resultText' => 'Не указан акт.']);
@@ -63,25 +74,7 @@ if ($existReport) {
 // ВАЖНО: Министр НЕ добавляется при создании!
 // Министр будет добавлен АВТОМАТИЧЕСКИ после полного согласования
 // (см. updateAgreement.php, documentacial=8, finalStatus=1)
-$agreementList = [];
-
-// Секция 1: согласующие (если есть)
-if (count($signers) > 0) {
-    $section = [
-        ['stage' => 1, 'list_type' => $listType]
-    ];
-    foreach ($signers as $sid) {
-        if ($sid <= 0) continue;
-        $section[] = [
-            'id'     => $sid,
-            'type'   => 2,  // согласование
-            'result' => null,
-        ];
-    }
-    if (count($section) > 1) {
-        $agreementList[] = $section;
-    }
-}
+$agreementList = $agreementListParsed;
 
 // ── Формируем name доклада ────────────────────────────────────
 $reportName = 'Доклад о результатах проверки «' . ($act->name ?? '') . '»';
@@ -106,7 +99,7 @@ $reportData = [
     'body'          => json_encode([
         'act_sent_date'     => $actSentDate,
         'proposals'         => $proposals,
-        'violation_ids'     => $violationIds,
+        'violations'        => $violations,
         'include_objections'=> $inclObj,
     ], JSON_UNESCAPED_UNICODE),
 ];

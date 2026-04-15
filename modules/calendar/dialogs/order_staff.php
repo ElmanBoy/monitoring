@@ -170,7 +170,7 @@ if ($auth->isLogin()) {
         if (isset($plan) && $plan->checks > 0) {
             $oSubQuery = ' AND checks = ' . $plan->checks;
         }
-        $orders = $db->getRegistry('documents', ' WHERE documentacial = 1' . $oSubQuery); //print_r($orders);
+        $orders = $db->getRegistry('documents', ' WHERE documentacial = 1' . $oSubQuery . $auth->getDocumentMinistryFilter()); //print_r($orders);
 
         //Если это уже назначенная задача
         if ($taskId > 0) {

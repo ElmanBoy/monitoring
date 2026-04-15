@@ -1,5 +1,6 @@
 <?php
 use Core\Db;
+use Core\Auth;
 use Core\Registry;
 
 require_once $_SERVER['DOCUMENT_ROOT'].'/core/connect.php';
@@ -8,8 +9,18 @@ $errStr = array();
 $result = false;
 $errorFields = array();
 
-$db = new Db;
-$reg = new Registry();
+$db   = new Db;
+$auth = new Auth();
+$reg  = new Registry();
+
+if (!$auth->isAdmin()) {
+    echo json_encode([
+        'result'      => false,
+        'resultText'  => 'Удаление планов доступно только администратору.',
+        'errorFields' => [],
+    ]);
+    exit;
+}
 
 if(!is_array($_POST['reg_id']) || count($_POST['reg_id']) == 0){
     $err++;

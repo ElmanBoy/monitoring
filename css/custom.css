@@ -1286,3 +1286,47 @@ table.num_list tr td{
 .plan_check_type_hint{
     display: none;
 }
+/* --- Диалог создания доклада --- */
+.proposal_item {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    margin-bottom: 4px;
+}
+
+.proposal_item .proposal_number {
+    flex-shrink: 0;
+    min-width: 1.5rem;
+    padding-top: 0.6rem;
+    text-align: right;
+    color: var(--dark);
+    font-size: 0.85rem;
+}
+
+.proposal_item .el_data {
+    margin: 0;
+}
+
+.proposal_item .button.remove_proposal {
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.hint_text {
+    font-size: 0.8rem;
+    color: var(--color_04);
+    width: 100%;
+}
+
+.violation_text {
+    flex: 1;
+    font-size: 0.85rem;
+}
+
+.violation_text .hint_text {
+    margin-top: 2px;
+}
+
+.invisible {
+    visibility: hidden;
+}

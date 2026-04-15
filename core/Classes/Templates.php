@@ -255,10 +255,10 @@ class Templates
             font-size: 5pt; background-color: #086a9b; color: #fff; line-height: 8px; vertical-align: middle">
                 СВЕДЕНИЯ О СЕРТИФИКАТЕ ЭП
             </div>
-            <div class="signature-data" style="font-size: 6px; line-height: 1.2; text-align: left">
-                <p style="margin: 0">Сертификат: ' . $signData['SerialNumber'] . '</p>
-                <p style="margin: 0">Владелец: ' . $fullName . '</p>
-                <p style="margin: 0">Действителен с ' . date('d.m.Y', strtotime($signData['validFrom']))
+            <div class="signature-data" style="font-size: 6px; line-height: 0.5em; text-align: left; padding: 0px">
+                <p style="text-indent: 0">Сертификат: ' . $signData['SerialNumber'] . '</p>
+                <p style="text-indent: 0">Владелец: ' . $fullName . '</p>
+                <p style="text-indent: 0">Действителен с ' . date('d.m.Y', strtotime($signData['validFrom']))
                 . ' по ' . date('d.m.Y', strtotime($signData['validTo'])) . '</p></div>';
             // Если есть изображение подписи, добавляем его
             if (!empty($signData['sign_image'])) {

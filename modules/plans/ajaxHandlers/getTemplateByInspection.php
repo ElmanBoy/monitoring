@@ -12,7 +12,7 @@ $selected = intval($_POST['selected']);
 
 if ($auth->isLogin()) {
     $temp = $db->selectOne('inspections', ' WHERE id = ?', [$tempId]);
-    $checks = $db->select('documents',  ' WHERE documentacial = 3 ORDER BY name');
+    $checks = $db->select('documents', ' WHERE documentacial = 3' . $auth->getDocumentMinistryFilter() . ' ORDER BY name');
 
     if (count($checks) > 0) {
         echo '<option value="0">&nbsp;</option>';

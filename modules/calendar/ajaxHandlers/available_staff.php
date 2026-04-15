@@ -79,8 +79,10 @@ ORDER BY u.surname, u.name;");
             foreach ($available as $key => $user) {
                 $user_fio = trim($user['surname']).' '.trim($user['name']).' '.trim($user['middle_name']);
 
+                $userMinistriesIds = json_decode($user['ministries'], true) ?? [];
+                $userMinistriesNames = array_filter(array_map(fn($id) => $mins['array'][$id] ?? '', $userMinistriesIds));
                 $userTitle = ' title="'.$ins['result'][$user['institution']]->short.
-                    (intval($user['ministries']) > 0 ? '<br>'.$mins['array'][$user['ministries']] : '').
+                    (count($userMinistriesNames) > 0 ? '<br>'.implode(', ', $userMinistriesNames) : '').
                     (intval($user['division']) > 0 ? '<br>'.$units['array'][$user['division']] : '').
                     (strlen($user['position']) > 0 ? '<br>'.$user['position'] : '').'"';
 

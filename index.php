@@ -78,9 +78,15 @@ if (isset($_POST['ajax']) && intval($_POST['ajax']) == 1) {
     $isPublicAction = in_array($_POST['action'] ?? '', ['login', 'mobileLogin']);
 
     if (!$isPublicAction) {
-        // Проверяем авторизацию, X-Requested-With и CSRF-токен одним методом
+        // Сначала проверяем авторизацию — если не залогинен, редиректим на логин
+        if (!$auth->isLogin()) {
+            echo '<script>document.location.href="/"</script>';
+            die();
+        }
+        // Затем проверяем AJAX-заголовки и CSRF — если не прошло, возвращаем ошибку без logout
         if (!$auth->checkAjax()) {
-            echo '<script>document.location.href="/?logout"</script>';
+            http_response_code(403);
+            echo json_encode(['result' => false, 'error' => 'Forbidden']);
             die();
         }
     }
@@ -190,6 +196,18 @@ if (isset($_POST['ajax']) && intval($_POST['ajax']) == 1) {
 // ─────────────────────────────────────────────────────────────────────────────
 } else {
 
+    // Очищаем куку last_path если там статический ресурс или невалидный путь
+    // (защита от бесконечного редиректа при запросах к .map/.js/.css и т.д.)
+    if (!empty($_COOKIE['last_path'])) {
+        $_COOKIE['last_path'] = str_replace('https://'.$_SERVER['SERVER_NAME'].'/', '', $_COOKIE['last_path']);
+        $cookiePath = urldecode($_COOKIE['last_path']);
+        $cookiePathOnly = parse_url($cookiePath, PHP_URL_PATH) ?? $cookiePath;
+        if (preg_match('/\.(map|js|css|ico|png|jpg|jpeg|gif|svg|woff|woff2|ttf|eot)(\?.*)?$/i', $cookiePathOnly)) {
+            setcookie('last_path', '', time() - 3600, '/');
+            unset($_COOKIE['last_path']);
+        }
+    }
+
     // Создаём токен CSRF в cookie — генерируем только если ещё нет в сессии
     try {
         if (empty($_SESSION['csrf-token'])) {
@@ -199,7 +217,7 @@ if (isset($_POST['ajax']) && intval($_POST['ajax']) == 1) {
     } catch (Exception $e) {
         echo $e->getMessage();
     }
-    setcookie('CSRF-TOKEN', $csrfToken, 0, '/', $_SERVER['SERVER_NAME']);
+    setcookie('CSRF-TOKEN', $csrfToken, 0, '/');
 
     // Проверяем авторизацию
     if (!$auth->isLogin()) {
@@ -216,14 +234,12 @@ if (isset($_POST['ajax']) && intval($_POST['ajax']) == 1) {
                 }
             </script>';
         }
-        include_once __DIR__ . '/tmpl/page/login.php';
-
         // Очищаем URL от служебных параметров перед сохранением
         $requestUri = $_SERVER['REQUEST_URI'];
         $requestUri = preg_replace('/[?&]session_expired=1/', '', $requestUri);
-        $requestUri = preg_replace('/[?&]module=(&|$)/', '$1', $requestUri);
-        $requestUri = preg_replace('/[?&]mode=(&|$)/', '$1', $requestUri);
-        $requestUri = preg_replace('/[?&]open_dialog=undefined/', '', $requestUri);
+        $requestUri = preg_replace('/[?&]module=[^&]*/', '', $requestUri);
+        $requestUri = preg_replace('/[?&]mode=[^&]*/', '', $requestUri);
+        $requestUri = preg_replace('/[?&]open_dialog=[^&]*/', '', $requestUri);
         $requestUri = preg_replace('/[?&]+$/', '', $requestUri);
         $requestUri = preg_replace('/\?&/', '?', $requestUri);
 
@@ -232,15 +248,40 @@ if (isset($_POST['ajax']) && intval($_POST['ajax']) == 1) {
             $requestUri = '/dashboard';
         }
 
-        $cleanPath = 'https://' . $_SERVER['HTTP_HOST'] . $requestUri;
-        setcookie('last_path', $cleanPath, 0, '/', $_SERVER['SERVER_NAME']);
+        $cleanPath = $requestUri;
+
+        // Не сохраняем в last_path запросы к статическим ресурсам (source maps, js, css и т.д.)
+        $isStaticResource = preg_match('/\.(map|js|css|ico|png|jpg|jpeg|gif|svg|woff|woff2|ttf|eot)(\?.*)?$/i', $requestUri);
+        if (!$isStaticResource) {
+            setcookie('last_path', $cleanPath, 0, '/');
+        }
         $_SESSION['login_path'] = $cleanPath;
+
+        include_once __DIR__ . '/tmpl/page/login.php';
     } else {
         $auth->refreshPermissions(); // пересчитываем права из БД при каждой загрузке страницы
-        // Получаем начальную страницу в зависимости от роли пользователя
-        $default_page = $auth->getDefaultPage();
+
+        // Определяем страницу для загрузки с приоритетом:
+        // 1. Явный параметр url= в GET
+        // 2. Путь из REQUEST_URI (работает при F5 на странице с открытым диалогом)
+        // 3. Сохранённый last_path из куки
         if (isset($_GET['url'])) {
             $default_page = $_GET['url'];
+        } else {
+            // Извлекаем только pathname из REQUEST_URI (без query string)
+            $requestPath = strtok($_SERVER['REQUEST_URI'], '?');
+            $requestPath = trim($requestPath, '/');
+            // Санитизация пути (только буквы, цифры, _, -, /)
+            $requestPath = preg_replace('/[^a-zA-Z0-9_\-\/]/', '', $requestPath);
+            $requestPath = str_replace('..', '', $requestPath);
+
+            if (strlen($requestPath) > 0
+                && is_file($_SERVER['DOCUMENT_ROOT'] . '/modules/' . $requestPath . '/pages/index.php')
+            ) {
+                $default_page = $requestPath;
+            } else {
+                $default_page = $auth->getDefaultPage();
+            }
         }
 
         $end_path = $default_page . '/pages/index.php';
@@ -253,7 +294,7 @@ if (isset($_POST['ajax']) && intval($_POST['ajax']) == 1) {
         $checkModuleAccess($default_page);
 
         if (!is_file($_SERVER['DOCUMENT_ROOT'] . '/modules/' . $end_path)) {
-            echo '<script>document.location.href="/"</script>';
+            echo '<script>document.location.href="/dashboard"</script>';
             exit();
         }
         include_once $_SERVER['DOCUMENT_ROOT'] . '/modules/' . $end_path;

@@ -113,7 +113,7 @@ if ($auth->isLogin()) {
         $insector = $db->getRegistry('institutions', 'WHERE inspectors = 1');
         $tasks = $db->getRegistry('tasks');
         $ousr = $db->getRegistry('ousr');
-        $orders = $db->getRegistry('documents', ' WHERE documentacial = 1');
+        $orders = $db->getRegistry('documents', ' WHERE documentacial = 1' . $auth->getDocumentMinistryFilter());
 
         //Если это уже назначенная задача
         if ($taskId > 0) {
@@ -160,7 +160,15 @@ if ($auth->isLogin()) {
             }
         }
 
-        $users = $db->getRegistry('users', "where roles <> '2' ORDER BY surname, name, middle_name", [], ['surname', 'name', 'middle_name']);
+        $staffMinistryFilter = '';
+        if (!$auth->isAdmin() && !$auth->haveUserRole(2)) {
+            $userMinistries = $_SESSION['user_ministry'] ?? [];
+            if (!empty($userMinistries)) {
+                $ministryConds = array_map(fn($id) => "ministries @> '[" . intval($id) . "]'", $userMinistries);
+                $staffMinistryFilter = " AND (roles @> '[\"2\"]' OR " . implode(' OR ', $ministryConds) . ")";
+            }
+        }
+        $users = $db->getRegistry('users', "where roles <> '2'" . $staffMinistryFilter . " ORDER BY surname, name, middle_name", [], ['surname', 'name', 'middle_name']);
         $new_order_number = 'ПРП' . $new_order_num . '-' . date('Y');
         $prevDate = date('Y-m-d', strtotime($datesEventArr[0] . ' -1 day'));
 

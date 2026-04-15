@@ -385,8 +385,10 @@ class Registry
                 if (intval($f['from_db']) == 40) {
                     $dataParamsArr = [];
                     $dataAttr = ['institution', 'ministries', 'division', 'position'];
+                    $iMinistriesIds = json_decode($i->ministries, true) ?? [];
+                    $iMinistriesNames = array_filter(array_map(fn($id) => $mins['array'][$id] ?? '', $iMinistriesIds));
                     $itemTitle = ' title="' . htmlspecialchars($ins['result'][$i->institution]->short .
-                            (intval($i->ministries) > 0 ? '<br>' . $mins['array'][$i->ministries] : '') .
+                            (count($iMinistriesNames) > 0 ? '<br>' . implode(', ', $iMinistriesNames) : '') .
                             (intval($i->division) > 0 ? '<br>' . $units['array'][$i->division] : '') .
                             (strlen($i->position) > 0 ? '<br>' . $i->position : '')
                         ) . '"';
@@ -1060,11 +1062,11 @@ class Registry
                 $html .= $this->renderListFromDB($i, $d, $mode);
 
                 $i = [
-                    'type' => 'list_fromdb',
+                    'type' => 'list_fromdb_multi',
                     'from_db' => 68,
                     'from_db_value' => 0,
                     'from_db_text' => 13,
-                    'field_name' => 'ministries[]',
+                    'field_name' => 'ministries',
                     'label' => 'Управление'
                 ];
                 $html .= $this->renderListFromDB($i, $d, $mode);
@@ -1178,11 +1180,11 @@ class Registry
             $html .= $this->renderListFromDB($i, $editData, $mode);
 
             $i = [
-                'type' => 'list_fromdb',
+                'type' => 'list_fromdb_multi',
                 'from_db' => 68,
                 'from_db_value' => 0,
                 'from_db_text' => 13,
-                'field_name' => 'ministries[]',
+                'field_name' => 'ministries',
                 'label' => 'Управление'
             ];
             $html .= $this->renderListFromDB($i, $editData, $mode);
@@ -1290,11 +1292,11 @@ class Registry
             $html .= $this->renderListFromDB($i, $editData, $mode);
 
             $i = [
-                'type' => 'list_fromdb',
+                'type' => 'list_fromdb_multi',
                 'from_db' => 68,
                 'from_db_value' => 0,
                 'from_db_text' => 13,
-                'field_name' => 'ministries[]',
+                'field_name' => 'ministries',
                 'label' => 'Управление'
             ];
             $html .= $this->renderListFromDB($i, $editData, $mode);
@@ -1751,13 +1753,15 @@ class Registry
             $userTitle = '';
             if (isset($users['result'][$userId])) {
                 $institution = $users['result'][$userId]->institution ?? 0;
-                $ministry = $users['result'][$userId]->ministries ?? 0;
+                $ministriesRaw = $users['result'][$userId]->ministries ?? null;
+                $ministriesIds = json_decode($ministriesRaw, true) ?? [];
+                $ministriesNames = array_filter(array_map(fn($id) => $mins['array'][$id] ?? '', $ministriesIds));
                 $division = $users['result'][$userId]->division ?? 0;
                 $position = $users['result'][$userId]->position ?? '';
 
                 $userTitle = ' title="' . htmlspecialchars(
                         ($ins['result'][$institution]->short ?? '') .
-                        ($ministry > 0 ? '<br>' . ($mins['array'][$ministry] ?? '') : '') .
+                        (count($ministriesNames) > 0 ? '<br>' . implode(', ', $ministriesNames) : '') .
                         ($division > 0 ? '<br>' . ($units['array'][$division] ?? '') : '') .
                         (!empty($position) ? '<br>' . htmlspecialchars($position) : '')
                     ) . '"';
@@ -2747,37 +2751,47 @@ class Registry
                         if (isset($sections[0]['stage']) && $sections[0]['stage'] == '') { //Секция подписантов
                             $count = 0;
                             foreach ($sections as $sec) {
-                                //print_r($sec);
-                                //if (intval($sec['type']) == 2) { //подписание
+                                // Пропускаем заголовок секции (нет поля id)
+                                $userId = intval($sec['id'] ?? 0);
+                                if ($userId === 0) continue;
+
                                 if ($doc_id > 0) {
                                     $signs = $this->db->selectOne('signs',
                                         ' where user_id = ? AND doc_id = ? AND type = 1
-                                             ORDER BY section DESC LIMIT 1', [$sec['id'], $doc_id]
-                                    ); //print_r($signs);
-                                } //echo ' where user_id = '.$sec['id'].' AND doc_id = '.$doc_id;
+                                             ORDER BY section DESC LIMIT 1', [$userId, $doc_id]
+                                    );
+                                }
                                 $role = intval($sec['role']);
 
-                                $userItem = $users['result'][$sec['id']];
+                                // Загружаем пользователя напрямую (users['result'] — линейный массив, не по id)
+                                $signerUser = $this->db->selectOne('users', ' WHERE id = ?', [$userId]);
+                                if (!$signerUser) continue;
 
-                                $signers[$role] = $userItem->surname . ' ' .
-                                    mb_substr($userItem->name, 0, 1) . '. ' .
-                                    (strlen($userItem->middle_name) > 0 ? mb_substr($userItem->middle_name, 0, 1) . '.' : '');
+                                $signers[$role] = $signerUser->surname . ' ' .
+                                    mb_substr($signerUser->name, 0, 1) . '. ' .
+                                    (strlen($signerUser->middle_name) > 0 ? mb_substr($signerUser->middle_name, 0, 1) . '.' : '');
 
-                                $position = $userItem->position;
-                                if (intval($sec['vrio']) > 0) {
-                                    $position = 'И.О. ' . $users['result'][$sec['vrio']]->position;
+                                $position = $signerUser->position;
+                                if (intval($sec['vrio'] ?? 0) > 0) {
+                                    $vrioUser = $this->db->selectOne('users', ' WHERE id = ?', [intval($sec['vrio'])]);
+                                    if ($vrioUser) {
+                                        $position = 'И.О. ' . $vrioUser->position;
+                                    }
                                 }
+                                $signers_position[$role] = $position;
 
-                                $signers_position[$role] = $position;/*$inst['array'][$userItem->institution].' '.
-                                    (intval($userItem->ministries) > 0 ? '<br>'.$mins['array'][$userItem->ministries] : '').
-                                    (intval($userItem->division) > 0 ? '<br>'.$units['array'][$userItem->division] : '').
-                                    (strlen($userItem->position) > 0 ? '<br>'.$userItem->position : '');*/
+                                $userMinistriesArr = json_decode($signerUser->ministries ?? '[]', true) ?: [];
+                                $userMinistryId = intval($userMinistriesArr[0] ?? 0);
+                                $signers_ministry[$role] = $userMinistryId > 0 ? ($mins['array'][$userMinistryId] ?? '') : '';
+                                $userDivisionId = intval($signerUser->division ?? 0);
+                                $signers_unit[$role] = $userDivisionId > 0 ? ($units['array'][$userDivisionId] ?? '') : '';
+                                $userInsId = intval($signerUser->institution ?? 0);
+                                $signers_institution[$role] = $userInsId > 0 ? ($inst['array'][$userInsId] ?? '') : '';
 
                                 $sign[$role] = is_object($signs) ?
-                                    $temp->getSign(json_decode($signs->sign, true)['certificate_info']) : '';
+                                    new \Twig\Markup($temp->getSign(json_decode($signs->sign, true)['certificate_info']), 'UTF-8') : '';
 
                                 $count++;
-                                //}
                             }
                         }
                     }
@@ -2788,7 +2802,10 @@ class Registry
                 $data['sign_1'] = $sign[0];
                 $data['signer_1'] = $signers[0];
                 $data['signer_1_position'] = $signers_position[0];
-                $data['sign_2'] = $sign[1];
+                // Для акта (documentacial=2) ЭП подписанта передаётся снаружи (руководитель проверки)
+                if (intval($data['documentacial'] ?? 0) !== 2) {
+                    $data['sign_2'] = $sign[1];
+                }
                 $data['signer_2'] = $signers[1];
                 $data['signer_2_position'] = $signers_position[1];
             }
@@ -2906,37 +2923,47 @@ class Registry
                         if (isset($sections[0]['stage']) && $sections[0]['stage'] == '') { //Секция подписантов
                             $count = 0;
                             foreach ($sections as $sec) {
-                                //print_r($sec);
-                                //if (intval($sec['type']) == 2) { //подписание
+                                // Пропускаем заголовок секции (нет поля id)
+                                $userId = intval($sec['id'] ?? 0);
+                                if ($userId === 0) continue;
+
                                 if ($doc_id > 0) {
                                     $signs = $this->db->selectOne('signs',
                                         ' where user_id = ? AND doc_id = ? AND type = 1
-                                             ORDER BY section DESC LIMIT 1', [$sec['id'], $doc_id]
-                                    ); //print_r($signs);
-                                } //echo ' where user_id = '.$sec['id'].' AND doc_id = '.$doc_id;
+                                             ORDER BY section DESC LIMIT 1', [$userId, $doc_id]
+                                    );
+                                }
                                 $role = intval($sec['role']);
 
-                                $userItem = $users['result'][$sec['id']];
+                                // Загружаем пользователя напрямую (users['result'] — линейный массив, не по id)
+                                $signerUser = $this->db->selectOne('users', ' WHERE id = ?', [$userId]);
+                                if (!$signerUser) continue;
 
-                                $signers[$role] = $userItem->surname . ' ' .
-                                    mb_substr($userItem->name, 0, 1) . '. ' .
-                                    (strlen($userItem->middle_name) > 0 ? mb_substr($userItem->middle_name, 0, 1) . '.' : '');
+                                $signers[$role] = $signerUser->surname . ' ' .
+                                    mb_substr($signerUser->name, 0, 1) . '. ' .
+                                    (strlen($signerUser->middle_name) > 0 ? mb_substr($signerUser->middle_name, 0, 1) . '.' : '');
 
-                                $position = $userItem->position;
-                                if (intval($sec['vrio']) > 0) {
-                                    $position = 'И.О. ' . $users['result'][$sec['vrio']]->position;
+                                $position = $signerUser->position;
+                                if (intval($sec['vrio'] ?? 0) > 0) {
+                                    $vrioUser = $this->db->selectOne('users', ' WHERE id = ?', [intval($sec['vrio'])]);
+                                    if ($vrioUser) {
+                                        $position = 'И.О. ' . $vrioUser->position;
+                                    }
                                 }
+                                $signers_position[$role] = $position;
 
-                                $signers_position[$role] = $position;/*$inst['array'][$userItem->institution].' '.
-                                    (intval($userItem->ministries) > 0 ? '<br>'.$mins['array'][$userItem->ministries] : '').
-                                    (intval($userItem->division) > 0 ? '<br>'.$units['array'][$userItem->division] : '').
-                                    (strlen($userItem->position) > 0 ? '<br>'.$userItem->position : '');*/
+                                $userMinistriesArr = json_decode($signerUser->ministries ?? '[]', true) ?: [];
+                                $userMinistryId = intval($userMinistriesArr[0] ?? 0);
+                                $signers_ministry[$role] = $userMinistryId > 0 ? ($mins['array'][$userMinistryId] ?? '') : '';
+                                $userDivisionId = intval($signerUser->division ?? 0);
+                                $signers_unit[$role] = $userDivisionId > 0 ? ($units['array'][$userDivisionId] ?? '') : '';
+                                $userInsId = intval($signerUser->institution ?? 0);
+                                $signers_institution[$role] = $userInsId > 0 ? ($inst['array'][$userInsId] ?? '') : '';
 
                                 $sign[$role] = is_object($signs) ?
-                                    $temp->getSign(json_decode($signs->sign, true)['certificate_info']) : '';
+                                    new \Twig\Markup($temp->getSign(json_decode($signs->sign, true)['certificate_info']), 'UTF-8') : '';
 
                                 $count++;
-                                //}
                             }
                         }
                     }
@@ -2947,7 +2974,10 @@ class Registry
                 $data['sign_1'] = $sign[0];
                 $data['signer_1'] = $signers[0];
                 $data['signer_1_position'] = $signers_position[0];
-                $data['sign_2'] = $sign[1];
+                // Для акта (documentacial=2) ЭП подписанта передаётся снаружи (руководитель проверки)
+                if (intval($data['documentacial'] ?? 0) !== 2) {
+                    $data['sign_2'] = $sign[1];
+                }
                 $data['signer_2'] = $signers[1];
                 $data['signer_2_position'] = $signers_position[1];
             }
@@ -3310,6 +3340,10 @@ class Registry
                 break;
             case 'JSONB':
                 $value = $this->fixJsonArray($value);
+                // Для числовых массивов (ID) — приводим к integer для единообразия в jsonb
+                if ($f['field_name'] === 'ministries' || $f['type'] === 'list_fromdb_multi') {
+                    $value = array_map(fn($v) => is_numeric($v) ? intval($v) : $v, $value);
+                }
                 $value = json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
                 break;
             default:
@@ -4077,11 +4111,28 @@ class Registry
                             }
                             break;
                         case 'list_fromdb':
-                            // Получаем значение из справочника
+                        case 'list_fromdb_multi':
+                            // Получаем текстовое значение из справочника
                             $fieldValue = $editData[$f['field_name']] ?? '';
                             if (!empty($fieldValue) && !empty($f['from_db'])) {
-                                $registry = $this->db->getRegistry($f['from_db']);
-                                $cellValue = $registry[$fieldValue] ?? $fieldValue;
+                                $regRow = $this->db->selectOne('registry', ' WHERE id = ?', [intval($f['from_db'])]);
+                                $textProp = $this->db->selectOne('regprops', ' WHERE id = ?', [intval($f['from_db_text'])]);
+                                if ($regRow && $textProp && !empty($regRow->table_name)) {
+                                    $multi = ($f['from_db_view'] == '1' || $f['type'] == 'list_fromdb_multi');
+                                    if ($multi) {
+                                        // Значение — JSON-массив ID
+                                        $ids = json_decode($fieldValue, true) ?: [];
+                                        $names = [];
+                                        foreach ($ids as $rid) {
+                                            $item = $this->db->selectOne($regRow->table_name, ' WHERE id = ?', [intval($rid)]);
+                                            if ($item) $names[] = $item->{$textProp->field_name} ?? '';
+                                        }
+                                        $cellValue = implode(', ', array_filter($names));
+                                    } else {
+                                        $item = $this->db->selectOne($regRow->table_name, ' WHERE id = ?', [intval($fieldValue)]);
+                                        $cellValue = $item ? ($item->{$textProp->field_name} ?? $fieldValue) : $fieldValue;
+                                    }
+                                }
                             }
                             break;
                         case 'calendar':
@@ -4122,6 +4173,84 @@ class Registry
         }
 
         return $output;
+    }
+
+    /**
+     * Возвращает данные пользователя с ролью министра.
+     *
+     * Ищет активного пользователя у которого:
+     *   - roles содержит "2" (роль министра)
+     *   - position = 'Министр социального развития Московской области'
+     *
+     * Возвращает объект с полями: id, surname, name, middle_name, position
+     * или null если министр не найден.
+     *
+     * Пример использования:
+     *   $minister = $reg->getMinister();
+     *   $fio = $minister->surname . ' ' . $minister->name . ' ' . $minister->middle_name;
+     *   $initials = $minister->surname . ' ' .
+     *       mb_substr($minister->name, 0, 1) . '.' .
+     *       mb_substr($minister->middle_name, 0, 1) . '.';
+     */
+    public function getMinister(): ?object
+    {
+        return $this->db->selectOne(
+            'users',
+            " WHERE active = 1
+                AND roles::text LIKE '%\"2\"%'
+                AND position = 'Министр социального развития Московской области'
+              ORDER BY id LIMIT 1",
+            []
+        );
+    }
+
+    /**
+     * Возвращает список нарушений из данных чек-листа:
+     * поля типа radio с ответом "Нет" (value=0) или "Частично" (value=2).
+     * Возвращает массив строк — тексты вопросов (имена полей чек-листа).
+     */
+    public function getChecklistViolations(int $regId, array $editData): array
+    {
+        if ($regId <= 0) return [];
+
+        $regProps = $this->rb::getAll(
+            'SELECT ' . TBL_PREFIX . 'checkitems.*, ' .
+            TBL_PREFIX . 'checkfields.label, ' .
+            TBL_PREFIX . 'checkfields.row_behaviour ' .
+            'FROM ' . TBL_PREFIX . 'checkfields, ' . TBL_PREFIX . 'checkitems ' .
+            'WHERE ' . TBL_PREFIX . 'checkfields.prop_id = ' . TBL_PREFIX . 'checkitems.id AND ' .
+            TBL_PREFIX . 'checkfields.reg_id = ? ORDER BY ' . TBL_PREFIX . 'checkfields.sort',
+            [$regId]
+        );
+
+        $violations = [];
+        foreach ($regProps as $f) {
+            if ($f['type'] !== 'radio') continue;
+            $val = (string)($editData[$f['field_name']] ?? '');
+            if ($val === '') continue;
+
+            // Ищем метку для данного значения в radio_values
+            $items = json_decode($f['radio_values'] ?? '[]', true) ?: [];
+            $answer = '';
+            foreach ($items as $item) {
+                if (isset($item['value']) && (string)$item['value'] === $val) {
+                    $answer = $item['label'] ?? '';
+                    break;
+                }
+            }
+            if ($answer === '') continue;
+
+            // Нарушение — если метка содержит "Нет" или "Частично" (без учёта регистра)
+            $answerLower = mb_strtolower($answer);
+            if (strpos($answerLower, 'нет') !== false || strpos($answerLower, 'частично') !== false) {
+                $label = $f['label'] ?: $f['name'];
+                $violations[] = [
+                    'text'   => $label,
+                    'answer' => $answer,
+                ];
+            }
+        }
+        return $violations;
     }
 
     /*******************Чек-листы Конец**************************/
@@ -4331,7 +4460,9 @@ class Registry
         // Используем уже полученную задачу вместо повторного запроса
         $task = $tasks;
         $executor = $this->db->selectOne('institutions', ' WHERE id = ?', [$user->institution]);
-        $ministries = $this->db->selectOne('ministries', ' WHERE id = ?', [$user->ministries]);
+        $userMinistriesIds = json_decode($user->ministries, true) ?? [];
+        $userFirstMinistryId = intval($userMinistriesIds[0] ?? 0);
+        $ministries = $userFirstMinistryId > 0 ? $this->db->selectOne('ministries', ' WHERE id = ?', [$userFirstMinistryId]) : null;
         $division = $this->db->selectOne('units', ' WHERE id = ?', [$user->division]);
 
         $html .= '
@@ -4361,7 +4492,7 @@ class Registry
         } else {
             $html .= '<label>' .
                 $executor->short . '<br>' .
-                (strlen($ministries->name) > 0 ? $ministries->name . '<br>' : '') .
+                ($ministries && strlen($ministries->name) > 0 ? $ministries->name . '<br>' : '') .
                 (strlen($division->name) > 0 ? $division->name . '<br>' : '') .
                 (strlen($user->position) > 0 ? $user->position . '<br>' : '') .
                 (strlen($userFio) > 0 ? '<strong> ' . $userFio . '</strong>' : '') . '</label>';

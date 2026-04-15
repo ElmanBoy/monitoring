@@ -280,6 +280,7 @@ class Auth
                 $this->_session['user_institution'] = $result->institution;
                 $this->_session['user_ousr'] = $result->ousr;
                 $this->_session['user_division'] = $result->division;
+                $this->_session['user_ministry'] = json_decode($result->ministries, true) ?? [];
                 $this->_session['user_position'] = $result->position;
                 $this->_session['user_active'] = $result->active;
                 $this->_session['user_email'] = $result->email;
@@ -288,6 +289,11 @@ class Auth
                 $this->_session['user_subordinates'] = @$result->subordinates;
                 $this->_session['user_settings'] = $this->getUserSettings($result->id);
                 $this->_session['user_permissions'] = $this->getUserPermissions($roles);
+                // Восстанавливаем последний выбранный фильтр по управлению
+                $savedFilter = $this->_session['user_settings'][0]['ministry_filter'] ?? null;
+                if ($savedFilter !== null) {
+                    $this->_session['ministry_filter'] = intval($savedFilter);
+                }
 
                 $existingCsrf = $_SESSION['csrf-token'] ?? null;
                 $_SESSION = $this->_session;
@@ -377,13 +383,14 @@ class Auth
 	 */
 	public function checkAjax(): bool
     {
-        return ($this->isLogin() && intval($this->_post['ajax']) == 1
-            && (strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest' ||
-                strtolower($this->_headers['x-requested-with']) == 'xmlhttprequest')
-            && hash_equals(
-                (string)($_SESSION['csrf-token'] ?? ''),
-                (string)(getallheaders()['x-csrf-token'] ?? getallheaders()['X-Csrf-Token'] ?? '')
-            ));
+        $headers  = getallheaders();
+        $csrfIn   = (string)($headers['x-csrf-token'] ?? $headers['X-Csrf-Token'] ?? $headers['X-CSRF-Token'] ?? '');
+        $csrfSess = (string)($_SESSION['csrf-token'] ?? '');
+        return ($this->isLogin()
+            && intval($this->_post['ajax']) == 1
+            && (strtolower($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') == 'xmlhttprequest'
+                || strtolower($this->_headers['x-requested-with'] ?? '') == 'xmlhttprequest')
+            && hash_equals($csrfSess, $csrfIn));
     }
 
 
@@ -403,12 +410,31 @@ class Auth
      */
     public function getCurrentModulePermission(): array
     {
-        $path = $_GET['url'] == '' ? $_COOKIE['last_path'] : $_POST['url'];
-        if($path == ''){
-            $path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+        // При AJAX-запросе модуль передаётся явно
+        if (!empty($_POST['module'])) {
+            $path = trim($_POST['module'], '/');
+        } elseif (!empty($_GET['url'])) {
+            $path = trim($_GET['url'], '/');
+        } else {
+            $path = $_COOKIE['last_path'] ?? '';
+            // last_path может содержать полный URL (https://host/path?query)
+            if (preg_match('/^https?:\/\//', $path)) {
+                $path = parse_url($path, PHP_URL_PATH) ?? '';
+            }
+            $path = trim($path, '/');
+            // Убираем query string если вдруг осталась
+            if (($q = strpos($path, '?')) !== false) {
+                $path = substr($path, 0, $q);
+            }
+        }
+        if ($path === '') {
+            return [];
         }
         $gui = new \Core\Gui();
-        $module_props = $gui->getModuleProps(str_replace('/', '', $path));
+        $module_props = $gui->getModuleProps($path);
+        if (empty($module_props['id'])) {
+            return [];
+        }
         return $this->checkModulePermissions($module_props['id']);
     }
 
@@ -423,16 +449,28 @@ class Auth
     {
         // Декодируем URL из cookie и удаляем слеши в начале/конце
         $last_path = urldecode($_COOKIE['last_path'] ?? '');
+
+        // Если last_path содержит полный URL (https://...) — извлекаем только путь
+        if (preg_match('/^https?:\/\//', $last_path)) {
+            $parsed = parse_url($last_path);
+            $last_path = ($parsed['path'] ?? '') . (isset($parsed['query']) ? '?' . $parsed['query'] : '');
+        }
+
         $last_path = preg_replace('/^\/+|\/+$/', '', $last_path);
+
+        // Роль ОК (5) всегда попадает на roadmap — независимо от last_path
+        if ($this->haveUserRole(5)) {
+            return 'roadmap';
+        }
 
         // Очищаем URL от некорректных параметров
         if (strlen($last_path) > 0) {
             // Удаляем параметр session_expired
             $last_path = preg_replace('/[?&]session_expired=1/', '', $last_path);
 
-            // Удаляем пустые параметры module и mode
-            $last_path = preg_replace('/[?&]module=(&|$)/', '$1', $last_path);
-            $last_path = preg_replace('/[?&]mode=(&|$)/', '$1', $last_path);
+            // Удаляем параметры module и mode (с любым значением)
+            $last_path = preg_replace('/[?&]module=[^&]*/', '', $last_path);
+            $last_path = preg_replace('/[?&]mode=[^&]*/', '', $last_path);
 
             // Удаляем параметр open_dialog с любым значением (включая JSON)
             $last_path = preg_replace('/[?&]open_dialog=[^&]*/', '', $last_path);
@@ -473,6 +511,57 @@ class Auth
     public function isAdmin(): bool
     {
         return $this->haveUserRole(1);
+    }
+
+    /**
+     * Возвращает активный фильтр по управлению.
+     * Для админов/руководства — из сессии ministry_filter (выбранное вручную), либо 0 (все).
+     * Для остальных — из user_ministry (собственное управление).
+     * Возвращает массив ID управлений или пустой массив (без ограничений).
+     *
+     * @return array массив int ID управлений, [] = без фильтра
+     */
+    public function getActiveMinistries(): array
+    {
+        if ($this->isAdmin() || $this->haveUserRole(2)) {
+            $filter = intval($_SESSION['ministry_filter'] ?? 0);
+            // id=1 (Руководство) — особый случай: видит всё, фильтр не применяется
+            return ($filter > 0 && $filter !== 1) ? [$filter] : [];
+        }
+        return array_map('intval', $_SESSION['user_ministry'] ?? []);
+    }
+
+    /**
+     * Возвращает SQL-фрагмент для фильтрации cam_agreement по управлению (через author).
+     * Используется в модуле Документы для списка соглашений.
+     *
+     * @return string SQL-фрагмент " AND author IN (...)" или пустая строка
+     */
+    public function getAgreementMinistryFilter(): string
+    {
+        $ministries = $this->getActiveMinistries();
+        if (empty($ministries)) {
+            return '';
+        }
+        $ids = implode(',', $ministries);
+        return ' AND author IN (SELECT id FROM ' . TBL_PREFIX . 'users WHERE ministries @> \'[' . intval($ministries[0]) . ']\')';
+    }
+
+    /**
+     * Возвращает SQL-фрагмент для фильтрации cam_documents по управлению текущего пользователя.
+     * Администраторы/руководство используют активный фильтр из сессии (ministry_filter).
+     * Остальные — только шаблоны своего управления или без управления (ministry_id IS NULL).
+     *
+     * @return string SQL-фрагмент, начинающийся с " AND " или пустая строка
+     */
+    public function getDocumentMinistryFilter(): string
+    {
+        $ministries = $this->getActiveMinistries();
+        if (empty($ministries)) {
+            return '';
+        }
+        $ids = implode(',', $ministries);
+        return ' AND (ministry_id IN (' . $ids . ') OR ministry_id IS NULL)';
     }
 
     public function haveUserRole( int $role_id): bool
@@ -521,6 +610,16 @@ class Auth
         $newPerms = $this->getUserPermissions($roles);
         $_SESSION['user_permissions'] = $newPerms;
         $_SESSION['user_roles']       = $user->roles;
+        $_SESSION['user_ministry']    = json_decode($user->ministries, true) ?? [];
         $this->_session['user_permissions'] = $newPerms;
+
+        // Восстанавливаем последний выбранный фильтр по управлению, если он ещё не задан в сессии
+        if (!isset($_SESSION['ministry_filter'])) {
+            $userSettings = $this->getUserSettings($userId);
+            $savedFilter = $userSettings[0]['ministry_filter'] ?? null;
+            if ($savedFilter !== null) {
+                $_SESSION['ministry_filter'] = intval($savedFilter);
+            }
+        }
     }
 }

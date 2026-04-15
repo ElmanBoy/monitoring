@@ -14,7 +14,7 @@ $selected = intval($_POST['selected']);
 if($auth->isLogin()) {
 
     $units = $db->db::getAll('SELECT * FROM '.TBL_PREFIX.'users WHERE institution = '.$orgId .
-        ' AND ministries = '.$ministriesId. ' AND division = '.$division);
+        ' AND ministries @> \'[' . $ministriesId . ']\' AND division = ' . $division);
 
     if(count($units) > 0) {
         echo '<option value="">&nbsp;</option>';

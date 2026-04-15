@@ -11,14 +11,14 @@
 use Core\Db;
 use Core\Auth;
 use Core\Date;
-use Core\Gui;
+use Core\Registry;
 
 require_once $_SERVER['DOCUMENT_ROOT'] . '/core/connect.php';
 
-$db = new Db();
+$db   = new Db();
 $auth = new Auth();
 $date = new Date();
-$gui = new Gui();
+$reg  = new Registry();
 
 if (!$auth->isLogin()) {
     die();
@@ -44,26 +44,41 @@ $existReport = $db->selectOne('agreement', ' WHERE documentacial = 8 AND source_
 $insId = intval($act->ins_id ?? $act->source_id ?? 0);
 $planId = intval($act->plan_id ?? 0);
 
+// Нарушения из чек-листов: поля radio с ответом "Нет" (0) или "Частично" (2)
 $violations = [];
-if ($insId > 0) {
-    $staffRows = [];
-    if ($planId > 0) {
-        $plan = $db->selectOne('checksplans', ' WHERE id = ?', [$planId]);
-        if ($plan && strlen($plan->uid ?? '') > 0) {
-            $staffRows = $db->select('checkstaff', ' WHERE check_uid = ? AND institution = ?',
-                [$plan->uid, $insId]
-            );
+if ($insId > 0 && $planId > 0) {
+    $plan = $db->selectOne('checksplans', ' WHERE id = ?', [$planId]);
+    if ($plan && strlen($plan->uid ?? '') > 0) {
+        $staffRows = $db->select('checkstaff',
+            ' WHERE check_uid = ? AND institution = ?', [$plan->uid, $insId]
+        );
+        foreach ($staffRows as $sr) {
+            // task_id — jsonb массив ID задач
+            $taskIds = json_decode($sr->task_id ?? '[]', true) ?: [];
+            foreach ($taskIds as $taskId) {
+                $task = $db->selectOne('tasks', ' WHERE id = ?', [intval($taskId)]);
+                if (!$task) continue;
+                $checklistIds = json_decode($task->sheet ?? '[]', true) ?: [];
+                foreach ($checklistIds as $clId) {
+                    $checklist = $db->selectOne('checklists', ' WHERE id = ?', [intval($clId)]);
+                    if (!$checklist || empty($checklist->table_name)) continue;
+                    $clData = $db->selectOne($checklist->table_name, ' WHERE id = ?', [intval($sr->record_id)]);
+                    if (!$clData) continue;
+                    $clViolations = $reg->getChecklistViolations(intval($clId), (array)$clData);
+                    foreach ($clViolations as $v) {
+                        $violations[] = $v;
+                    }
+                }
+            }
         }
-    }
-    if (count($staffRows) > 0) {
-        $taskIds = array_map(function ($r) {
-            return intval($r->id);
-        }, $staffRows
-        );
-        $violations = $db->db::getAll(
-            'SELECT * FROM ' . TBL_PREFIX . 'checksviolations WHERE tasks IN (' .
-            implode(',', $taskIds) . ') ORDER BY id'
-        );
+        // Убираем дубли по тексту
+        $seen = [];
+        $violations = array_filter($violations, function($v) use (&$seen) {
+            if (isset($seen[$v['text']])) return false;
+            $seen[$v['text']] = true;
+            return true;
+        });
+        $violations = array_values($violations);
     }
 }
 
@@ -71,12 +86,8 @@ if ($insId > 0) {
 $objections = json_decode($act->objections ?? '{}', true);
 $hasObjections = !empty($objections['text']) || !empty($objections['files']);
 
-// Пользователи для выбора листа согласования
-$users = $db->getRegistry('users', " WHERE active = 1 AND roles NOT LIKE '%2%'",
-    [], ['surname', 'name', 'middle_name']
-);
 ?>
-<div class='pop_up drag' style='width:65vw;min-height:70vh'>
+<div class='pop_up drag' style='width:65vw'>
     <div class='title handle'>
         <div class='name'>Доклад министру — «<?= htmlspecialchars($act->name) ?>»</div>
         <div class='button icon close'><span class='material-icons'>close</span></div>
@@ -86,7 +97,7 @@ $users = $db->getRegistry('users', " WHERE active = 1 AND roles NOT LIKE '%2%'",
         <?php if ($existReport): ?>
             <!-- Доклад уже создан — показываем статус и кнопку согласования -->
             <div class='group'>
-                <div class='item'>
+                <div class='item w_100'>
                     <div class='inform_block <?= intval($existReport->status) === 1 ? 'inform_success' : '' ?>'>
                         <span class='material-icons'><?= intval($existReport->status) === 1 ? 'task_alt' : 'pending' ?></span>
                         Доклад <?= intval($existReport->status) === 1 ? 'утверждён министром' : 'на согласовании' ?>.
@@ -96,18 +107,13 @@ $users = $db->getRegistry('users', " WHERE active = 1 AND roles NOT LIKE '%2%'",
                     </div>
                 </div>
             </div>
-            <div class='group'>
-                <div class='item'>
-                    <button class='button icon text' onclick="
-                            el_app.dialog_open('documents', 'agreement',
-                            {docId: <?= intval($existReport->id) ?>}, true)">
-                        <span class='material-icons'>how_to_vote</span>Открыть лист согласования
-                    </button>
-                    <button class='button icon text' style='margin-left:8px' onclick="
-                            window.open('/?ajax=1&mode=popup&module=documents&url=report_pdf&params[docId]=<?= intval($existReport->id) ?>','_blank')">
-                        <span class='material-icons'>picture_as_pdf</span>Предпросмотр PDF
-                    </button>
-                </div>
+            <div class='confirm'>
+                <button class='button icon text' onclick="el_app.dialog_open('documents', 'agreement', {docId: <?= intval($existReport->id) ?>}, true)">
+                    <span class='material-icons'>how_to_vote</span>Открыть лист согласования
+                </button>
+                <button class='button icon text' onclick="window.open('/?ajax=1&mode=popup&module=documents&url=report_pdf&params[docId]=<?= intval($existReport->id) ?>','_blank')">
+                    <span class='material-icons'>picture_as_pdf</span>Предпросмотр PDF
+                </button>
             </div>
         <?php else: ?>
             <!-- Форма создания доклада -->
@@ -132,20 +138,18 @@ $users = $db->getRegistry('users', " WHERE active = 1 AND roles NOT LIKE '%2%'",
                         <div class='item w_50'>
                             <div class='el_data'>
                                 <label>Исходящий номер доклада</label>
-                                <input class='el_input' type='text' name='params[doc_number]'
-                                       placeholder='20Исх-XXXX'>
+                                <input class='el_input' type='text' name='params[doc_number]' placeholder='20Исх-XXXX'>
                             </div>
                         </div>
                         <div class='item w_50'>
                             <div class='el_data'>
                                 <label>Дата доклада</label>
-                                <input class='el_input single_date' type='date'
-                                       name='params[doc_date]' value='<?= date('Y-m-d') ?>'>
+                                <input class='el_input single_date' type='date' name='params[doc_date]' value='<?= date('Y-m-d') ?>'>
                             </div>
                         </div>
                     </div>
                     <div class='group'>
-                        <div class='item'>
+                        <div class='item w_100'>
                             <div class='el_data'>
                                 <label>Акт направлен ОК</label>
                                 <input class='el_input' type='text' name='params[act_sent_date]'
@@ -155,31 +159,31 @@ $users = $db->getRegistry('users', " WHERE active = 1 AND roles NOT LIKE '%2%'",
                         </div>
                     </div>
                     <div class='group'>
-                        <div class='item'>
-                            <div class='el_data'>
-                                <label>Вводный текст доклада <span style='color:var(--color_04);font-size:11px'>(можно оставить по умолчанию)</span></label>
-                                <textarea class='el_input' name='params[intro_text]' rows='5'
-                                          style='width:100%;resize:vertical'><?= htmlspecialchars($act->brief ?? '') ?></textarea>
+                        <div class='item w_100'>
+                            <div class='el_data vertical'>
+                                <label>Вводный текст доклада <span style='color:var(--color_04);font-size:11px'>(если оставить пустым — сформируется автоматически из данных плана и приказа)</span></label>
+                                <textarea class='el_textarea' name='params[intro_text]' rows='3' placeholder='Управлением финансового контроля и аудита на основании приказа от ... №..., в период с ... по ..., проведена плановая проверка ...'></textarea>
                             </div>
                         </div>
                     </div>
                     <div class='group'>
-                        <div class='item'>
-                            <label style='font-weight:500;margin-bottom:8px;display:block'>Предложения по результатам проверки</label>
+                        <div class='item w_100 block'>
+                            <div class='el_data vertical'>
+                                <label>Предложения по результатам проверки</label>
+                            </div>
                             <div id='proposals_container'>
-                                <!-- Первое предложение -->
-                                <div class='proposal_item' style='display:flex;gap:8px;margin-bottom:8px;align-items:flex-start'>
-                                    <span class='proposal_number' style='flex-shrink:0;padding:8px 0;min-width:20px'>1.</span>
-                                    <textarea class='el_input' name='params[proposals][]' rows='2'
-                                              style='width:100%;resize:vertical'
-                                              placeholder='Введите предложение...'></textarea>
-                                    <button type='button' class='button icon remove_proposal' style='flex-shrink:0;visibility:hidden'>
+                                <div class='proposal_item'>
+                                    <span class='proposal_number'>1.</span>
+                                    <div class='el_data'>
+                                        <textarea class='el_textarea' name='params[proposals][]' rows='2' placeholder='Введите предложение...'></textarea>
+                                    </div>
+                                    <button type='button' class='button icon remove_proposal invisible'>
                                         <span class='material-icons'>close</span>
                                     </button>
                                 </div>
                             </div>
-                            <button type='button' class='button icon text' id='add_proposal' style='margin-top:8px'>
-                                <span class='material-icons'>add_circle_outline</span>Еще предложение
+                            <button type='button' class='button icon text' id='add_proposal'>
+                                <span class='material-icons'>add_circle_outline</span>Ещё предложение
                             </button>
                         </div>
                     </div>
@@ -188,16 +192,13 @@ $users = $db->getRegistry('users', " WHERE active = 1 AND roles NOT LIKE '%2%'",
                 <!-- Вкладка: Нарушения -->
                 <div class='tab-panel' id='tab_report_violations-panel' style='display:none'>
                     <div class='group'>
-                        <div class='item'>
-                            <p style='color:var(--color_04);font-size:12px'>
-                                Нарушения подтягиваются из акта автоматически. Снимите галочку, чтобы исключить
-                                нарушение из доклада.
-                            </p>
+                        <div class='item w_100'>
+                            <p class='hint_text'>Нарушения подтягиваются из акта автоматически. Снимите галочку, чтобы исключить нарушение из доклада.</p>
                         </div>
                     </div>
                     <?php if (count($violations) === 0): ?>
                         <div class='group'>
-                            <div class='item'>
+                            <div class='item w_100'>
                                 <div class='inform_block'>
                                     <span class='material-icons'>info</span>
                                     По данному акту нарушений не зафиксировано.
@@ -206,20 +207,18 @@ $users = $db->getRegistry('users', " WHERE active = 1 AND roles NOT LIKE '%2%'",
                         </div>
                     <?php else: ?>
                         <?php foreach ($violations as $i => $v): ?>
-                            <div class='group' style='border-bottom:1px solid var(--border_color);padding-bottom:8px'>
-                                <div class='item' style='display:flex;gap:12px;align-items:flex-start'>
-                                    <input type='checkbox'
-                                           name='params[violation_ids][]'
-                                           value='<?= intval($v['id']) ?>'
-                                           checked
-                                           style='margin-top:4px;flex-shrink:0'>
-                                    <div>
-                                        <div style='font-weight:500'><?= ($i + 1) . '. ' . htmlspecialchars($v['name'] ?? '') ?></div>
-                                        <?php if (!empty($v['violations'])): ?>
-                                            <div style='color:var(--color_04);font-size:12px;margin-top:4px'>
-                                                Тип: <?= htmlspecialchars($v['violations']) ?>
-                                            </div>
-                                        <?php endif; ?>
+                            <div class='group'>
+                                <div class='item w_100'>
+                                    <div class='custom_checkbox'>
+                                        <label class='container'>
+                                            <input type='checkbox' name='params[violation_ids][]' value='<?= $i ?>' checked>
+                                            <span class='checkmark'></span>
+                                        </label>
+                                    </div>
+                                    <input type='hidden' name='params[violation_texts][]' value='<?= htmlspecialchars($v['text']) ?>'>
+                                    <div class='violation_text'>
+                                        <strong><?= ($i + 1) . '. ' . htmlspecialchars($v['text']) ?></strong>
+                                        <div class='hint_text'>Ответ: <?= htmlspecialchars($v['answer']) ?></div>
                                     </div>
                                 </div>
                             </div>
@@ -231,27 +230,30 @@ $users = $db->getRegistry('users', " WHERE active = 1 AND roles NOT LIKE '%2%'",
                 <?php if ($hasObjections): ?>
                     <div class='tab-panel' id='tab_report_objections-panel' style='display:none'>
                         <div class='group'>
-                            <div class='item'>
-                                <label>Дата возражений</label>
-                                <div class='el_value'><?= htmlspecialchars($objections['date'] ?? '') ?></div>
-                            </div>
-                        </div>
-                        <div class='group'>
-                            <div class='item'>
-                                <label>Текст возражений ОК</label>
-                                <div style='background:var(--bg_02);padding:12px;border-radius:6px;white-space:pre-wrap'>
-                                    <?= htmlspecialchars($objections['text'] ?? 'Нет текста') ?>
+                            <div class='item w_50'>
+                                <div class='el_data'>
+                                    <label>Дата возражений</label>
+                                    <input class='el_input' type='text' readonly value='<?= htmlspecialchars($objections['date'] ?? '') ?>'>
                                 </div>
                             </div>
                         </div>
                         <div class='group'>
-                            <div class='item'>
-                                <label>Включить возражения в текст доклада</label>
-                                <label class='container'>
-                                    <input type='checkbox' name='params[include_objections]' value='1' checked>
-                                    <span class='checkmark'></span>
-                                    Да, включить раздел «Возражения ОК» в доклад
-                                </label>
+                            <div class='item w_100'>
+                                <div class='el_data vertical'>
+                                    <label>Текст возражений ОК</label>
+                                    <textarea class='el_textarea' rows='5' readonly><?= htmlspecialchars($objections['text'] ?? '') ?></textarea>
+                                </div>
+                            </div>
+                        </div>
+                        <div class='group'>
+                            <div class='item w_100'>
+                                <div class='custom_checkbox'>
+                                    <label class='container'>
+                                        <input type='checkbox' name='params[include_objections]' value='1' checked>
+                                        <span class='checkmark'></span>
+                                        Включить раздел «Возражения ОК» в доклад
+                                    </label>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -260,28 +262,16 @@ $users = $db->getRegistry('users', " WHERE active = 1 AND roles NOT LIKE '%2%'",
                 <!-- Вкладка: Лист согласования -->
                 <div class='tab-panel' id='tab_report_agreement-panel' style='display:none'>
                     <div class='group'>
-                        <div class='item'>
-                            <p>Укажите согласовантов. Министр будет добавлен автоматически последним подписантом.</p>
+                        <div class='item w_100'>
+                            <p class='hint_text'>Укажите согласовантов. Министр будет добавлен автоматически последним подписантом.</p>
                         </div>
                     </div>
-                    <div class='group'>
-                        <div class='item'>
-                            <select data-label='Согласующие (можно выбрать несколько)'
-                                    name='params[signers][]' multiple style='height:150px'>
-                                <?= $gui->buildSelectFromRegistry($users['result'], [], true,
-                                    ['surname', 'name', 'middle_name']
-                                ) ?>
-                            </select>
-                        </div>
-                    </div>
-                    <div class='group'>
-                        <div class='item w_50'>
-                            <label>Тип согласования</label>
-                            <select name='params[list_type]' class='el_input'>
-                                <option value='2'>Параллельное</option>
-                                <option value='1'>Последовательное</option>
-                            </select>
-                        </div>
+                    <div class='group agreement_list_group'>
+                        <?= $reg->renderAddAgreement(
+                            ['field_name' => 'agreementlist'],
+                            ['agreementlist' => 'null'],
+                            ''
+                        ) ?>
                     </div>
                 </div>
 
@@ -299,8 +289,12 @@ $users = $db->getRegistry('users', " WHERE active = 1 AND roles NOT LIKE '%2%'",
     </div>
 </div>
 
+<script src='/js/assets/agreement_list.js'></script>
 <script>
     (function () {
+        agreement_list.agreement_list_init();
+        el_app.mainInit();
+
         var proposalCounter = 1;
 
         // Функция обновления нумерации предложений
@@ -314,42 +308,30 @@ $users = $db->getRegistry('users', " WHERE active = 1 AND roles NOT LIKE '%2%'",
         $('#add_proposal').on('click', function() {
             proposalCounter++;
 
-            var $newProposal = $('<div>', {
-                'class': 'proposal_item',
-                'style': 'display:flex;gap:8px;margin-bottom:8px;align-items:flex-start'
-            });
+            var $newProposal = $('<div>', {'class': 'proposal_item'});
 
-            $newProposal.append(
-                $('<span>', {
-                    'class': 'proposal_number',
-                    'style': 'flex-shrink:0;padding:8px 0;min-width:20px',
-                    'text': proposalCounter + '.'
-                })
-            );
+            $newProposal.append($('<span>', {'class': 'proposal_number', 'text': proposalCounter + '.'}));
 
-            $newProposal.append(
-                $('<textarea>', {
-                    'class': 'el_input',
-                    'name': 'params[proposals][]',
-                    'rows': 2,
-                    'style': 'width:100%;resize:vertical',
-                    'placeholder': 'Введите предложение...'
-                })
-            );
+            var $wrap = $('<div>', {'class': 'el_data'});
+            $wrap.append($('<textarea>', {
+                'class': 'el_textarea',
+                'name': 'params[proposals][]',
+                'rows': 2,
+                'placeholder': 'Введите предложение...'
+            }));
+            $newProposal.append($wrap);
 
-            var $removeBtn = $('<button>', {
+            $newProposal.append($('<button>', {
                 'type': 'button',
                 'class': 'button icon remove_proposal',
-                'style': 'flex-shrink:0',
                 'html': '<span class="material-icons">close</span>'
-            });
+            }));
 
-            $newProposal.append($removeBtn);
             $('#proposals_container').append($newProposal);
 
             // Показываем кнопки удаления, если предложений больше одного
             if ($('#proposals_container .proposal_item').length > 1) {
-                $('.remove_proposal').css('visibility', 'visible');
+                $('.remove_proposal').removeClass('invisible');
             }
         });
 
@@ -362,7 +344,7 @@ $users = $db->getRegistry('users', " WHERE active = 1 AND roles NOT LIKE '%2%'",
 
                 // Скрываем кнопки удаления, если осталось только одно предложение
                 if ($('#proposals_container .proposal_item').length === 1) {
-                    $('.remove_proposal').css('visibility', 'hidden');
+                    $('.remove_proposal').addClass('invisible');
                 }
             }
         });

@@ -92,9 +92,10 @@ var el_roadmap_registry = {
 
         // Создать график
         $(".addRoad").off("click").on("click", function () {
-            let taskId = $(this).data("id"),
-                insId  = $(this).data("ins");
-            el_app.dialog_open("add_road", {docId: taskId, insId: insId}, "roadmap");
+            let taskId   = $(this).data("id"),
+                insId    = $(this).data("ins"),
+                reportId = $(this).data("report");
+            el_app.dialog_open("add_road", {docId: taskId, insId: insId, reportId: reportId}, "roadmap");
         });
 
         // Открыть существующий график устранения

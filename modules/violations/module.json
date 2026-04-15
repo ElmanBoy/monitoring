@@ -1,0 +1,12 @@
+{
+  "id": 22,
+  "name": "Нарушения",
+  "description": "Реестр выявленных нарушений с отслеживанием статусов устранения",
+  "minimumCoreVersion": "0.1",
+  "title": "Реестр нарушений",
+  "version": "0.1",
+  "author": "Боязитов Э.М.",
+  "path": "violations",
+  "icon": "rule_folder",
+  "number": 7
+}

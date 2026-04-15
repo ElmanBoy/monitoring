@@ -67,10 +67,15 @@ class Gui
             $module_path = $mArr[0];
         }
         $props_file = $_SERVER['DOCUMENT_ROOT'] . '/modules/' . $module_path . '/module.json';
+        if (!is_file($props_file)) {
+            return [];
+        }
         $module_props = json_decode(file_get_contents($props_file), true);
-        $this->set('module_id', $module_props['id']);
-        $this->set('module_props', $module_props);
-        return $module_props;
+        if (!empty($module_props['id'])) {
+            $this->set('module_id', $module_props['id']);
+            $this->set('module_props', $module_props);
+        }
+        return $module_props ?? [];
     }
 
     public function buildLeftMenu1(): string
@@ -355,6 +360,7 @@ class Gui
             return $this->db->select($tableName, $filterQueryMain . $sortQuery, $filterSlots);
         } else {
             echo '<script>alert("Ваша сессия устарела.");document.location.href = "/"</script>';
+            return [];
         }
     }
 
@@ -1007,6 +1013,27 @@ class Gui
     }
 
 
+    /**
+     * Заполняет filterFields из строки фильтра $_GET['filter'].
+     * Нужно вызывать перед buildSortFilter, когда таблица строится вручную (без buildTable).
+     */
+    public function parseFilterFields(): void
+    {
+        $this->filterFields = [];
+        if (empty($this->_get['filter'])) {
+            return;
+        }
+        foreach (explode(';', $this->_get['filter']) as $fPart) {
+            $fArr = explode(':', $fPart, 2);
+            if (count($fArr) < 2 || $fArr[1] === '') continue;
+            foreach (explode('|', $fArr[1]) as $val) {
+                if ($val !== '') {
+                    $this->filterFields[$fArr[0]][] = $val;
+                }
+            }
+        }
+    }
+
     public function buildSortFilter(
         string $tableName,
         string $columnText,
@@ -1426,6 +1453,28 @@ class Gui
                                 $notsHtml .
                                 '<button tabindex="0" class="button icon right" title="' . $title . '">
                                     <span class="material-icons" id="logout">logout</span></button>';
+                        }
+                        break;
+                    case 'ministry_filter':
+                        if ($this->auth->isAdmin() || $this->auth->haveUserRole(2)) {
+                            $_mList = $this->db->select('ministries', ' WHERE active = 1 ORDER BY name');
+                            $_activeId = intval($_SESSION['ministry_filter'] ?? 0);
+                            $_activeName = 'Все управления';
+                            foreach ($_mList as $_m) {
+                                if ($_m->id == $_activeId) { $_activeName = $_m->name; break; }
+                            }
+                            $_dot = $_activeId > 0 ? ' <span class="mf_dot"></span>' : '';
+                            $navHtml .= '<div class="mf_nav_wrap">
+                                <button tabindex="0" class="button icon text mf_nav_toggle" title="' . $title . '">
+                                    <span class="material-icons">filter_list</span>
+                                    <span class="mf_nav_label">' . htmlspecialchars($_activeName) . '</span>' . $_dot . '
+                                </button>
+                                <div class="mf_nav_dropdown">
+                                    <div class="mf_nav_option' . ($_activeId === 0 ? ' mf_nav_selected' : '') . '" data-id="0">Все управления</div>';
+                            foreach ($_mList as $_m) {
+                                $navHtml .= '<div class="mf_nav_option' . ($_m->id == $_activeId ? ' mf_nav_selected' : '') . '" data-id="' . $_m->id . '">' . htmlspecialchars($_m->name) . '</div>';
+                            }
+                            $navHtml .= '</div></div>';
                         }
                         break;
                 }

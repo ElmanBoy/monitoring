@@ -11,6 +11,8 @@
 use Core\Db;
 use Core\Auth;
 use Core\Date;
+use Core\Registry;
+use Core\Templates;
 use Dompdf\Dompdf;
 use Dompdf\Options;
 
@@ -19,6 +21,8 @@ require_once $_SERVER['DOCUMENT_ROOT'] . '/core/connect.php';
 $db   = new Db();
 $auth = new Auth();
 $date = new Date();
+$reg  = new Registry();
+$temp = new Templates();
 
 if (!$auth->isLogin()) { die(); }
 
@@ -44,50 +48,40 @@ $planId = intval($rep->plan_id ?? 0);
 
 // Учреждение
 $ins = $insId > 0 ? $db->selectOne('institutions', ' WHERE id = ?', [$insId]) : null;
-$insName = $ins->name ?? '';
-$insNameShort = $ins->name_short ?? $insName;
+$insName      = $ins->name       ?? '';
+$insNameShort = $ins->short      ?? ($ins->name_short ?? $insName);
+
+// Шаблон доклада (из cam_documents, привязан к документу через rep->document)
+$tmplDoc = intval($rep->document ?? 0) > 0
+    ? $db->selectOne('documents', ' WHERE id = ?', [intval($rep->document)])
+    : null;
+
+// Министр
+$minister = $reg->getMinister();
+$ministerInitials = '';
+$ministerFio      = '';
+if ($minister) {
+    $ministerInitials = trim($minister->surname) . ' ' .
+        mb_substr(trim($minister->name), 0, 1) . '.' .
+        mb_substr(trim($minister->middle_name), 0, 1) . '.';
+    $ministerFio = trim($minister->surname) . ' ' .
+        trim($minister->name) . ' ' .
+        trim($minister->middle_name);
+}
 
 // Данные из поля body (сохранены при создании)
 $body = json_decode($rep->body ?? '{}', true) ?: [];
-$actSentDate    = $body['act_sent_date']     ?? ($act->doc_number ?? '');
-$violationIds   = $body['violation_ids']     ?? [];
-$inclObj        = intval($body['include_objections'] ?? 0);
+$actSentDate = $body['act_sent_date'] ?? ($act->doc_number ?? '');
+$inclObj     = intval($body['include_objections'] ?? 0);
 
-// Предложения: новый формат (массив) или старый (текст)
+// Предложения
 $proposals = [];
-if (isset($body['proposals']) && is_array($body['proposals'])) {
-    // Новый формат - массив
-    $proposals = array_filter($body['proposals'], function($p) { return strlen(trim($p)) > 0; });
-} elseif (isset($body['proposals_text']) && strlen($body['proposals_text']) > 0) {
-    // Старый формат - текст, разбиваем по строкам (обратная совместимость)
-    $proposals = array_filter(
-        array_map('trim', explode("\n", $body['proposals_text'])),
-        function($p) { return strlen($p) > 0; }
-    );
+if (!empty($body['proposals']) && is_array($body['proposals'])) {
+    $proposals = array_values(array_filter($body['proposals'], function($p) { return strlen(trim($p)) > 0; }));
 }
 
-// Нарушения
-$violations = [];
-if ($insId > 0 && $planId > 0) {
-    $plan = $db->selectOne('checksplans', ' WHERE id = ?', [$planId]);
-    if ($plan && strlen($plan->uid ?? '') > 0) {
-        $staffRows = $db->select('checkstaff', ' WHERE check_uid = ? AND institution = ?',
-            [$plan->uid, $insId]);
-        if (count($staffRows) > 0) {
-            $taskIds = array_map(function($r){ return intval($r->id); }, $staffRows);
-            $allViolations = $db->db::getAll(
-                'SELECT * FROM ' . TBL_PREFIX . 'checksviolations WHERE tasks IN (' .
-                implode(',', $taskIds) . ') ORDER BY id'
-            );
-            foreach ($allViolations as $v) {
-                // Если выбраны конкретные нарушения — фильтруем
-                if (count($violationIds) === 0 || in_array(intval($v['id']), $violationIds)) {
-                    $violations[] = $v;
-                }
-            }
-        }
-    }
-}
+// Нарушения — из body['violations'] (сохранены при создании доклада)
+$violations = $body['violations'] ?? [];
 
 // Возражения ОК
 $objections = json_decode($act->objections ?? '{}', true) ?: [];
@@ -97,9 +91,10 @@ $repDate = strlen($rep->docdate ?? '') > 0
     ? $date->dateToString($rep->docdate)
     : date('d.m.Y');
 
-// Подписант (начальник управления) — автор доклада
-$repAuthor = $db->selectOne('users', ' WHERE id = ?', [intval($rep->author ?? 0)]);
-$authorFio  = trim(($repAuthor->surname ?? '') . ' ' . mb_substr(trim($repAuthor->name ?? ''), 0, 1) . '. ' .
+// Подписант — автор доклада
+$repAuthor  = $db->selectOne('users', ' WHERE id = ?', [intval($rep->author ?? 0)]);
+$authorFio  = trim(($repAuthor->surname ?? '') . ' ' .
+    mb_substr(trim($repAuthor->name ?? ''), 0, 1) . '. ' .
     mb_substr(trim($repAuthor->middle_name ?? ''), 0, 1) . '.');
 $authorPos  = $repAuthor->position ?? '';
 
@@ -113,19 +108,45 @@ $orderDate   = $order->docdate ? $date->dateToString($order->docdate) : '';
 // Период проверки из плана
 $checkPeriodStart = '';
 $checkPeriodEnd   = '';
-if ($planId > 0) {
-    $plan = $plan ?? $db->selectOne('checksplans', ' WHERE id = ?', [$planId]);
-    if ($plan) {
-        $addIns = json_decode($plan->addinstitution ?? '[]', true);
-        foreach ((array)$addIns as $ads) {
-            if (intval($ads['institutions'] ?? 0) === $insId && isset($ads['check_periods'])) {
-                $pArr = explode(' - ', $ads['check_periods']);
-                $checkPeriodStart = $date->correctDateFormatFromMysql($pArr[0] ?? '');
-                $checkPeriodEnd   = $date->correctDateFormatFromMysql($pArr[1] ?? '');
-                break;
-            }
+$plan = $planId > 0 ? $db->selectOne('checksplans', ' WHERE id = ?', [$planId]) : null;
+if ($plan) {
+    $checks = json_decode($plan->checks ?? '[]', true) ?: [];
+    foreach ($checks as $ch) {
+        if (intval($ch['institution'] ?? $ch['institutions'] ?? 0) === $insId) {
+            $pArr = explode(' - ', $ch['check_periods'] ?? '');
+            $checkPeriodStart = $date->correctDateFormatFromMysql(trim($pArr[0] ?? ''));
+            $checkPeriodEnd   = $date->correctDateFormatFromMysql(trim($pArr[1] ?? ''));
+            break;
         }
     }
+}
+
+// ── Переменные для подстановки в шаблон ─────────────────────
+$tplVars = [
+    'minister_initials'  => $ministerInitials,
+    'minister_fio'       => $ministerFio,
+    'institution'        => $insName,
+    'institution_short'  => $insNameShort,
+    'order_number'       => $orderNumber,
+    'order_date'         => $orderDate,
+    'check_period_start' => $checkPeriodStart,
+    'check_period_end'   => $checkPeriodEnd,
+    'report_date'        => $repDate,
+    'signer'             => $authorFio,
+    'signer_position'    => $authorPos,
+    'act_sent_date'      => $actSentDate,
+];
+
+// Рендерим header из шаблона (адресат)
+$headerHtml = $tmplDoc ? $temp->twig_parse($tmplDoc->header ?? '', $tplVars) : '';
+
+// Рендерим вводный абзац: если заполнен вручную — берём его,
+// иначе рендерим body шаблона
+$introHtml = '';
+if (strlen($rep->brief ?? '') > 0) {
+    $introHtml = nl2br(htmlspecialchars($rep->brief));
+} elseif ($tmplDoc && strlen($tmplDoc->body ?? '') > 0) {
+    $introHtml = $temp->twig_parse($tmplDoc->body, $tplVars);
 }
 
 // ── HTML для DomPDF ─────────────────────────────────────────
@@ -226,14 +247,13 @@ ob_start();
     <body>
 
     <!-- Шапка: адресат справа -->
+    <?php if (strlen($headerHtml) > 0): ?>
     <div class="clearfix">
         <div class="header-right">
-            Министру социального развития<br>
-            Московской области<br>
-            <br>
-            <strong>_______________</strong>
+            <?= $headerHtml ?>
         </div>
     </div>
+    <?php endif; ?>
 
     <!-- Заголовок -->
     <div class="title-block">
@@ -246,18 +266,9 @@ ob_start();
     <div class="greeting">Уважаемый министр!</div>
 
     <!-- Вводный абзац -->
-    <div class="intro">
-        <?php
-        $introDefault = 'Управлением финансового контроля и аудита' .
-            (strlen($orderDate) > 0 ? ' на основании приказа от ' . $orderDate .
-                (strlen($orderNumber) > 0 ? ' № ' . $orderNumber : '') : '') .
-            ', в период с ' . $checkPeriodStart . ' по ' . $checkPeriodEnd .
-            ' года, проведена плановая проверка' .
-            (strlen($insName) > 0 ? ' ' . $insName : '') . '.';
-
-        echo htmlspecialchars(strlen($rep->brief ?? '') > 0 ? $rep->brief : $introDefault);
-        ?>
-    </div>
+    <?php if (strlen($introHtml) > 0): ?>
+    <div class="intro"><?= $introHtml ?></div>
+    <?php endif; ?>
 
     <?php if (strlen($actSentDate) > 0): ?>
         <div class="intro">
@@ -270,7 +281,7 @@ ob_start();
         <h2 class="section-title">По результатам проверки установлено следующее.</h2>
         <?php foreach ($violations as $i => $v): ?>
             <div class="violation-item">
-                <?= ($i + 1) . '. ' . htmlspecialchars($v['name'] ?? '') ?>
+                <?= ($i + 1) . '. ' . htmlspecialchars($v['text'] ?? '') ?>
             </div>
         <?php endforeach; ?>
     <?php else: ?>

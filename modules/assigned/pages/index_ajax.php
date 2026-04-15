@@ -7,7 +7,16 @@ use Core\Date;
 
 require_once $_SERVER['DOCUMENT_ROOT'] . '/core/connect.php';
 
+// При AJAX-загрузке параметры (filter, sort и др.) приходят в $_POST['params'] — мержим в $_GET
+if (isset($_POST['params'])) {
+    parse_str($_POST['params'], $paramArr);
+    foreach ($paramArr as $name => $value) {
+        $_GET[$name] = $value;
+    }
+}
+
 $gui = new Gui;
+$gui->parseFilterFields();
 $db = new Db;
 $auth = new Auth();
 $date = new Date();
@@ -27,7 +36,13 @@ $planId = 0;
  * */
 
 //Смотрим всегда текущий план
-$plan = $db->select('checksplans', ' WHERE active = 1');// ORDER BY year ASC LIMIT 1
+$_activeMinistries = $auth->getActiveMinistries();
+$_planMinistryFilter = '';
+if (!empty($_activeMinistries)) {
+    $ids = implode(',', $_activeMinistries);
+    $_planMinistryFilter = ' AND (ministry_id IN (' . $ids . ') OR ministry_id IS NULL)';
+}
+$plan = $db->select('checksplans', ' WHERE active = 1' . $_planMinistryFilter);// ORDER BY year ASC LIMIT 1
 
 $ins = $db->getRegistry('institutions', '', [], ['short']); //print_r($ins['array']);
 $units = $db->getRegistry('units');
@@ -66,16 +81,17 @@ $gui->set('module_id', 15);
     <div class="nav_01">
         <?
         echo $gui->buildTopNav([
-                'title' => 'Назначенные задачи',
+                'title'          => 'Назначенные задачи',
                 //'planList' => 'Выбор плана',
-                'renew' => 'Обновить список задач',
+                'renew'          => 'Обновить список задач',
                 //'switch_plan' => 'Показать',
-                'create' => 'Создать задание',
+                'create'         => 'Создать задание',
                 //'plans' => 'Планы проверок',
                 //'filter_panel' => 'Открыть панель фильтров',
                 //'clone' => 'Копия записи',
                 //'delete' => 'Удалить выделенные',
-                'logout' => 'Выйти'
+                'ministry_filter' => 'Фильтр по управлению',
+                'logout'         => 'Выйти'
             ]
         );
         ?>
@@ -103,69 +119,104 @@ $gui->set('module_id', 15);
                     );
                     ?>
                 </th>
+                <th class="sort">
+                    <?
+                    echo $gui->buildSortFilter(
+                        'institutions',
+                        'Объект проверки',
+                        'parent_items',
+                        'el_data',
+                        [],
+                        'suggest',
+                        'text',
+                        false,
+                        'parent_items',
+                        '',
+                        'short'
+                    );
+                    ?>
+                </th>
+                <th class="sort">
+                    <?
+                    echo $gui->buildSortFilter(
+                        'users',
+                        'Исполнитель',
+                        'executor',
+                        'el_data',
+                        [],
+                        'suggest',
+                        'text',
+                        false,
+                        'executor',
+                        '',
+                        'user_fio'
+                    );
+                    ?>
+                </th>
+                <th class='sort'>
+                    <?php
+                    // Читаем текущие значения фильтра по дате из URL
+                    $fDateFrom = '';
+                    $fDateTo   = '';
+                    if (!empty($_GET['filter'])) {
+                        foreach (explode(';', $_GET['filter']) as $fp) {
+                            $fa = explode(':', $fp, 2);
+                            if (count($fa) < 2) continue;
+                            if ($fa[0] === 'date_from') $fDateFrom = htmlspecialchars($fa[1]);
+                            if ($fa[0] === 'date_to')   $fDateTo   = htmlspecialchars($fa[1]);
+                        }
+                    }
+                    $dateFilterActive = ($fDateFrom !== '' || $fDateTo !== '') ? ' active' : '';
+                    ?>
+                    <div class="head_sort_filter">
+                        <div class="button icon text sorter" title="Сортировать" data-field="dates">
+                            Даты проверки<span class="material-icons">north</span>
+                        </div>
+                        <div class="button icon filterer<?= $dateFilterActive ?>" title="Фильтр">
+                            <span class="material-icons">filter_alt</span>
+                        </div>
+                    </div>
+                    <div class="data_filter_select date_range"
+                         style="display:<?= $dateFilterActive ? 'block' : 'none' ?>; padding: 0.5rem;">
+                        <div style="display:flex; flex-direction:column; gap:0.4rem;">
+                            <label style="font-size:0.8rem; color:var(--dark)">С</label>
+                            <input type="date" name="filter_date_from" class="el_input date_filter_input"
+                                   value="<?= $fDateFrom ?>" style="width:100%">
+                            <label style="font-size:0.8rem; color:var(--dark)">По</label>
+                            <input type="date" name="filter_date_to" class="el_input date_filter_input"
+                                   value="<?= $fDateTo ?>" style="width:100%">
+                            <button type="button" class="button icon text date_filter_reset"
+                                    style="font-size:0.8rem; padding:0.2rem 0.5rem;">
+                                <span class="material-icons" style="font-size:1rem">restart_alt</span>Сбросить
+                            </button>
+                        </div>
+                    </div>
+                </th>
                 <th class='sort'>
                     <?
                     echo $gui->buildSortFilter(
-                        'registryitems',
-                        'Статус',
+                        'checkstaff',
+                        'Статус задачи',
                         'active',
                         'constant',
                         ['1' => 'Ожидает выполнения', '0' => 'Выполнена']
                     );
                     ?>
                 </th>
-                <th class="sort">
-                    <?
-                    echo $gui->buildSortFilter(
-                        'registryitems',
-                        'Объект проверки',
-                        'parent_items',
-                        'constant',
-                        []//$checks['array']
-                    );
-                    ?>
-                </th>
-                <th class="sort">
-                    <?
-                    echo $gui->buildSortFilter(
-                        'registryitems',
-                        'Исполнитель',
-                        'name',
-                        'el_data',
-                        []
-                    );
-                    ?>
-                </th>
                 <th class='sort'>
                     <?
                     echo $gui->buildSortFilter(
-                        'registryitems',
-                        'Даты проверки',
-                        'name',
-                        'el_data',
-                        []
-                    );
-                    ?>
-                </th>
-                <th class='sort'>
-                    <?
-                    echo $gui->buildSortFilter(
-                        'registryitems',
-                        'Статус задачи',
-                        'name',
-                        'el_data',
-                        []
-                    );
-                    ?>
-                </th>
-                <th class='sort'>
-                    <?
-                    echo $gui->buildSortFilter(
-                        'registryitems',
+                        'tasks',
                         'Шаблон задачи',
-                        'name',
+                        'task_template',
                         'el_data',
-                        []
+                        [],
+                        'suggest',
+                        'text',
+                        false,
+                        'task_template',
+                        '',
+                        'name'
                     );
                     ?>
                 </th>
@@ -215,13 +266,51 @@ $gui->set('module_id', 15);
             //echo $permissionQuery;
 
 
+            // Парсим активные фильтры
+            $filterActive      = isset($_GET['filter']) ? $_GET['filter'] : '';
+            $filterDone        = null;  // фильтр по статусу выполнения (done)
+            $filterObject      = '';    // фильтр по объекту проверки
+            $filterExecutor    = '';    // фильтр по исполнителю
+            $filterDateFrom    = null;  // фильтр "начало проверки не раньше"
+            $filterDateTo      = null;  // фильтр "конец проверки не позже"
+            $filterTaskTemplate = '';   // фильтр по шаблону задачи
+            if ($filterActive !== '') {
+                foreach (explode(';', $filterActive) as $fPart) {
+                    $fArr = explode(':', $fPart, 2);
+                    if (count($fArr) < 2) continue;
+                    if ($fArr[0] === 'active') {
+                        $vals = explode('|', $fArr[1]);
+                        if (count($vals) === 1) {
+                            $filterDone = ($vals[0] === '1') ? 0 : 1;
+                        }
+                    }
+                    if ($fArr[0] === 'parent_items') {
+                        $filterObject = mb_strtolower($fArr[1]);
+                    }
+                    if ($fArr[0] === 'executor') {
+                        $filterExecutor = mb_strtolower($fArr[1]);
+                    }
+                    if ($fArr[0] === 'date_from' && $fArr[1] !== '') {
+                        $filterDateFrom = strtotime($fArr[1]);
+                    }
+                    if ($fArr[0] === 'date_to' && $fArr[1] !== '') {
+                        $filterDateTo = strtotime($fArr[1]);
+                    }
+                    if ($fArr[0] === 'task_template') {
+                        $filterTaskTemplate = mb_strtolower($fArr[1]);
+                    }
+                    // task_status сейчас всегда "Назначена" — чекбокс декоративный, фильтровать не нужно
+                }
+            }
+
             $check_number = 1;
             if (is_array($checks) && count($checks) > 0) {
                 for ($c = 0; $c < count($checks); $c++) {
                     foreach ($checks[$c] as $ch) {
 
-                        $tasks = $db->getRegistry('checkstaff', " WHERE check_uid = '" . $ch['planUid'] . "' 
-                        AND institution = '" . $ch['institutions'] . "'$permissionQuery"
+                        $doneQuery = $filterDone !== null ? ' AND done = ' . intval($filterDone) : '';
+                        $tasks = $db->getRegistry('checkstaff', " WHERE check_uid = '" . $ch['planUid'] . "'
+                        AND institution = '" . $ch['institutions'] . "'$permissionQuery$doneQuery"
                         );
                         //echo '<pre>';/*print_r($tasks);*/echo " WHERE check_uid = '" . $ch['planUid'] . "'
                         //AND institution = '" . $ch['institutions'] . "'$permissionQuery";echo '</pre><hr>';
@@ -229,18 +318,40 @@ $gui->set('module_id', 15);
                         if (count($tasks) > 0) {
                             $task_number = 0;
                             foreach ($tasks['result'] as $task) {
-                                if (!in_array($task->id, $taskIds)) { //исключаем повторения
-                                    $dateArr = explode(' - ', $task->dates);
-                                    $executorFio = trim($users['array'][$task->user][0])
-                                        . ' ' . trim($users['array'][$task->user][1]) . ' ' . trim($users['array'][$task->user][2]);
-
-                                    $object = $task->object_type == 1 ? stripslashes(htmlspecialchars($ins['result'][$ch['institutions']]->short)) . ' ' .
-                                        stripslashes(htmlspecialchars($units['array'][$ch['units']])) :
-                                        stripslashes(htmlspecialchars($persons['array'][$ch['institutions']][0])) . ' ' .
-                                        stripslashes(htmlspecialchars($persons['array'][$ch['institutions']][1])) . ' ' .
-                                        stripslashes(htmlspecialchars($persons['array'][$ch['institutions']][2])) . ' ' .
+                                $objectRaw = $task->object_type == 1
+                                    ? stripslashes($ins['result'][$ch['institutions']]->short) . ' ' .
+                                        stripslashes($units['array'][$ch['units']])
+                                    : stripslashes($persons['array'][$ch['institutions']][0]) . ' ' .
+                                        stripslashes($persons['array'][$ch['institutions']][1]) . ' ' .
+                                        stripslashes($persons['array'][$ch['institutions']][2]) . ' ' .
                                         (strlen(trim($persons['array'][$ch['institutions']][3])) > 0 ?
                                             $date->correctDateFormatFromMysql($persons['array'][$ch['institutions']][3]) : '');
+                                $object = htmlspecialchars($objectRaw);
+
+                                $executorFio = trim($users['array'][$task->user][0])
+                                    . ' ' . trim($users['array'][$task->user][1]) . ' ' . trim($users['array'][$task->user][2]);
+
+                                $dateArr   = explode(' - ', $task->dates);
+                                $taskStart = isset($dateArr[0]) ? strtotime(trim($dateArr[0])) : null;
+                                $taskEnd   = isset($dateArr[1]) ? strtotime(trim($dateArr[1])) : null;
+
+                                if (!in_array($task->id, $taskIds) &&
+                                    ($filterObject === '' || mb_stripos($objectRaw, $filterObject) !== false) &&
+                                    ($filterExecutor === '' || (function() use ($executorFio, $filterExecutor) {
+                                        foreach (preg_split('/\s+/', trim($filterExecutor)) as $word) {
+                                            if ($word !== '' && mb_stripos($executorFio, $word) === false) return false;
+                                        }
+                                        return true;
+                                    })()) &&
+                                    ($filterDateFrom === null || ($taskEnd !== null && $taskEnd >= $filterDateFrom)) &&
+                                    ($filterDateTo   === null || ($taskStart !== null && $taskStart <= $filterDateTo)) &&
+                                    ($filterTaskTemplate === '' || (function() use ($task, $tasks_templates, $filterTaskTemplate) {
+                                        $ids = json_decode($task->task_id, true) ?: [];
+                                        foreach ($ids as $tid) {
+                                            if (mb_stripos($tasks_templates['array'][$tid] ?? '', $filterTaskTemplate) !== false) return true;
+                                        }
+                                        return false;
+                                    })())) { //исключаем повторения
 
                                     if ($task->done == 1) {
                                         $icon = 'task_alt';
@@ -256,15 +367,18 @@ $gui->set('module_id', 15);
                                     echo '
                             <tr data-id="' . $check_number . '" tabindex="0" class="noclick">
                                 <td>' . $check_number . '</td>
-                                <td class="status ' . $class . '"><span class="material-icons ' . $class . '">' . $icon . '</span> ' . $status . '</td>
                                 <td>' . $object .
                                         '</td>
                                 <td>' . $executorFio . '</td>
                                 <td>с ' . $date->correctDateFormatFromMysql($dateArr[0]) . ' по ' . $date->correctDateFormatFromMysql($dateArr[1]) . '</td>
-                                <td>Назначена</td>
-                                <td>' . $tasks_templates['array'][$task->task_id] . '</td>
+                                <td class="status ' . $class . '"><span class="material-icons ' . $class . '">' . $icon . '</span> ' . $status . '</td>
+                                <td>' . implode(', ', array_filter(array_map(
+                                        fn($tid) => $tasks_templates['array'][$tid] ?? '',
+                                        json_decode($task->task_id, true) ?: []
+                                    ))) . '</td>
                                 <td class="link">
                                     <span class="material-icons view_task" data-id="' . $task->id . '" title="Просмотр задачи">pageview</span>
+                                    <span class="material-icons view_staff_btn" data-task-str="' . $ch['planUid'] . '_' . $task->id . '" title="Назначение / продление срока" style="margin-left:6px;cursor:pointer;">manage_accounts</span>
                                 </td>
                             </tr>';
                                     $task_number++;

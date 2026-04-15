@@ -114,6 +114,14 @@ var el_documents_registry = {
             $(".table_data tr").removeClass("selected");
             $(".table_data tr[data-id=" + taskId + "]").addClass("selected");
         });
+        $(".createReport").off("click").on("click", function () {
+            let actId = $(this).data("id");
+            el_app.dialog_open("create_report", {docId: actId}, "documents");
+        });
+        $(".openReport").off("click").on("click", function () {
+            let reportId = $(this).data("id");
+            el_app.dialog_open("agreement", {docId: reportId}, "documents");
+        });
 
         el_documents_registry.bindDadata();
         el_app.sort_init();

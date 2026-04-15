@@ -134,7 +134,7 @@ var el_app = {
 
             history.pushState({param: 'Value'}, answer.title, url + queryString);
             paramsArr = document.location.search.split("&");
-            el_app.curr_path = document.location.pathname + '/' + document.location.search;
+            el_app.curr_path = document.location.pathname + document.location.search;
             el_tools.setcookie('last_path', el_app.curr_path);
             el_app.mainInit();
             $(document).trigger("content_load", {url, params});
@@ -201,7 +201,7 @@ var el_app = {
     dialog_open: function (dialog_id, params, module) {
         $.when(el_app.loadContent(dialog_id, "popup", params, module)).then(function (content) {
             const url = new URL(window.location);
-            let open_dialog = JSON.stringify(params);
+            let open_dialog = JSON.stringify(params ?? {});
             if (module) {
                 url.searchParams.set('module', module);
             } else {
@@ -734,6 +734,11 @@ var el_app = {
         });*/
 
         $(".preloader").fadeOut('fast');
+
+        $(".table_data tr").off("click").on("click", function (){
+            $(".table_data tr").removeClass("selected");
+            $(this).addClass("selected");
+        });
 
     },
     /*selectedMonths: {},
@@ -1994,6 +1999,7 @@ $(document).ready(function () {
     //el_tools.initForms();
     el_app.mainInit();
 
+
     $("input[name=inn]").on("keyup", function () {
         let val = $(this).val();
         if (val.length > 9) {
@@ -2080,11 +2086,9 @@ $(document).ready(function () {
             type: 'POST',
             //dataType: 'json',
             cache: false,
-            headers: {
-                'X-Csrf-Token': el_tools.getcookie("CSRF-TOKEN"),
-                'X-Requested-With': "XMLHttpRequest"
-            },
-            beforeSend: function () {
+            beforeSend: function (xhr) {
+                xhr.setRequestHeader('X-Csrf-Token', el_tools.getcookie("CSRF-TOKEN"));
+                xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
                 if (loader_active)
                     el_app.loader_show();
             },
@@ -2306,6 +2310,38 @@ $(document).ready(function () {
 document.addEventListener('DOMContentLoaded', async () => {
     if (typeof userId !== 'undefined' && parseInt(userId) > 0) {
         await el_app.initPushNotifications();
+    }
+});
+
+// Переключатель управления в верхнем меню
+$(document).on('click', '.mf_nav_toggle', function (e) {
+    e.stopPropagation();
+    var $dropdown = $(this).siblings('.mf_nav_dropdown');
+    $('.mf_nav_dropdown').not($dropdown).hide();
+    $dropdown.toggle();
+});
+$(document).on('click', '.mf_nav_option', function () {
+    var id = $(this).data('id');
+    var $wrap = $(this).closest('.mf_nav_wrap');
+    $wrap.find('.mf_nav_selected').removeClass('mf_nav_selected');
+    $(this).addClass('mf_nav_selected');
+    $wrap.find('.mf_nav_dropdown').hide();
+    $.ajax({
+        url: '/',
+        type: 'POST',
+        headers: {
+            'X-Csrf-Token': el_tools.getcookie('CSRF-TOKEN'),
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        data: { ajax: 1, action: 'setMinistryFilter', ministryId: id },
+        success: function () {
+            el_app.reloadMainContent();
+        }
+    });
+});
+$(document).on('click', function (e) {
+    if (!$(e.target).closest('.mf_nav_wrap').length) {
+        $('.mf_nav_dropdown').hide();
     }
 });
 

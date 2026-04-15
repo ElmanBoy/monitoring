@@ -57,7 +57,10 @@ if($auth->isLogin()) {
                     $errStr[] = 'Укажите даты проверки для сотрудника №'.($i + 1);
                     $errorFields[] = 'dates['.$i.']';
                 }
-                if (intval($_POST['tasks'][$i]) == 0) {
+                $taskArr = isset($_POST['tasks'][$i]) && is_array($_POST['tasks'][$i])
+                    ? array_filter(array_map('intval', $_POST['tasks'][$i]))
+                    : (intval($_POST['tasks'][$i] ?? 0) > 0 ? [intval($_POST['tasks'][$i])] : []);
+                if (count($taskArr) == 0) {
                     $err++;
                     $errStr[] = 'Укажите шаблон задачи для сотрудника №'.($i + 1);
                     $errorFields[] = 'tasks['.$i.']';
@@ -89,7 +92,7 @@ if($auth->isLogin()) {
                     'check_uid' => $_POST['uid'],
                     'user' => intval($_POST['executors'][$i]),
                     'dates' => $_POST['dates'][$i],
-                    'task_id' => $_POST['tasks'][$i],
+                    'task_id' => json_encode(array_values($taskArr)),
                     'institution' => intval($_POST['ins']),
                     'is_head' => intval($_POST['is_head'][$i]),
                     'allowremind' => intval($_POST['allowremind']),

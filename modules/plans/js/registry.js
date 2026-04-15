@@ -20,6 +20,19 @@ var el_plans_registry = {
             el_app.dialog_open("registry_create");
         });
 
+        $("#button_nav_archive").on("click", async function () {
+            if (!$(this).hasClass("disabled")) {
+                let $checked = $("form#registry_delete").find("input[name='reg_id[]']:checked");
+                if ($checked.length === 0) return;
+                let ok = await confirm("Переместить выбранные планы в архив?");
+                if (ok) {
+                    $("form#registry_archive").find("input[name='reg_id[]']").remove();
+                    $checked.clone().appendTo("form#registry_archive");
+                    $("form#registry_archive").trigger("submit");
+                }
+            }
+        });
+
         $("#button_nav_delete").on("click", async function () {
             if (!$(this).hasClass("disabled")) {
                 let ok = await confirm("Содержимое планов будет так же удалено. Уверены, что хотите удалить эти планы?");

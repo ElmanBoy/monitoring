@@ -355,8 +355,42 @@ function getDocumentStatusForIcon(int $userId, ?string $agreementListJson, int $
         return null;
     };
 
-    // Рекурсивная функция для поиска пользователя во ВСЕХ перенаправлениях, даже если он не в основном списке
-    $findUserInAllRedirects = function($section, $userId, $level = 0) use (&$findUserInAllRedirects, &$findUserInSection) {
+    // Вспомогательное замыкание: ищет userId в массиве redirect[] (без метаданных [0])
+    // Возвращает найденную запись с указателем на parent_approver и корневую секцию
+    $searchInRedirectArray = function(array $redirectArr, $userId, array $rootSectionInfo, array $rootSection, array $rootParent, int $level) use (&$searchInRedirectArray) {
+        foreach ($redirectArr as $idx => $rd) {
+            if (!isset($rd['id'])) continue;
+
+            if ($rd['id'] == $userId) {
+                return [
+                    'approver'       => $rd,
+                    'section_info'   => $rootSectionInfo,
+                    'list_type'      => isset($rootSectionInfo['list_type']) ? intval($rootSectionInfo['list_type']) : 1,
+                    'stage'          => $rootSectionInfo['stage'] ?? '',
+                    'index'          => $idx,
+                    'level'          => $level,
+                    'is_redirect'    => true,
+                    'parent_approver' => $rootParent,   // непосредственный перенаправитель
+                    'section'        => $redirectArr,   // массив redirect[], где найден
+                    'main_section'   => $rootSection,   // исходная основная секция (с metadata [0])
+                    'main_index'     => false,          // заполняется ниже через поиск по id
+                ];
+            }
+
+            // Рекурсивно проверяем вложенные redirect[]
+            if (isset($rd['redirect']) && is_array($rd['redirect'])) {
+                $found = $searchInRedirectArray($rd['redirect'], $userId, $rootSectionInfo, $rootSection, $rd, $level + 1);
+                if ($found) {
+                    return $found;
+                }
+            }
+        }
+        return null;
+    };
+
+    // Рекурсивная функция для поиска пользователя во ВСЕХ перенаправлениях, даже если он не в основном списке.
+    // Исправлено: рекурсия в redirect[] не использует array_slice(..., 1), т.к. там нет метаданных [0]
+    $findUserInAllRedirects = function($section, $userId, $level = 0) use (&$findUserInAllRedirects, &$searchInRedirectArray) {
         if (!is_array($section) || empty($section)) {
             return null;
         }
@@ -364,36 +398,15 @@ function getDocumentStatusForIcon(int $userId, ?string $agreementListJson, int $
         $sectionInfo = $section[0] ?? [];
         $approvers = array_slice($section, 1);
 
-        foreach ($approvers as $index => $approver) {
-            // Проверяем перенаправления этого сотрудника
-            if (isset($approver['redirect']) && is_array($approver['redirect'])) {
-                // Ищем в самом массиве перенаправления
-                $redirectSection = $approver['redirect'];
-                $redirectStartIndex = isset($redirectSection[0]['stage']) ? 1 : 0;
+        foreach ($approvers as $approverIdx => $approver) {
+            if (!isset($approver['redirect']) || !is_array($approver['redirect'])) continue;
 
-                for ($r = $redirectStartIndex; $r < count($redirectSection); $r++) {
-                    if (!isset($redirectSection[$r]['id'])) continue;
-
-                    if ($redirectSection[$r]['id'] == $userId) {
-                        return [
-                            'approver' => $redirectSection[$r],
-                            'section_info' => $sectionInfo,
-                            'list_type' => isset($sectionInfo['list_type']) ? intval($sectionInfo['list_type']) : 1,
-                            'stage' => $sectionInfo['stage'] ?? '',
-                            'index' => $r,
-                            'level' => $level + 1,
-                            'is_redirect' => true,
-                            'parent_approver' => $approver,
-                            'section' => $redirectSection
-                        ];
-                    }
-                }
-
-                // Рекурсивно проверяем вложенные перенаправления
-                $found = $findUserInAllRedirects($approver['redirect'], $userId, $level + 1);
-                if ($found) {
-                    return $found;
-                }
+            // Ищем userId в цепочке redirect[], начиная с непосредственного redirect[]
+            $found = $searchInRedirectArray($approver['redirect'], $userId, $sectionInfo, $section, $approver, $level + 1);
+            if ($found) {
+                // Сохраняем индекс корневого перенаправителя в основной секции
+                $found['main_index'] = $approverIdx;
+                return $found;
             }
         }
 
@@ -472,11 +485,6 @@ function getDocumentStatusForIcon(int $userId, ?string $agreementListJson, int $
         ];
     }
 
-    // DEBUG для документа 181
-    if ($docId == 181) {
-        echo "<!-- DEBUG START Doc 181, User $userId, DocStatus=$documentStatus -->\n";
-    }
-
     // Ищем пользователя во всём дереве согласования.
     // Приоритет: pending > redirected > approved — чтобы не скрывать активную очередь
     // за уже выполненным действием в другой секции.
@@ -501,9 +509,6 @@ function getDocumentStatusForIcon(int $userId, ?string $agreementListJson, int $
                     'is_redirect' => false,
                     'section' => $section
                 ];
-                if ($docId == 181) {
-                    echo "<!-- DEBUG: Added main level entry, result.id=" . ($approver['result']['id'] ?? 'NULL') . " -->\n";
-                }
             }
         }
 
@@ -511,9 +516,6 @@ function getDocumentStatusForIcon(int $userId, ?string $agreementListJson, int $
         $foundInRedirect = $findUserInAllRedirects($section, $userId);
         if ($foundInRedirect) {
             $allFound[] = $foundInRedirect;
-            if ($docId == 181) {
-                echo "<!-- DEBUG: Added redirect entry, result.id=" . ($foundInRedirect['approver']['result']['id'] ?? 'NULL') . ", level=" . ($foundInRedirect['level'] ?? '?') . " -->\n";
-            }
         }
     }
 
@@ -605,27 +607,6 @@ function getDocumentStatusForIcon(int $userId, ?string $agreementListJson, int $
             return $pa <=> $pb;
         });
         $userInfo = $allFound[0];
-
-        // Временная отладка для документа 181
-        if ($docId == 181) {
-            echo "<!-- DEBUG Doc 181, Current User ID: $userId\n";
-            echo "Total found entries: " . count($allFound) . "\n";
-            foreach ($allFound as $idx => $entry) {
-                $hasUnfin = $hasUnfinishedRedirect($entry['approver']) ? 'YES' : 'NO';
-                $rawStatus = $getApproverStatus($entry['approver'], null, !empty($entry['is_redirect']))['status'];
-                $effectiveStatus = $hasUnfin == 'YES' ? 'redirected' : $rawStatus;
-                $isRepeat = !empty($entry['approver']['_is_redirector_repeat']) ? 'YES' : 'NO';
-                $hasRedirect = !empty($entry['approver']['redirect']) ? 'YES' : 'NO';
-                $resultId = isset($entry['approver']['result']['id']) ? $entry['approver']['result']['id'] : 'NULL';
-                echo "Entry $idx: result.id=$resultId, raw_status=$rawStatus, effective_status=$effectiveStatus, _is_redirector_repeat=$isRepeat, has_redirect=$hasRedirect, has_unfinished=$hasUnfin, is_redirect=" . (!empty($entry['is_redirect']) ? 'YES' : 'NO') . ", level=" . ($entry['level'] ?? 0) . "\n";
-            }
-            $selectedHasUnfin = $hasUnfinishedRedirect($userInfo['approver']) ? 'YES' : 'NO';
-            $selectedRawStatus = $getApproverStatus($userInfo['approver'], null, !empty($userInfo['is_redirect']))['status'];
-            $selectedEffectiveStatus = $selectedHasUnfin == 'YES' ? 'redirected' : $selectedRawStatus;
-            $selectedResultId = isset($userInfo['approver']['result']['id']) ? $userInfo['approver']['result']['id'] : 'NULL';
-            echo "Selected entry: result.id=$selectedResultId, raw_status=$selectedRawStatus, effective_status=$selectedEffectiveStatus, has_unfinished=$selectedHasUnfin\n";
-            echo "-->\n";
-        }
     }
 
     // Если пользователь найден в списке согласования
@@ -633,11 +614,6 @@ function getDocumentStatusForIcon(int $userId, ?string $agreementListJson, int $
         // Передаем флаг is_redirect, чтобы не проверять user_signs для записей внутри redirect
         $isInsideRedirect = !empty($userInfo['is_redirect']);
         $userStatus = $getApproverStatus($userInfo['approver'], null, $isInsideRedirect);
-
-        // DEBUG для документа 181
-        if ($docId == 181) {
-            echo "<!-- DEBUG BEFORE SWITCH: userStatus['status']=" . $userStatus['status'] . ", isInsideRedirect=" . ($isInsideRedirect ? 'YES' : 'NO') . " -->\n";
-        }
 
         switch ($userStatus['status']) {
             case 'approved':
@@ -707,11 +683,6 @@ function getDocumentStatusForIcon(int $userId, ?string $agreementListJson, int $
                 ];
 
             case 'redirected':
-                // DEBUG для документа 181
-                if ($docId == 181) {
-                    echo "<!-- DEBUG IN CASE REDIRECTED -->\n";
-                }
-
                 // Пользователь перенаправил
                 // Проверяем, завершено ли перенаправление РЕКУРСИВНО по всей цепочке
                 $isRedirectCompletedRecursive = function($redirectArr) use (&$isRedirectCompletedRecursive, $getApproverStatus) {
@@ -924,45 +895,104 @@ function getDocumentStatusForIcon(int $userId, ?string $agreementListJson, int $
                 }
 
             case 'pending':
-                // DEBUG для документа 181
-                if ($docId == 181) {
-                    echo "<!-- DEBUG IN CASE PENDING -->\n";
-                }
-
                 // Пользователь ожидает согласования
                 // Проверяем, может ли пользователь действовать сейчас
                 $canAct = true;
 
-                // Для последовательного согласования проверяем предыдущих
-                if ($userInfo['list_type'] == 1 && $userInfo['index'] > 0) {
-                    $approvers = array_slice($userInfo['section'], 1);
-                    $currentRole = intval($userInfo['approver']['role'] ?? 0);
-                    for ($i = 0; $i < $userInfo['index']; $i++) {
-                        if (!isset($approvers[$i]['id'])) continue;
-                        // Пропускаем role=0 (утверждающего) стоящего перед role=1 (подписывающим)
-                        // Это некорректный порядок — подписывающий не должен ждать утверждающего
-                        if ($currentRole === 1 && intval($approvers[$i]['role'] ?? 0) === 0) continue;
-                        $prevStatus = $getApproverStatus($approvers[$i]);
-                        if ($prevStatus['status'] !== 'approved' && $prevStatus['status'] !== 'redirected') {
-                            $canAct = false;
-                            break;
+                if (!empty($userInfo['is_redirect'])) {
+                    // --- Пользователь найден внутри redirect[] ---
+                    // Его очередь наступает когда:
+                    //   1. parent_approver активно перенаправил (result.id == 4)
+                    //   2. Все предшественники корневого перенаправителя в основной секции завершили работу
+                    //   3. Все предшественники самого пользователя внутри redirect[] завершили работу
+
+                    // 1. Проверяем, что непосредственный перенаправитель действительно перенаправил
+                    $parentApprover = $userInfo['parent_approver'] ?? null;
+                    if (!$parentApprover || (intval($parentApprover['result']['id'] ?? 0) !== 4)) {
+                        $canAct = false;
+                    }
+
+                    // 2. Проверяем предшественников корневого перенаправителя в основной секции
+                    if ($canAct) {
+                        $mainSection = $userInfo['main_section'] ?? null;
+                        if ($mainSection !== null) {
+                            $mainSectionInfo = $mainSection[0] ?? [];
+                            $mainListType = isset($mainSectionInfo['list_type']) ? intval($mainSectionInfo['list_type']) : 1;
+                            $mainApprovers = array_slice($mainSection, 1);
+
+                            // Ищем индекс корневого перенаправителя (parent_approver верхнего уровня)
+                            // Используем main_index, сохранённый при поиске
+                            $mainIdx = $userInfo['main_index'];
+                            if ($mainIdx === false) {
+                                // Не смогли найти — проверим по id parent_approver
+                                foreach ($mainApprovers as $mIdx => $mApp) {
+                                    if (isset($mApp['id']) && $mApp['id'] == ($parentApprover['id'] ?? null)) {
+                                        $mainIdx = $mIdx;
+                                        break;
+                                    }
+                                }
+                            }
+
+                            // Для последовательной основной секции проверяем предшественников
+                            if ($mainListType == 1 && $mainIdx !== false && $mainIdx > 0) {
+                                for ($i = 0; $i < $mainIdx; $i++) {
+                                    if (!isset($mainApprovers[$i]['id'])) continue;
+                                    $prevStatus = $getApproverStatus($mainApprovers[$i]);
+                                    if ($prevStatus['status'] !== 'approved' && $prevStatus['status'] !== 'redirected') {
+                                        $canAct = false;
+                                        break;
+                                    }
+                                }
+                            }
                         }
                     }
-                }
 
-                // Для параллельного согласования проверяем незавершённые redirect у предыдущих
-                if ($canAct && $userInfo['list_type'] == 2 && $userInfo['index'] > 0) {
-                    $approvers = array_slice($userInfo['section'], 1);
-                    for ($i = 0; $i < $userInfo['index']; $i++) {
-                        if (!isset($approvers[$i]['id'])) continue;
-                        if (!empty($approvers[$i]['_is_redirector_repeat'])) continue;
-                        $prevStatus = $getApproverStatus($approvers[$i]);
-                        // pending или redirected с незавершённой цепочкой — ждём
-                        if (($prevStatus['status'] === 'redirected' || $prevStatus['status'] === 'pending')
-                            && !empty($approvers[$i]['redirect'])
-                            && !$isRedirectChainDone($approvers[$i])) {
-                            $canAct = false;
-                            break;
+                    // 3. Проверяем предшественников пользователя внутри redirect[]
+                    if ($canAct && $userInfo['index'] > 0) {
+                        $redirectArr = $userInfo['section']; // это сам redirect[]
+                        for ($i = 0; $i < $userInfo['index']; $i++) {
+                            if (!isset($redirectArr[$i]['id'])) continue;
+                            $prevStatus = $getApproverStatus($redirectArr[$i], null, true);
+                            if ($prevStatus['status'] !== 'approved' && $prevStatus['status'] !== 'redirected') {
+                                $canAct = false;
+                                break;
+                            }
+                        }
+                    }
+                } else {
+                    // --- Пользователь найден в основном списке секции ---
+
+                    // Для последовательного согласования проверяем предыдущих
+                    if ($userInfo['list_type'] == 1 && $userInfo['index'] > 0) {
+                        $approvers = array_slice($userInfo['section'], 1);
+                        $currentRole = intval($userInfo['approver']['role'] ?? 0);
+                        for ($i = 0; $i < $userInfo['index']; $i++) {
+                            if (!isset($approvers[$i]['id'])) continue;
+                            // Пропускаем role=0 (утверждающего) стоящего перед role=1 (подписывающим)
+                            // Это некорректный порядок — подписывающий не должен ждать утверждающего
+                            if ($currentRole === 1 && intval($approvers[$i]['role'] ?? 0) === 0) continue;
+                            $prevStatus = $getApproverStatus($approvers[$i]);
+                            if ($prevStatus['status'] !== 'approved' && $prevStatus['status'] !== 'redirected') {
+                                $canAct = false;
+                                break;
+                            }
+                        }
+                    }
+
+                    // Для параллельного согласования проверяем незавершённые redirect у предыдущих
+                    if ($canAct && $userInfo['list_type'] == 2 && $userInfo['index'] > 0) {
+                        $approvers = array_slice($userInfo['section'], 1);
+                        for ($i = 0; $i < $userInfo['index']; $i++) {
+                            if (!isset($approvers[$i]['id'])) continue;
+                            if (!empty($approvers[$i]['_is_redirector_repeat'])) continue;
+                            $prevStatus = $getApproverStatus($approvers[$i]);
+                            // pending или redirected с незавершённой цепочкой — ждём
+                            if (($prevStatus['status'] === 'redirected' || $prevStatus['status'] === 'pending')
+                                && !empty($approvers[$i]['redirect'])
+                                && !$isRedirectChainDone($approvers[$i])) {
+                                $canAct = false;
+                                break;
+                            }
                         }
                     }
                 }
@@ -1106,7 +1136,46 @@ $subQuery = '';
 
 $gui->set('module_id', 17);
 
-$regs = $gui->getTableData($table->table_name);
+$_ministryFilter = '';
+$_activeMinistries = $auth->getActiveMinistries();
+if (!empty($_activeMinistries)) {
+    $ids = implode(',', $_activeMinistries);
+    $_ministryFilter = ' AND (ministry_id IN (' . $ids . ') OR ministry_id IS NULL)';
+}
+$regs = $gui->getTableData($table->table_name, $_ministryFilter);
+
+// Загружаем доклады для актов (documentacial=8, source_id = act_id)
+// Используется для показа кнопки "Создать доклад" в строке акта
+$_actIdsForReports = [];
+$_insIds = [];
+foreach ($regs as $_r) {
+    $_r = (object)$_r;
+    if (intval($_r->documentacial) === 2) {
+        $_actIdsForReports[] = intval($_r->id);
+    }
+    if (intval($_r->ins_id ?? 0) > 0) {
+        $_insIds[] = intval($_r->ins_id);
+    }
+}
+$_reportsForActs = []; // act_id => report
+if (!empty($_actIdsForReports)) {
+    $_reps = $db->select('agreement',
+        ' WHERE documentacial = 8 AND source_id IN (' . implode(',', array_unique($_actIdsForReports)) . ')'
+    );
+    foreach ($_reps as $_rep) {
+        $_reportsForActs[intval($_rep->source_id)] = $_rep;
+    }
+}
+// Подгружаем учреждения для строк с ins_id
+$_insMap = [];
+if (!empty($_insIds)) {
+    $_insList = $db->select('institutions',
+        ' WHERE id IN (' . implode(',', array_unique($_insIds)) . ')'
+    );
+    foreach ($_insList as $_ins) {
+        $_insMap[intval($_ins->id)] = $_ins;
+    }
+}
 ?>
 <style>
     .tab-pane{
@@ -1123,12 +1192,13 @@ $regs = $gui->getTableData($table->table_name);
     <div class="nav_01">
         <?
         echo $gui->buildTopNav([
-            'title'        => 'Документы',
-            'renew'        => 'Сбросить все фильтры',
-            'create'       => 'Создать приказ',
-            'archive'      => 'Переместить в архив',
-            'filter_panel' => 'Открыть панель фильтров',
-            'logout'       => 'Выйти'
+            'title'            => 'Документы',
+            'renew'            => 'Сбросить все фильтры',
+            'create'           => 'Создать приказ',
+            'archive'          => 'Переместить в архив',
+            'filter_panel'     => 'Открыть панель фильтров',
+            'ministry_filter'  => 'Фильтр по управлению',
+            'logout'           => 'Выйти'
         ]);
         ?>
 
@@ -1203,19 +1273,8 @@ $regs = $gui->getTableData($table->table_name);
                     );
                     ?>
                 </th>
-                <th class='sort'>
-                    <?
-                    echo $gui->buildSortFilter(
-                        'documents',
-                        'Тип документа',
-                        'documentacial',
-                        'constant',
-                        $documentacial['array']
-                    );
-                    ?>
-                </th>
                 <th>
-                    <div class="head_sort_filter">Примечания</div>
+                    <div class="head_sort_filter">Учреждение</div>
                 </th>
             </tr>
             </thead>
@@ -1265,14 +1324,15 @@ $regs = $gui->getTableData($table->table_name);
                     $statusText = $agrStatus['status_text'];
                     $class = 'redText';
                     $style = ' style="color:var(--red); display: inline;vertical-align: bottom;"';
-                    $title = ' title="' . $agrStatus['title'] . '"';
+                    // Экранируем title во избежание XSS через значение поля agreementlist из БД
+                    $title = ' title="' . htmlspecialchars($agrStatus['title'], ENT_QUOTES, 'UTF-8') . '"';
                 } elseif (!$signersValidation['valid']) {
                     // Если валидация не прошла - показываем предупреждение
                     $icon = 'warning';
                     $statusText = $signersValidation['error'];
                     $class = 'orange';
                     $style = ' style="color:#ff9800; display: inline;vertical-align: bottom;"'; // Оранжевый цвет для иконки
-                    $title = ' title="' . ($signersValidation['error_full'] ?? $signersValidation['error']) . '"';
+                    $title = ' title="' . htmlspecialchars($signersValidation['error_full'] ?? $signersValidation['error'], ENT_QUOTES, 'UTF-8') . '"';
                 } elseif($reg->status == 1 || $agrStatus['icon_class'] == 'task_alt'){
                     // Валидация прошла и документ согласован
                     $icon = 'task_alt';
@@ -1292,7 +1352,8 @@ $regs = $gui->getTableData($table->table_name);
                     }
                     if(strlen($reg->agreementlist) > 0) {
 
-                        $title = ' title="' . $agrStatus['title'] . '"';
+                        // Экранируем title во избежание XSS через поле agreementlist из БД
+                        $title = ' title="' . htmlspecialchars($agrStatus['title'], ENT_QUOTES, 'UTF-8') . '"';
                         $icon = $agrStatus['icon_class'];
                         if ($agrStatus['status_type'] != 'not_involved') {
                             $style = ' style="color:' . $agrStatus['color'] . '"';
@@ -1321,6 +1382,15 @@ $regs = $gui->getTableData($table->table_name);
                         break;
                 }
 
+                $insId = intval($reg->ins_id ?? 0);
+                $insShort = '';
+                if ($insId > 0 && isset($_insMap[$insId])) {
+                    $_insObj = $_insMap[$insId];
+                    $insShort = trim($_insObj->short ?? $_insObj->name_short ?? $_insObj->name ?? '');
+                }
+                $docNumberStr = trim($reg->doc_number ?? '');
+                $docDateStr   = strlen(trim($reg->docdate ?? '')) > 0 ? $gui->dateToString($reg->docdate) : '';
+
                 echo '<tr data-id="' . $reg->id . '" data-parent="' . $regId . '" tabindex="0" class="noclick">'.
                     (($allowEdit) ? '
                     <td>
@@ -1331,13 +1401,26 @@ $regs = $gui->getTableData($table->table_name);
                     </td>' : '<td>&nbsp;</td>').'
                     <td>' . $reg->id . '</td>
                     <td class="status '.$class.'"'.$title.'><span class="material-icons '.$class.'"'.$style.'>' . $icon . '</span> '.$statusText.'</td>
-                    <td class="group">' . stripslashes($reg->name) . '</td>
-                    <td>'.$documentacial['array'][$reg->documentacial].'</td>
-                    <td>' . $reg->comment . '</td>
+                    <td class="group">' . htmlspecialchars(stripslashes($reg->name), ENT_QUOTES, 'UTF-8') .
+                        (strlen($docNumberStr) > 0 || strlen($docDateStr) > 0
+                            ? '&nbsp;<span class="doc_number">' .
+                                ($docNumberStr !== '' ? '№&nbsp;' . htmlspecialchars($docNumberStr) : '') .
+                                ($docNumberStr !== '' && $docDateStr !== '' ? ' от&nbsp;' : '') .
+                                ($docDateStr !== '' ? htmlspecialchars($docDateStr) : '') .
+                              '</span>'
+                            : '') .
+                    '</td>
+                    <td>' . htmlspecialchars($insShort) . '</td>
                     <td class="link" style="justify-content: end;">'.
                     (($allowEdit && intval($reg->documentacial) != 2) ? '
                         <span class="material-icons doc_edit" data-plan="'.$edit_plan_id.'" data-ins="'.$edit_ins.'"
-                        data-id="'.$reg->id.'" data-doctype="'.$reg->documentacial.'" title="Редактирование документа">edit</span>' : '').'
+                        data-id="'.$reg->id.'" data-doctype="'.$reg->documentacial.'" title="Редактирование документа">edit</span>' : '').
+                    // Для согласованного акта — кнопка создания или просмотра доклада
+                    (intval($reg->documentacial) === 2 && intval($reg->status) === 1 ? (
+                        isset($_reportsForActs[$reg->id])
+                            ? '<span class="material-icons openReport" data-id="'.$_reportsForActs[$reg->id]->id.'" title="Открыть доклад о результатах проверки">summarize</span>'
+                            : '<span class="material-icons createReport" data-id="'.$reg->id.'" title="Создать доклад о результатах проверки">post_add</span>'
+                    ) : '').'
                         <span class="material-icons agreementDoc" data-id="'.$reg->id.'" title="Согласование документа">verified</span>
                         <span class="material-icons viewDoc" data-id="'.$reg->id.'" title="Просмотр документа">picture_as_pdf</span>
                     </td>

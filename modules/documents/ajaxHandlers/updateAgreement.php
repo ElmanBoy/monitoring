@@ -20,6 +20,34 @@ $options  = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS
 $agr = $db->selectOne('agreement', ' id = ?', [$docId]);
 
 // ============================================================
+// Проверка IDOR: документ должен существовать и пользователь
+// должен быть его автором или участником списка согласования.
+// Без этой проверки любой авторизованный пользователь мог бы
+// изменить agreementlist чужого документа, передав чужой docId.
+// ============================================================
+if (!$agr) {
+    echo json_encode(['result' => false, 'resultText' => 'Документ не найден.', 'errorFields' => []]);
+    exit;
+}
+$_currentUserId = intval($_SESSION['user_id'] ?? 0);
+$_agreementListRaw = json_decode($agr->agreementlist ?? '[]', true) ?: [];
+$_userInAgreement = false;
+foreach ($_agreementListRaw as $_section) {
+    if (!is_array($_section)) continue;
+    foreach ($_section as $_item) {
+        if (isset($_item['id']) && intval($_item['id']) === $_currentUserId) {
+            $_userInAgreement = true;
+            break 2;
+        }
+    }
+}
+if (intval($agr->author) !== $_currentUserId && !$_userInAgreement) {
+    echo json_encode(['result' => false, 'resultText' => 'Нет доступа к документу.', 'errorFields' => []]);
+    exit;
+}
+unset($_agreementListRaw, $_userInAgreement, $_section, $_item);
+
+// ============================================================
 // Исправляем возможную двойную JSON-сериализацию элементов
 // ============================================================
 function fixAgreementList($agreementlist): array
@@ -40,6 +68,8 @@ function fixAgreementList($agreementlist): array
 // - "true"/"false" → булевы
 // - result="" → null
 // - result.id как int
+// - У записей с _is_redirector_repeat: true принудительно сбрасываем result в null,
+//   чтобы сервер не доверял клиенту и не принимал уже заполненный result для повторных записей
 function normalizeSection($item): array
 {
     if (!is_array($item)) return $item;
@@ -64,6 +94,13 @@ function normalizeSection($item): array
             $v = normalizeSection($v);
         }
     }
+    unset($v); // Разрываем ссылку на последний элемент после foreach по ссылке
+    // Сервер не доверяет клиенту: если запись является повторной записью перенаправившего,
+    // сбрасываем result в null независимо от того, что прислал клиент.
+    // Подпись для повторной записи должна проставляться только через applySignsToAgreementList.
+    if (!empty($item['_is_redirector_repeat']) && isset($item['result']) && $item['result'] !== null) {
+        $item['result'] = null;
+    }
     return $item;
 }
 
@@ -71,6 +108,9 @@ $_POST['agreementList'] = fixAgreementList($_POST['agreementList']);
 
 // Получаем тип документа для валидации
 $documentType = intval($agr->documentacial ?? 0);
+
+// Инициализируем предупреждение о количестве участников (используется в конце файла в json_encode)
+$quantityWarning = '';
 
 // Валидация секции подписантов
 foreach ($_POST['agreementList'] as $section) {
@@ -183,20 +223,40 @@ function getApproverStatus(array $approver): array
 // ============================================================
 // Завершена ли redirect-цепочка (рекурсивно)
 // ============================================================
-function isRedirectChainCompleted(array $redirectArr): bool
+function isRedirectChainCompleted(array $redirectArr, int $depth = 0): bool
 {
+    // Защита от зацикливания при испорченных данных (циклические ссылки или слишком длинные цепочки)
+    if ($depth > 20) return false;
+
     foreach ($redirectArr as $approver) {
         if (!isset($approver['id'])) continue;
         $status = getApproverStatus($approver);
+
         if ($status['status'] === 'pending') return false;
         if ($status['status'] === 'returned') return false; // вернули — цепочка не завершена
+
         if ($status['status'] === 'redirected') {
-            if (isset($approver['redirect']) && is_array($approver['redirect'])) {
-                if (!isRedirectChainCompleted($approver['redirect'])) return false;
-            } else {
-                return false;
+            // Проверяем, завершена ли под-цепочка
+            $subDone = isset($approver['redirect']) && is_array($approver['redirect'])
+                && isRedirectChainCompleted($approver['redirect'], $depth + 1);
+            if (!$subDone) return false;
+
+            // Под-цепочка завершена, но сам redirector ещё должен принять финальное решение.
+            // Финальное решение фиксируется в _is_redirector_repeat-записи с непустым result.
+            // Пока такой записи нет — считаем цепочку незавершённой.
+            $redirectorId  = $approver['id'];
+            $hasFinalized  = false;
+            foreach ($redirectArr as $entry) {
+                if (isset($entry['id']) && $entry['id'] == $redirectorId
+                    && !empty($entry['_is_redirector_repeat'])
+                    && !empty($entry['result'])) {
+                    $hasFinalized = true;
+                    break;
+                }
             }
+            if (!$hasFinalized) return false;
         }
+        // approved / rejected — считаются завершёнными, ничего не делаем
     }
     return true;
 }
@@ -204,52 +264,94 @@ function isRedirectChainCompleted(array $redirectArr): bool
 // ============================================================
 // ПРАВИЛО 4: Добавить повторную запись перенаправившего
 // сразу после перенаправленного (если ещё не добавлена).
+// Функция рекурсивна — обрабатывает вложенные redirect[] любой глубины.
 // ============================================================
+
+/**
+ * Рекурсивно обходит $level и вставляет _is_redirector_repeat-записи
+ * для каждого участника со статусом redirected на любой глубине вложенности.
+ * Обработка идёт снизу вверх: сначала вложенные уровни, потом текущий —
+ * это гарантирует, что isRedirectChainCompleted увидит уже корректную структуру.
+ */
+function _insertRepeatInLevel(array &$level, int $startIndex = 0, int $depth = 0): void
+{
+    // Защита от зацикливания при испорченных данных
+    if ($depth > 20) return;
+
+    for ($j = $startIndex; $j < count($level); $j++) {
+        if (!isset($level[$j]['id'])) continue;
+
+        // Сначала рекурсивно обрабатываем вложенный redirect[]
+        if (!empty($level[$j]['redirect']) && is_array($level[$j]['redirect'])) {
+            _insertRepeatInLevel($level[$j]['redirect'], 0, $depth + 1);
+        }
+
+        $status = getApproverStatus($level[$j]);
+        if ($status['status'] !== 'redirected') continue;
+
+        $userId = $level[$j]['id'];
+
+        // Проверяем, нет ли уже повторной записи после текущей позиции
+        $hasRepeat = false;
+        for ($k = $j + 1; $k < count($level); $k++) {
+            if (isset($level[$k]['id']) && $level[$k]['id'] == $userId
+                && !empty($level[$k]['_is_redirector_repeat'])) {
+                $hasRepeat = true;
+                break;
+            }
+        }
+
+        if (!$hasRepeat) {
+            $approver    = $level[$j];
+            $repeatEntry = [
+                'id'                    => $userId,
+                'type'                  => $approver['type']   ?? 1,
+                'vrio'                  => $approver['vrio']   ?? '0',
+                'urgent'                => $approver['urgent'] ?? '0',
+                'role'                  => $approver['role']   ?? '0',
+                'result'                => null,
+                '_is_redirector_repeat' => true
+            ];
+            array_splice($level, $j + 1, 0, [$repeatEntry]);
+            $j++; // пропускаем только что вставленную запись
+        }
+    }
+}
+
 function insertRedirectorRepeatEntry(array &$agreementList): void
 {
     for ($i = 0; $i < count($agreementList); $i++) {
         $section    = &$agreementList[$i];
         $startIndex = isset($section[0]['stage']) ? 1 : 0;
-
-        for ($j = $startIndex; $j < count($section); $j++) {
-            $approver = $section[$j];
-            if (!isset($approver['id'])) continue;
-
-            $status = getApproverStatus($approver);
-            if ($status['status'] !== 'redirected') continue;
-
-            $userId = $approver['id'];
-
-            // Проверяем, нет ли уже повторной записи после текущей позиции
-            $hasRepeat = false;
-            for ($k = $j + 1; $k < count($section); $k++) {
-                if (isset($section[$k]['id']) && $section[$k]['id'] == $userId
-                    && isset($section[$k]['_is_redirector_repeat'])) {
-                    $hasRepeat = true;
-                    break;
-                }
-            }
-
-            if (!$hasRepeat) {
-                $repeatEntry = [
-                    'id'                    => $userId,
-                    'type'                  => $approver['type']   ?? 1,
-                    'vrio'                  => $approver['vrio']   ?? '0',
-                    'urgent'                => $approver['urgent'] ?? '0',
-                    'role'                  => $approver['role']   ?? '0',
-                    'result'                => null,
-                    '_is_redirector_repeat' => true
-                ];
-                array_splice($section, $j + 1, 0, [$repeatEntry]);
-                $j++; // пропускаем только что вставленную запись
-            }
-        }
+        // Рекурсивно обходим секцию, начиная с первого участника
+        _insertRepeatInLevel($section, $startIndex);
     }
 }
 
 // ============================================================
 // Сбор глобальной статистики
 // ============================================================
+
+/**
+ * Рекурсивно обходит redirect[] любой глубины и добавляет статусы в $stats.
+ */
+function _countRedirectStats(array $redirectArr, array &$stats, int $depth = 0): void
+{
+    // Защита от зацикливания при испорченных данных
+    if ($depth > 20) return;
+
+    foreach ($redirectArr as $rd) {
+        if (!isset($rd['id'])) continue;
+        $rst = getApproverStatus($rd);
+        $stats['total']++;
+        $stats[$rst['status']]++;
+        // Рекурсия вглубь вложенных перенаправлений
+        if (isset($rd['redirect']) && is_array($rd['redirect'])) {
+            _countRedirectStats($rd['redirect'], $stats, $depth + 1);
+        }
+    }
+}
+
 function collectGlobalStats(array $agreementList): array
 {
     $stats = ['total' => 0, 'pending' => 0, 'approved' => 0, 'redirected' => 0, 'rejected' => 0, 'returned' => 0];
@@ -261,13 +363,9 @@ function collectGlobalStats(array $agreementList): array
             $st = getApproverStatus($section[$i]);
             $stats['total']++;
             $stats[$st['status']]++;
+            // Рекурсивно считаем статусы всех вложенных redirect[]
             if (isset($section[$i]['redirect']) && is_array($section[$i]['redirect'])) {
-                foreach ($section[$i]['redirect'] as $rd) {
-                    if (!isset($rd['id'])) continue;
-                    $rst = getApproverStatus($rd);
-                    $stats['total']++;
-                    $stats[$rst['status']]++;
-                }
+                _countRedirectStats($section[$i]['redirect'], $stats);
             }
         }
     }
@@ -467,31 +565,98 @@ function sendNotificationsToNextActors(
 // Только для строк у которых result ещё не установлен (null/пустой)
 // и которые НЕ являются _is_redirector_repeat
 // ============================================================
+
+/**
+ * Рекурсивно применяет подписи из $user_signs к записям redirect[] любой глубины.
+ * $sectionIndex используется как ключ в $user_signs (индекс секции).
+ */
+function _applySignsToRedirectLevel(array &$redirectArr, array $user_signs, int $sectionIndex, int $depth = 0): void
+{
+    // Защита от зацикливания при испорченных данных
+    if ($depth > 20) return;
+
+    for ($r = 0; $r < count($redirectArr); $r++) {
+        $rd = &$redirectArr[$r];
+        if (!isset($rd['id'])) continue;
+        // Не перезаписываем уже имеющийся result
+        if (!empty($rd['result'])) {
+            // Но рекурсия вглубь всё равно нужна
+            if (!empty($rd['redirect']) && is_array($rd['redirect'])) {
+                _applySignsToRedirectLevel($rd['redirect'], $user_signs, $sectionIndex, $depth + 1);
+            }
+            continue;
+        }
+        $rdUserId = intval($rd['id']);
+        if (isset($user_signs[$rdUserId][$sectionIndex])) {
+            $signType = intval($user_signs[$rdUserId][$sectionIndex]['type']);
+            if (in_array($signType, [1, 2])) {
+                $rd['result'] = [
+                    'id'   => $signType,
+                    'date' => $user_signs[$rdUserId][$sectionIndex]['date']
+                ];
+            }
+        }
+        // Рекурсия вглубь вложенных redirect[]
+        if (!empty($rd['redirect']) && is_array($rd['redirect'])) {
+            _applySignsToRedirectLevel($rd['redirect'], $user_signs, $sectionIndex, $depth + 1);
+        }
+    }
+}
+
+/**
+ * Рекурсивно собирает userId тех участников, кто уже подписал через redirect[].
+ * Нужно для определения, что основная запись участника тоже должна получить result.
+ */
+function _collectSignedViaRedirect(array $redirectArr, array &$signedViaRedirect, int $depth = 0): void
+{
+    // Защита от зацикливания при испорченных данных
+    if ($depth > 20) return;
+
+    foreach ($redirectArr as $rd) {
+        if (!isset($rd['id'])) continue;
+        $rdStatus = intval($rd['result']['id'] ?? 0);
+        if (in_array($rdStatus, [1, 2, 3])) {
+            $signedViaRedirect[intval($rd['id'])] = true;
+        }
+        // Рекурсия вглубь вложенных redirect[]
+        if (!empty($rd['redirect']) && is_array($rd['redirect'])) {
+            _collectSignedViaRedirect($rd['redirect'], $signedViaRedirect, $depth + 1);
+        }
+    }
+}
+
 function applySignsToAgreementList(array &$agreementList, array $user_signs): void
 {
     for ($i = 0; $i < count($agreementList); $i++) {
         $startIndex = isset($agreementList[$i][0]['stage']) ? 1 : 0;
 
-        // Собираем userId которые уже подписали через redirect[] в этой секции
+        // Собираем userId которые уже подписали через redirect[] в этой секции (любая глубина)
         $signedViaRedirect = [];
         for ($j = $startIndex; $j < count($agreementList[$i]); $j++) {
             if (!isset($agreementList[$i][$j]['redirect'])) continue;
-            foreach ($agreementList[$i][$j]['redirect'] as $rd) {
-                if (!isset($rd['id'])) continue;
-                $rdStatus = intval($rd['result']['id'] ?? 0);
-                if (in_array($rdStatus, [1, 2, 3])) {
-                    $signedViaRedirect[intval($rd['id'])] = true;
-                }
-            }
+            _collectSignedViaRedirect($agreementList[$i][$j]['redirect'], $signedViaRedirect);
         }
+
+        // Словарь: userId => true, если подпись для этого участника уже применена в секции.
+        // Предотвращает копирование одной и той же подписи на второе вхождение участника
+        // (например, если участник перенаправил и получил повторную запись без _is_redirector_repeat).
+        $signsApplied = [];
 
         for ($j = $startIndex; $j < count($agreementList[$i]); $j++) {
             if (!isset($agreementList[$i][$j]['id'])) continue;
             // Не трогаем повторные записи перенаправившего
             if (!empty($agreementList[$i][$j]['_is_redirector_repeat'])) continue;
             $userId = intval($agreementList[$i][$j]['id']);
-            // Не перезаписываем строки у которых уже есть result
-            if (!empty($agreementList[$i][$j]['result'])) continue;
+            // Если у этой записи уже есть result — помечаем userId как обработанный и пропускаем.
+            // Это гарантирует, что следующее вхождение того же участника (без _is_redirector_repeat)
+            // не получит подпись повторно.
+            if (!empty($agreementList[$i][$j]['result'])) {
+                $signsApplied[$userId] = true;
+                continue;
+            }
+            // Если подпись для этого userId в секции уже была применена — пропускаем.
+            // Защищает от дублирования при наличии нескольких вхождений одного участника.
+            if (isset($signsApplied[$userId])) continue;
             // Применяем подпись из cam_signs если она есть
             if (isset($user_signs[$userId][$i])) {
                 $signType = intval($user_signs[$userId][$i]['type']);
@@ -500,6 +665,7 @@ function applySignsToAgreementList(array &$agreementList, array $user_signs): vo
                         'id'   => $signType,
                         'date' => $user_signs[$userId][$i]['date']
                     ];
+                    $signsApplied[$userId] = true;
                 }
             } elseif (isset($signedViaRedirect[$userId])) {
                 // Пользователь подписал через redirect — копируем результат из redirect
@@ -510,29 +676,16 @@ function applySignsToAgreementList(array &$agreementList, array $user_signs): vo
                             $rdStatus = intval($rd['result']['id'] ?? 0);
                             if (in_array($rdStatus, [1, 2, 3])) {
                                 $agreementList[$i][$j]['result'] = $rd['result'];
+                                $signsApplied[$userId] = true;
                             }
                             break 2;
                         }
                     }
                 }
             }
-            // Рекурсивно обрабатываем redirect[]
+            // Рекурсивно применяем подписи ко всем уровням redirect[]
             if (!empty($agreementList[$i][$j]['redirect']) && is_array($agreementList[$i][$j]['redirect'])) {
-                for ($r = 0; $r < count($agreementList[$i][$j]['redirect']); $r++) {
-                    $rd = &$agreementList[$i][$j]['redirect'][$r];
-                    if (!isset($rd['id'])) continue;
-                    if (!empty($rd['result'])) continue;
-                    $rdUserId = intval($rd['id']);
-                    if (isset($user_signs[$rdUserId][$i])) {
-                        $signType = intval($user_signs[$rdUserId][$i]['type']);
-                        if (in_array($signType, [1, 2])) {
-                            $rd['result'] = [
-                                'id'   => $signType,
-                                'date' => $user_signs[$rdUserId][$i]['date']
-                            ];
-                        }
-                    }
-                }
+                _applySignsToRedirectLevel($agreementList[$i][$j]['redirect'], $user_signs, $i);
             }
         }
     }
@@ -540,8 +693,10 @@ function applySignsToAgreementList(array &$agreementList, array $user_signs): vo
 
 applySignsToAgreementList($agreementList, $user_signs);
 
-// Повторная запись перенаправившего вставляется на клиенте (agreement.php),
-// поэтому insertRedirectorRepeatEntry здесь не вызывается во избежание дублирования.
+// Вставляем повторные записи перенаправившего для всех уровней вложенности.
+// Функция идемпотентна (проверяет $hasRepeat перед вставкой), поэтому
+// дублирования с клиентским кодом не возникает.
+insertRedirectorRepeatEntry($agreementList);
 
 $globalStats = collectGlobalStats($agreementList);
 

@@ -40,8 +40,14 @@ if ($planId > 0) {
     $planShort[0] = $plan->short;
     $checks[0] = json_decode($plan->addinstitution, true);
 } else {
-    // Загружаем только утвержденные планы
-    $plans = $db->select('checksplans', ' WHERE active = 1');
+    // Загружаем только утвержденные планы с фильтром по управлению
+    $_calMinistryFilter = '';
+    $_activeMinistries = $auth->getActiveMinistries();
+    if (!empty($_activeMinistries)) {
+        $ids = implode(',', $_activeMinistries);
+        $_calMinistryFilter = ' AND (ministry_id IN (' . $ids . ') OR ministry_id IS NULL)';
+    }
+    $plans = $db->select('checksplans', ' WHERE active = 1' . $_calMinistryFilter);
     $i = 0;
     foreach ($plans as $plan) {
         $planUid[$i] = $plan->uid;
@@ -118,12 +124,13 @@ $gui->set('module_id', 14);
     <div class="nav_01">
         <?
         echo $gui->buildTopNav([
-                'title' => 'Календарь проверок',
-                'planList' => 'Выбор плана',
-                'renew' => 'Обновить календарь',
-                'create' => 'Создать задание',
-                'switch_plan' => 'Показать',
-                'logout' => 'Выйти'
+                'title'           => 'Календарь проверок',
+                'planList'        => 'Выбор плана',
+                'renew'           => 'Обновить календарь',
+                'create'          => 'Создать задание',
+                'switch_plan'     => 'Показать',
+                'ministry_filter' => 'Фильтр по управлению',
+                'logout'          => 'Выйти'
             ]
         );
         ?>

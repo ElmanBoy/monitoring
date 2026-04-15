@@ -20,7 +20,7 @@ $perms = $auth->getCurrentModulePermission();
 $taskStr = $_POST['params']['taskId'];
 $insStr = $_POST['params']['insId'];
 $in_calendar = isset($_POST['params']['in_calendar']) && intval($_POST['params']['in_calendar']) == 1;
-$task = 0;
+$task = [];
 $new_order_number = '';
 $new_order_num = 1000;
 $dates = '';
@@ -53,7 +53,7 @@ if ($auth->isLogin()) {
         $insector = $db->getRegistry('institutions', 'WHERE inspectors = 1');
         $tasks = $db->getRegistry('tasks');
         $ousr = $db->getRegistry('ousr');
-        $orders = $db->getRegistry('documents', ' WHERE documentacial = 1');
+        $orders = $db->getRegistry('documents', ' WHERE documentacial = 1' . $auth->getDocumentMinistryFilter());
 
 
         //Если это уже назначенная задача
@@ -65,7 +65,10 @@ if ($auth->isLogin()) {
             $minDate = $datesEventArr[0];
 
             $insId = $chStaff->institution;
-            $task = $chStaff->task_id;
+            $taskRaw = $chStaff->task_id;
+            // task_id хранится как jsonb-массив "[1,2]" или как скаляр "1"
+            $taskDecoded = json_decode($taskRaw, true);
+            $task = is_array($taskDecoded) ? array_map('intval', $taskDecoded) : [intval($taskRaw)];
 
             if($chStaff->object_type == 0){
                 $ins = $db->getRegistry('persons', '', [], ['surname', 'first_name', 'middle_name', 'birth']);
@@ -96,9 +99,39 @@ if ($auth->isLogin()) {
             }
         }
 
-        $users = $db->getRegistry('users', "where roles <> '2' ORDER BY surname, name, middle_name", [], ['surname', 'name', 'middle_name']);
+        $staffMinistryFilter = '';
+        if (!$auth->isAdmin() && !$auth->haveUserRole(2)) {
+            $userMinistries = $_SESSION['user_ministry'] ?? [];
+            if (!empty($userMinistries)) {
+                $ministryConds = array_map(fn($id) => "ministries @> '[" . intval($id) . "]'", $userMinistries);
+                $staffMinistryFilter = " AND (roles @> '[\"2\"]' OR " . implode(' OR ', $ministryConds) . ")";
+            }
+        }
+        $users = $db->getRegistry('users', "where roles <> '2'" . $staffMinistryFilter . " ORDER BY surname, name, middle_name", [], ['surname', 'name', 'middle_name']);
         $new_order_number = 'ПРП' . $new_order_num . '-' . date('Y');
         $prevDate = date('Y-m-d', strtotime($datesEventArr[0] .' -1 day'));
+
+        // --- Логика запроса на продление (только для существующих задач) ---
+        $currentUserId = intval($_SESSION['user_id']);
+        $isOwnTask = false;
+        $isHead    = false;
+        $extStatus = 0;
+        $extDates  = '';
+        $extComment = '';
+        $extMinDate = date('Y-m-d');
+        if ($taskId > 0) {
+            $isOwnTask = (intval($chStaff->user) === $currentUserId);
+            $headRecord = $db->selectOne('checkstaff',
+                ' WHERE check_uid = ? AND institution = ? AND is_head = 1 AND active = 1 AND "user" = ?',
+                [$chStaff->check_uid, $chStaff->institution, $currentUserId]
+            );
+            $isHead     = ($headRecord !== null) || $auth->isAdmin();
+            $extStatus  = intval($chStaff->extension_request_status ?? 0);
+            $extDates   = $chStaff->extension_requested_dates ?? '';
+            $extComment = $chStaff->extension_request_comment ?? '';
+            $currentEndDate = isset($datesEventArr[1]) ? trim($datesEventArr[1]) : '';
+            $extMinDate = $currentEndDate ? date('Y-m-d', strtotime($currentEndDate . ' +1 day')) : date('Y-m-d');
+        }
         ?>
         <div class='pop_up drag' style='width: 60vw; min-height: 50vh;'>
             <div class='title handle'>
@@ -185,9 +218,9 @@ if ($auth->isLogin()) {
                                 </select>
                             </div>
                             <div class='item w_50'>
-                                <select data-label='Шаблон задачи' name='tasks[]'>
+                                <select data-label='Шаблон задачи' name='tasks[]' multiple>
                                     <?
-                                    echo $gui->buildSelectFromRegistry($tasks['result'], [$task], true);
+                                    echo $gui->buildSelectFromRegistry($tasks['result'], $task, false);
                                     ?>
                                 </select>
                             </div>
@@ -221,6 +254,102 @@ if ($auth->isLogin()) {
                     );
                     ?>
 
+                    <?php if ($taskId > 0 && ($isOwnTask || $isHead)): ?>
+                    <!-- Блок запроса на продление -->
+                    <div class="group">
+                        <div class="group staff">
+                            <div id="extension_block">
+
+                            <?php if ($isOwnTask && !$isHead): ?>
+                                <!-- Инспектор: показываем статус и форму запроса -->
+                                <?php if ($extStatus === 1): ?>
+                                    <div class="el_data" style="background:#fff3cd;border:1px solid #ffc107;border-radius:4px;padding:10px;margin-bottom:0.5rem;">
+                                        <span class="material-icons" style="vertical-align:middle;margin-right:4px;">hourglass_empty</span>
+                                        <strong>Запрос на продление ожидает рассмотрения.</strong>
+                                        Запрошенный период: <strong><?= htmlspecialchars($extDates) ?></strong>
+                                        <?php if (strlen($extComment) > 0): ?>
+                                            <br><em><?= htmlspecialchars($extComment) ?></em>
+                                        <?php endif; ?>
+                                        <br><button class="button icon text red" id="btn_cancel_extension" style="margin-top:6px;">
+                                            <span class="material-icons">cancel</span>Отозвать запрос
+                                        </button>
+                                    </div>
+                                <?php elseif ($extStatus === 2): ?>
+                                    <div class="el_data" style="background:#d4edda;border:1px solid #28a745;border-radius:4px;padding:10px;margin-bottom:0.5rem;">
+                                        <span class="material-icons" style="vertical-align:middle;margin-right:4px;color:#28a745;">check_circle</span>
+                                        <strong>Продление утверждено.</strong> Новый период: <strong><?= htmlspecialchars($extDates) ?></strong>
+                                    </div>
+                                <?php elseif ($extStatus === 3): ?>
+                                    <div class="el_data" style="background:#f8d7da;border:1px solid #dc3545;border-radius:4px;padding:10px;margin-bottom:0.5rem;">
+                                        <span class="material-icons" style="vertical-align:middle;margin-right:4px;color:#dc3545;">cancel</span>
+                                        <strong>Запрос отклонён.</strong>
+                                        <?php if (strlen($extComment) > 0): ?>
+                                            Причина: <em><?= htmlspecialchars($extComment) ?></em>
+                                        <?php endif; ?>
+                                    </div>
+                                <?php endif; ?>
+
+                                <?php if ($extStatus !== 1): ?>
+                                    <div id="extension_form_wrap">
+                                        <h5 style="margin:0.5rem 0 0.3rem;">Запросить продление срока проверки</h5>
+                                        <div class="group" style="margin:0;">
+                                            <div class="item w_50">
+                                                <div class="el_data">
+                                                    <label>Новая дата окончания проверки</label>
+                                                    <input class="el_input" id="ext_dates_input" type="text"
+                                                           placeholder="Выберите дату">
+                                                </div>
+                                            </div>
+                                            <div class="item w_50">
+                                                <div class="el_data">
+                                                    <label>Комментарий (необязательно)</label>
+                                                    <textarea class="el_input" id="ext_comment_input"
+                                                              placeholder="Почему нужно продление..."></textarea>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <button class="button icon text blue" id="btn_request_extension">
+                                            <span class="material-icons">update</span>Отправить запрос руководителю
+                                        </button>
+                                    </div>
+                                <?php endif; ?>
+
+                            <?php elseif ($isHead && $extStatus === 1): ?>
+                                <!-- Руководитель: видит запрос инспектора -->
+                                <?php
+                                $inspectorUser = $db->selectOne('users', ' WHERE id = ?', [$chStaff->user]);
+                                $inspectorFio = trim($inspectorUser->surname ?? '') . ' ' . trim($inspectorUser->name ?? '') . ' ' . trim($inspectorUser->middle_name ?? '');
+                                ?>
+                                <div class="el_data" style="background:#fff3cd;border:1px solid #ffc107;border-radius:4px;padding:10px;margin-bottom:0.5rem;">
+                                    <span class="material-icons" style="vertical-align:middle;margin-right:4px;">pending_actions</span>
+                                    <strong>Запрос на продление от инспектора <?= htmlspecialchars(trim($inspectorFio)) ?>:</strong><br>
+                                    Текущий период: <strong><?= htmlspecialchars($chStaff->dates) ?></strong><br>
+                                    Запрошенный период: <strong><?= htmlspecialchars($extDates) ?></strong>
+                                    <?php if (strlen($extComment) > 0): ?>
+                                        <br>Комментарий: <em><?= htmlspecialchars($extComment) ?></em>
+                                    <?php endif; ?>
+                                </div>
+                                <div class="group" style="margin:0 0 0.5rem;">
+                                    <div class="item w_50">
+                                        <div class="el_data">
+                                            <label>Комментарий при отклонении</label>
+                                            <textarea class="el_input" id="ext_resolve_comment"
+                                                      placeholder="Причина отклонения..."></textarea>
+                                        </div>
+                                    </div>
+                                </div>
+                                <button class="button icon text" id="btn_approve_extension">
+                                    <span class="material-icons">check_circle</span>Одобрить
+                                </button>
+                                <button class="button icon text red" id="btn_reject_extension" style="margin-left:0.5rem;">
+                                    <span class="material-icons">cancel</span>Отклонить
+                                </button>
+                            <?php endif; ?>
+                        </div>
+                        </div>
+                    </div>
+                    <?php endif; ?>
+
                     <div style="height: 100px"></div>
                     <div class='confirm'>
                         <?
@@ -243,6 +372,7 @@ if ($auth->isLogin()) {
                         ?>
                     </div>
                 </form>
+
             </div>
         </div>
         <script src="/modules/calendar/js/registry.js"></script>
@@ -377,10 +507,122 @@ if ($auth->isLogin()) {
                 <?php
                 if(intval($perms['edit']) != 1){
                 ?>
-                $("form#view_staff input, form#view_staff select, form#view_staff textarea").attr("disabled", true).trigger('chosen:updated');
+                $("form#view_staff input, form#view_staff select, form#view_staff textarea").not("#extension_block *").attr("disabled", true).trigger('chosen:updated');
                 <?php
                 }
                 ?>
+
+                <?php if ($taskId > 0 && $isOwnTask && !$isHead && $extStatus !== 1): ?>
+                // --- Datepicker для запроса продления (только новая дата окончания) ---
+                flatpickr("#ext_dates_input", {
+                    locale: 'ru',
+                    dateFormat: 'Y-m-d',
+                    altFormat: 'd.m.Y',
+                    altInput: true,
+                    altInputClass: 'el_input',
+                    allowInput: true,
+                    minDate: "<?= $extMinDate ?>",
+                    firstDayOfWeek: 1
+                });
+
+                $("#btn_request_extension").off("click").on("click", function () {
+                    let newEndDate = $("#ext_dates_input").val(),
+                        comment = $("#ext_comment_input").val();
+                    if (!newEndDate) {
+                        el_tools.notify('error', 'Ошибка', 'Укажите новую дату окончания проверки');
+                        return;
+                    }
+                    $(this).attr('disabled', true);
+                    $.post("/", {
+                        ajax: 1,
+                        path: 'calendar',
+                        action: 'request_extension',
+                        task_id: <?= $taskId ?>,
+                        new_end_date: newEndDate,
+                        request_comment: comment
+                    }, function (data) {
+                        let answer = JSON.parse(data);
+                        if (answer.result) {
+                            inform('Готово', answer.resultText);
+                            setTimeout(function () { el_app.dialog_close('view_staff'); }, 1500);
+                        } else {
+                            el_tools.notify('error', 'Ошибка', answer.resultText);
+                            $("#btn_request_extension").attr('disabled', false);
+                        }
+                    });
+                });
+                <?php endif; ?>
+
+                <?php if ($taskId > 0 && $isOwnTask && !$isHead && $extStatus === 1): ?>
+                // --- Отзыв запроса ---
+                $("#btn_cancel_extension").off("click").on("click", async function () {
+                    let ok = await confirm("Отозвать запрос на продление?");
+                    if (!ok) return;
+                    $.post("/", {
+                        ajax: 1,
+                        path: 'calendar',
+                        action: 'resolve_extension',
+                        task_id: <?= $taskId ?>,
+                        resolve_action: 'reject',
+                        comment: 'Отозвано инспектором'
+                    }, function (data) {
+                        let answer = JSON.parse(data);
+                        if (answer.result) {
+                            inform('Готово', 'Запрос отозван');
+                            setTimeout(function () { el_app.dialog_close('view_staff'); }, 1200);
+                        } else {
+                            el_tools.notify('error', 'Ошибка', answer.resultText);
+                        }
+                    });
+                });
+                <?php endif; ?>
+
+                <?php if ($taskId > 0 && $isHead && $extStatus === 1): ?>
+                // --- Руководитель: одобрить / отклонить ---
+                $("#btn_approve_extension").off("click").on("click", function () {
+                    $.post("/", {
+                        ajax: 1,
+                        path: 'calendar',
+                        action: 'resolve_extension',
+                        task_id: <?= $taskId ?>,
+                        resolve_action: 'approve',
+                        comment: $("#ext_resolve_comment").val()
+                    }, function (data) {
+                        let answer = JSON.parse(data);
+                        if (answer.result) {
+                            inform('Готово', answer.resultText);
+                            setTimeout(function () { el_app.dialog_close('view_staff'); }, 1500);
+                        } else {
+                            el_tools.notify('error', 'Ошибка', answer.resultText);
+                        }
+                    });
+                });
+
+                $("#btn_reject_extension").off("click").on("click", async function () {
+                    let comment = $("#ext_resolve_comment").val();
+                    if (!comment) {
+                        let ok = await confirm("Отклонить без комментария?");
+                        if (!ok) return;
+                    }
+                    $.post("/", {
+                        ajax: 1,
+                        path: 'calendar',
+                        action: 'resolve_extension',
+                        task_id: <?= $taskId ?>,
+                        resolve_action: 'reject',
+                        comment: comment
+                    }, function (data) {
+                        let answer = JSON.parse(data);
+                        if (answer.result) {
+                            inform('Готово', answer.resultText);
+                            setTimeout(function () { el_app.dialog_close('view_staff'); }, 1500);
+                        } else {
+                            el_tools.notify('error', 'Ошибка', answer.resultText);
+                        }
+                    });
+                });
+                <?php endif; ?>
+
             });
         </script>
         <?php

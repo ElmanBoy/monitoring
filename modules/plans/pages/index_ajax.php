@@ -12,7 +12,13 @@ if (isset($_POST['params']) && substr_count($_POST['params'], 'plan=') > 0) {
 } else {
     $gui = new Gui;
     $module_props = $gui->getModuleProps('plans');
-    $regs = $gui->getTableData('checksplans');
+    $_ministryFilter = '';
+    $_activeMinistries = $auth->getActiveMinistries();
+    if (!empty($_activeMinistries)) {
+        $ids = implode(',', $_activeMinistries);
+        $_ministryFilter = ' AND (ministry_id IN (' . $ids . ') OR ministry_id IS NULL)';
+    }
+    $regs = $gui->getTableData('checksplans', $_ministryFilter);
 
     // Загружаем даты утверждения планов из cam_agreement
     $db = new \Core\Db();
@@ -28,17 +34,20 @@ if (isset($_POST['params']) && substr_count($_POST['params'], 'plan=') > 0) {
     <div class="nav">
         <div class="nav_01">
             <?
-            echo $gui->buildTopNav([
-                    'title' => 'Планы проверок',
-                    //'registryList' => '',
-                    'renew' => 'Сбросить все фильтры',
-                    'create' => 'Новый план',
-                    //'clone' => 'Копия плана',
-                    'delete' => 'Удалить выделенные',
-                    //'list_props' => 'Поля справочников',
-                    'logout' => 'Выйти'
-                ]
-            );
+            $navItems = [
+                'title'           => 'Планы проверок',
+                'renew'           => 'Сбросить все фильтры',
+                'create'          => 'Новый план',
+                'ministry_filter' => 'Фильтр по управлению',
+            ];
+            if ($auth->isAdmin()) {
+                $navItems['archive'] = 'Переместить в архив';
+                $navItems['delete']  = 'Удалить безвозвратно';
+            } else {
+                $navItems['archive'] = 'Переместить в архив';
+            }
+            $navItems['logout'] = 'Выйти';
+            echo $gui->buildTopNav($navItems);
             ?>
         </div>
 
@@ -47,6 +56,7 @@ if (isset($_POST['params']) && substr_count($_POST['params'], 'plan=') > 0) {
         <ul class='breadcrumb'>
             <li><a href='/plans'>Все планы</a></li>
         </ul>
+        <form method="post" id="registry_archive" class="ajaxFrm"></form>
         <form method="post" id="registry_delete" class="ajaxFrm">
             <table class="table_data" id="tbl_registry">
                 <thead>

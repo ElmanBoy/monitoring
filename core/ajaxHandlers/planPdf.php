@@ -209,6 +209,7 @@ if (isset($_POST['data']) && strlen($_POST['data']) > 0) { //Предпросм�
         $docId = $agr->id;
         //print_r($data);
     } else { //Просмотр иного сохраненного документа, не плана
+        $docId = $agr->id; // Устанавливаем сразу — нужен для поиска ЭП внутри блока documentacial=2
         $executorsArr = [];
         $executors = '';
         $executors_list = json_decode($agr->executors_list, true);
@@ -235,6 +236,8 @@ if (isset($_POST['data']) && strlen($_POST['data']) > 0) { //Предпросм�
         $checkPeriodArr = explode(' - ', $agr->check_period);
         $ins_name = htmlspecialchars(stripslashes($ins['array'][$agr->ins_id]));
         $ins_genitive = InstitutionDeclension::decline($ins_name, 'genitive');
+        $ins_dative   = InstitutionDeclension::decline($ins_name, 'dative');
+        $ins_accusative = InstitutionDeclension::decline($ins_name, 'accusative');
 
         $doc_data = [
             'order_date' => $date->dateToString($agr->docdate),
@@ -244,8 +247,12 @@ if (isset($_POST['data']) && strlen($_POST['data']) > 0) { //Предпросм�
             'document' => $agr->document,
             'institution' => $ins_name,
             'institution_genitive' => $ins_genitive,
+            'institution_dative' => $ins_dative,
+            'institution_accusative' => $ins_accusative,
             'check_institution' => $ins_name,
             'check_institution_genitive' => $ins_genitive,
+            'check_institution_dative' => $ins_dative,
+            'check_institution_accusative' => $ins_accusative,
             //'plan_year' => $plan->year,
             'action_period_start' => $date->dateToString($actionPeriodArr[0]),
             'action_period_end' => $date->dateToString($actionPeriodArr[1]),
@@ -281,6 +288,9 @@ if (isset($_POST['data']) && strlen($_POST['data']) > 0) { //Предпросм�
             $head_fio_r = '';
             $head_position_r = '';
             $head_short_r = '';
+            $head_user_id_r = 0;
+            $control_institution_r = '';
+            $control_ministries_r = '';
             $list_executors_arr = [];
 
             foreach ($staffRows as $sr) {
@@ -291,8 +301,37 @@ if (isset($_POST['data']) && strlen($_POST['data']) > 0) { //Предпросм�
                     $head_fio_r = $initials;
                     $head_position_r = $u->position ?? '';
                     $head_short_r = $initials;
+                    $head_user_id_r = intval($u->id);
+                    // Управление (ministries) для шаблонов со старыми переменными
+                    $headMinistriesArr = json_decode($u->ministries ?? '[]', true);
+                    $headMinistryId = intval($headMinistriesArr[0] ?? 0);
+                    if ($headMinistryId > 0) {
+                        $headMinistry = $db->selectOne('ministries', ' WHERE id = ?', [$headMinistryId]);
+                        $control_ministries_r = $headMinistry->name ?? '';
+                    }
+                    // Учреждение для шаблонов со старыми переменными
+                    $headInsId = intval($u->institution ?? 0);
+                    if ($headInsId > 0) {
+                        $headIns = $db->selectOne('institutions', ' WHERE id = ?', [$headInsId]);
+                        $control_institution_r = $headIns->short ?? $headIns->name ?? '';
+                    }
                 } else {
                     $list_executors_arr[] = $initials . ' — ' . ($u->position ?? '');
+                }
+            }
+
+            // ЭП руководителя проверки
+            $head_sign_r = '';
+            if ($head_user_id_r > 0 && $docId > 0) {
+                $headSign = $db->selectOne('signs',
+                    ' WHERE user_id = ? AND doc_id = ? AND type = 1 ORDER BY id DESC LIMIT 1',
+                    [$head_user_id_r, $docId]
+                );
+                if ($headSign) {
+                    $headSignData = json_decode($headSign->sign, true);
+                    if (!empty($headSignData['certificate_info'])) {
+                        $head_sign_r = new \Twig\Markup($temp->getSign($headSignData['certificate_info']), 'UTF-8');
+                    }
                 }
             }
 
@@ -389,10 +428,17 @@ if (isset($_POST['data']) && strlen($_POST['data']) > 0) { //Предпросм�
 
             // Декодируем HTML-сущности в названии учреждения
             $ins_name_r = html_entity_decode($ins['array'][$insId] ?? '', ENT_QUOTES, 'UTF-8');
+            $ins_genitive_r   = InstitutionDeclension::decline($ins_name_r, 'genitive');
+            $ins_dative_r     = InstitutionDeclension::decline($ins_name_r, 'dative');
+            $ins_accusative_r = InstitutionDeclension::decline($ins_name_r, 'accusative');
 
             $doc_data['head_fio'] = $head_fio_r;
             $doc_data['head_position'] = $head_position_r;
             $doc_data['head_short'] = $head_short_r;
+            $doc_data['sign_2'] = $head_sign_r;  // ЭП руководителя проверки
+            $doc_data['sign_1'] = $head_sign_r;  // на случай шаблонов с sign_1
+            $doc_data['control_institution'] = $control_institution_r;
+            $doc_data['control_ministries'] = $control_ministries_r;
             $doc_data['list_executors'] = implode(';<br>', $list_executors_arr);
             $doc_data['verifiable_start'] = $verifiable_start_r;
             $doc_data['verifiable_end'] = $verifiable_end_r;
@@ -401,6 +447,12 @@ if (isset($_POST['data']) && strlen($_POST['data']) > 0) { //Предпросм�
             $doc_data['check_period_start'] = $check_period_start_r;
             $doc_data['check_period_end'] = $check_period_end_r;
             $doc_data['institution'] = $ins_name_r;
+            $doc_data['institution_genitive'] = $ins_genitive_r;
+            $doc_data['institution_dative'] = $ins_dative_r;
+            $doc_data['institution_accusative'] = $ins_accusative_r;
+            $doc_data['check_institution_genitive'] = $ins_genitive_r;
+            $doc_data['check_institution_dative'] = $ins_dative_r;
+            $doc_data['check_institution_accusative'] = $ins_accusative_r;
             // Перезаписываем order_date/order_number из приказа если нашли
             if (!empty($order_number_r)) $doc_data['order_number'] = $order_number_r;
             if (!empty($order_date_r)) $doc_data['order_date'] = $date->dateToString($order_date_r);
@@ -498,6 +550,51 @@ $initiator_fio = $users['array'][$initiator][0] . ' ' . $users['array'][$initiat
     $users['array'][$initiator][2];
 $initiator_position = $users['array'][$initiator][3];
 
+// Найти руководителя управления по ministry_id шаблона документа
+// Ищем пользователя с ролью «Руководитель управления» (id=13) из того же управления
+$chief_inspector_short   = '';
+$chief_inspector_full    = '';
+$chief_inspector_dative  = '';
+$chief_inspector_greeting = '';
+$docMinistryId = 0;
+if (!empty($data['document'])) {
+    $docTemplate = $db->selectOne('documents', ' WHERE id = ?', [intval($data['document'])]);
+    $docMinistryId = intval($docTemplate->ministry_id ?? 0);
+}
+$chiefUserQuery = "SELECT id, surname, name, middle_name FROM " . TBL_PREFIX . "users
+     WHERE active = 1 AND roles @> '[\"13\"]'::jsonb";
+if ($docMinistryId > 0) {
+    $chiefUserQuery .= " AND ministries @> '[" . $docMinistryId . "]'";
+}
+$chiefUserQuery .= " LIMIT 1";
+$chiefUser = R::getRow($chiefUserQuery);
+if ($chiefUser) {
+    $chiefSurname = trim($chiefUser['surname']);
+    $chiefName    = trim($chiefUser['name']);
+    $chiefMiddle  = trim($chiefUser['middle_name']);
+    $chiefNameI   = mb_substr($chiefName, 0, 1);
+    $chiefMiddleI = mb_substr($chiefMiddle, 0, 1);
+    // И.О. Фамилия (для подписи в актах)
+    $chief_inspector_short   = $chiefNameI . '.' . ($chiefMiddleI ? $chiefMiddleI . '.' : '') . ' ' . $chiefSurname;
+    // Фамилия И.О. (полная форма)
+    $chief_inspector_full    = $chiefSurname . ' ' . $chiefNameI . '.' . ($chiefMiddleI ? $chiefMiddleI . '.' : '');
+    // Фамилия в дательном + И.О. (для «направляется ... Ляховой Е.В.»)
+    $declinedFio = PersonNameDeclension::decline(
+        $chiefSurname . ' ' . $chiefName . ' ' . $chiefMiddle, 'dative'
+    );
+    // decline возвращает «Ляховой Елене Владимировне» — берём только фамилию (первое слово)
+    $declinedParts = explode(' ', $declinedFio, 2);
+    $chief_inspector_dative = $declinedParts[0] . ' ' . $chiefNameI . '.' . ($chiefMiddleI ? $chiefMiddleI . '.' : '');
+    // Имя Отчество (для обращения «Уважаемая Имя Отчество!»)
+    $chief_inspector_greeting = $chiefName . ($chiefMiddle ? ' ' . $chiefMiddle : '');
+}
+$doc_data['chief_inspector']          = $chief_inspector_short;
+$doc_data['chief_inspector_full']     = $chief_inspector_full;
+$doc_data['chief_inspector_dative']   = $chief_inspector_dative;
+$doc_data['chief_inspector_greeting'] = $chief_inspector_greeting;
+
+$doc_data['documentacial'] = $documentacial;
+
 $orientation = 'landscape';
 $footer_position = 576;
 $data = array_merge($data, $doc_data);
@@ -555,7 +652,7 @@ $html .= '<html lang="ru">
             table tr td.group{
                 border: none;
             }
-            p {
+            p:not(.notident) {
                 text-indent: 1.25cm;
                 margin: 0 0 0 0;
             }
@@ -861,13 +958,31 @@ if ($outputType == 0) {
     <div class='pop_up_body'>
         <iframe id='pdf-viewer' width='100%' height='600px'></iframe>
         <div class='confirm'>
+            " . ($documentacial == 2 && $auth->haveUserRole(5) && intval($agr->act_agree) == 0 ? "
+            <button class='button icon' id='act_agree_btn'><span class='material-icons'>check</span>С актом ознакомлены</button>
+            " : "") . "
             <button class='button icon close'><span class='material-icons'>close</span>Закрыть</button>
         </div>
     </div>
 </div>
 <script>
-  // После генерации PDF:
     document.getElementById('pdf-viewer').src = `data:application/pdf;base64,$pdfData`;
+    " . ($documentacial == 2 && $auth->haveUserRole(5) && intval($agr->act_agree) == 0 ? "
+    $('#act_agree_btn').off('click').on('click', function () {
+        var self = $(this);
+        self.prop('disabled', true);
+        $.post('/', {ajax: 1, action: 'act_agree', path: 'roadmap', user_id: " . intval($_SESSION['user_id']) . ", act_id: " . intval($agr->id) . "}, function (data) {
+            var answer = JSON.parse(data);
+            if (answer.result) {
+                self.hide();
+                if (typeof inform === 'function') inform('Отлично!', answer.resultText);
+            } else {
+                self.prop('disabled', false);
+                if (typeof el_tools !== 'undefined') el_tools.notify('error', 'Ошибка', answer.resultText);
+            }
+        });
+    });
+    " : "") . "
 </script>";
 }
 

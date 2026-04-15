@@ -46,7 +46,7 @@ input:invalid {
 
 .el_data label {
     font-size: .85rem;
-    /*! opacity: 0.75; */
+    /*! opacity: 0.75;*/
     position: absolute;
     top: -1.25rem;
     background: white;
@@ -59,10 +59,16 @@ input:invalid {
     z-index: 1;
 }
 
+.el_data label span.label-text{
+    position: relative;
+}
+
 .el_data.vertical label,
 .el_data.horizontal label{
     position: relative;
     top: 0;
+    left: auto;
+    /*width: 100%;*/
 }
 
 .el_data select {

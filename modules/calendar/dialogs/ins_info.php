@@ -88,13 +88,14 @@ if ($auth->isLogin()) {
                     }
                 }
                 $planInspectionNames[$plan->id] = $planInspectionName;
-                $orders = $db->select('agreement', ' WHERE status = 1 AND plan_id = ? AND ins_id = ?',
+                $orders = $db->select('agreement', ' WHERE documentacial = 1 AND status = 1 AND plan_id = ? AND ins_id = ?',
                     [$plan->id, $insId]
                 );
                 if (count($orders) > 0) {
                     foreach ($orders as $order) {
                         $tasks = $db->select('checkstaff', ' WHERE order_id = ?', [$order->id]);
                         $tasks_info = [];
+                        $check_done = false;
                         if (count($tasks) > 0) {
                             foreach ($tasks as $task) {
                                 $tasks_info[$task->user] = [
@@ -103,6 +104,9 @@ if ($auth->isLogin()) {
                                     'dates' => $task->dates,
                                     'status' => $task->done
                                 ];
+                                if (intval($task->is_head) === 1 && intval($task->done) === 1) {
+                                    $check_done = true;
+                                }
                             }
                         }
                         $order_ids[$plan->id] = $order->id;
@@ -140,6 +144,7 @@ if ($auth->isLogin()) {
                         [$plan->uid, $insId]
                     );
                     $tasks_info = [];
+                    $check_done = false;
                     if (count($tasks) > 0) {
                         foreach ($tasks as $task) {
                             $tasks_info[$task->user] = [
@@ -148,6 +153,9 @@ if ($auth->isLogin()) {
                                 'dates' => $task->dates,
                                 'status' => $task->done
                             ];
+                            if (intval($task->is_head) === 1 && intval($task->done) === 1) {
+                                $check_done = true;
+                            }
                             $executors[$plan->id][$task->user] = trim($users['array'][$task->user][0]) . ' ' .
                                 trim($users['array'][$task->user][1]) . ' ' .
                                 trim($users['array'][$task->user][2]);
