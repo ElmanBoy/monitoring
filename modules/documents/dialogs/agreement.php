@@ -259,6 +259,7 @@ $initialAgreementList = json_decode($tmpl->agreementlist, true) ?? [];
             const DOC_ID = <?= $docId ?>;
             const CURRENT_USER_ID = <?= $currentUserId ?>;
             const INITIATOR_ID = <?= intval($tmpl->initiator) ?>;
+            const DOCUMENT_TYPE = <?= intval($tmpl->documentacial) ?>;
             // Список пользователей для формы редактирования
             const AG_USERS_OPTIONS = <?= (function() use ($users) {
                 $opts = '<option value=""></option>';
@@ -549,9 +550,16 @@ $initialAgreementList = json_decode($tmpl->agreementlist, true) ?? [];
                         }
                     }
 
+                    // Определяем максимальное количество участников в зависимости от типа документа
+                    let maxParticipants = 2; // По умолчанию для большинства документов
+                    if (DOCUMENT_TYPE === 4) {
+                        // Доклад министру: только 1 подписант (министр)
+                        maxParticipants = 1;
+                    }
+
                     // Показываем/скрываем кнопки добавления
                     const $addButtons = $('.ag-add-btn[data-section="' + sectionId + '"]');
-                    if (firstLevelCount >= 2) {
+                    if (firstLevelCount >= maxParticipants) {
                         $addButtons.hide();
                     } else {
                         $addButtons.show();
@@ -791,7 +799,7 @@ $initialAgreementList = json_decode($tmpl->agreementlist, true) ?? [];
                         const $ag = $('#ag' + section);
                         let agj = $.trim($ag.val()).length > 0 ? JSON.parse($ag.val()) : [];
 
-                        // ПРОВЕРКА: В секции подписантов не может быть больше 2 участников первого уровня
+                        // ПРОВЕРКА: В секции подписантов ограничение на количество участников
                         if (isSigners) {
                             // Считаем участников первого уровня (исключаем _is_redirector_repeat)
                             let firstLevelCount = 0;
@@ -800,8 +808,19 @@ $initialAgreementList = json_decode($tmpl->agreementlist, true) ?? [];
                                     firstLevelCount++;
                                 }
                             }
-                            if (firstLevelCount >= 2) {
-                                el_tools.notify('error', 'Ошибка', 'В секции подписантов не может быть больше 2 участников первого уровня');
+
+                            // Определяем максимальное количество участников в зависимости от типа документа
+                            let maxParticipants = 2; // По умолчанию (1 подписывает, 1 утверждает)
+                            let errorMessage = 'В секции подписантов не может быть больше 2 участников первого уровня';
+
+                            if (DOCUMENT_TYPE === 4) {
+                                // Доклад министру: только 1 подписант (министр)
+                                maxParticipants = 1;
+                                errorMessage = 'Доклад должен иметь ровно 1 подписанта (министр)';
+                            }
+
+                            if (firstLevelCount >= maxParticipants) {
+                                el_tools.notify('error', 'Ошибка', errorMessage);
                                 addRow.remove();
                                 return;
                             }
@@ -1040,13 +1059,25 @@ $initialAgreementList = json_decode($tmpl->agreementlist, true) ?? [];
                 // Предпросмотр PDF
                 $('#agreement #tab_preview').on('click', function () {
                     $('.preloader').fadeIn('fast');
-                    $.post('/', {
-                        ajax: 1, mode: 'popup', module: 'documents', url: 'planPdf', outputType: 0,
-                        params: {docId: DOC_ID}
-                    }, function (data) {
-                        if (data.length > 0) {
-                            $('#pdf-viewer').attr('src', 'data:application/pdf;base64,' + data);
-                            $('.preloader').fadeOut('fast');
+                    // Передаем параметры в стандартном формате jQuery
+                    let formData = new FormData();
+                    formData.append('ajax', 1);
+                    formData.append('action', 'planPdf');
+                    formData.append('outputType', 0);
+                    formData.append('params[docId]', DOC_ID);
+                    formData.append('params[docType]', DOCUMENT_TYPE);
+
+                    $.ajax({
+                        url: '/',
+                        type: 'POST',
+                        data: formData,
+                        processData: false,
+                        contentType: false,
+                        success: function(data) {
+                            if (data.length > 0) {
+                                $('#pdf-viewer').attr('src', 'data:application/pdf;base64,' + data);
+                                $('.preloader').fadeOut('fast');
+                            }
                         }
                     });
                 });

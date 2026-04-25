@@ -105,6 +105,11 @@ foreach ($agreementList as $sectionIdx => &$section) {
             if ($participantCount != 1 || $signerCount != 1 || $approverCount > 0) {
                 $validationErrors[] = "Приказ: должен иметь ровно 1 подписанта первого уровня без утверждающих (сейчас: {$participantCount} участник(ов) первого уровня, из них {$signerCount} подписывающих и {$approverCount} утверждающих)";
             }
+        } elseif ($documentType == 4) {
+            // Правило для докладов министру (documentacial=4): только 1 подписант (министр), без утверждающих
+            if ($participantCount != 1 || $signerCount != 1 || $approverCount > 0) {
+                $validationErrors[] = "Доклад министру: должен иметь ровно 1 подписанта (министр) без утверждающих (сейчас: {$participantCount} участник(ов) первого уровня, из них {$signerCount} подписывающих и {$approverCount} утверждающих)";
+            }
         } else {
             // Правила для всех остальных типов документов (акты, планы, графики и т.д.)
 

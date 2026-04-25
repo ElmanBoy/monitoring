@@ -32,7 +32,7 @@ if ($existRoad) {
 }
 
 // Получаем предложения из согласованного доклада
-$report    = $reportId > 0 ? $db->selectOne('agreement', ' WHERE id = ? AND documentacial = 8 AND status = 1', [$reportId]) : null;
+$report    = $reportId > 0 ? $db->selectOne('agreement', ' WHERE id = ? AND documentacial = 4 AND status = 1', [$reportId]) : null;
 if (!$report) {
     // Доклад не найден или не согласован — создание невозможно
     echo '<div class="pop_up" style="width:400px">
@@ -47,7 +47,23 @@ if (!$report) {
 $bodyData  = json_decode($report->body ?? '{}', true) ?: [];
 $proposals = [];
 if (isset($bodyData['proposals']) && is_array($bodyData['proposals'])) {
-    $proposals = array_values(array_filter(array_map('trim', $bodyData['proposals']), fn($p) => strlen($p) > 0));
+    // Предложения могут быть массивом объектов с полями text, level, parent
+    // или просто массивом строк
+    foreach ($bodyData['proposals'] as $p) {
+        if (is_array($p) && isset($p['text'])) {
+            // Структурированное предложение - извлекаем текст
+            $text = trim($p['text']);
+            if (strlen($text) > 0) {
+                $proposals[] = $text;
+            }
+        } elseif (is_string($p)) {
+            // Простая строка
+            $text = trim($p);
+            if (strlen($text) > 0) {
+                $proposals[] = $text;
+            }
+        }
+    }
 } elseif (isset($bodyData['proposals_text']) && strlen($bodyData['proposals_text']) > 0) {
     $proposals = array_values(array_filter(array_map('trim', explode("\n", $bodyData['proposals_text'])), fn($p) => strlen($p) > 0));
 }

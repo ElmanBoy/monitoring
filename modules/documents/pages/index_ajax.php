@@ -213,6 +213,15 @@ function validateSignersCount(?string $agreementListJson, int $documentType): ar
                         'error_full' => 'Приказ должен иметь ровно 1 подписанта без утверждающих'
                     ];
                 }
+            } elseif ($documentType == 4) {
+                // Доклад: только 1 подписант (министр)
+                if ($firstLevelCount != 1 || $signerCount != 1 || $approverCount > 0) {
+                    return [
+                        'valid' => false,
+                        'error' => 'Ошибка подписантов',
+                        'error_full' => 'Доклад должен иметь ровно 1 подписанта (министр)'
+                    ];
+                }
             } else {
                 // Остальные документы: 1 подписант + 1 утверждающий
                 if ($firstLevelCount != 2 || $signerCount != 1 || $approverCount != 1) {
@@ -1144,7 +1153,7 @@ if (!empty($_activeMinistries)) {
 }
 $regs = $gui->getTableData($table->table_name, $_ministryFilter);
 
-// Загружаем доклады для актов (documentacial=8, source_id = act_id)
+// Загружаем доклады для актов (documentacial=4, source_id = act_id)
 // Используется для показа кнопки "Создать доклад" в строке акта
 $_actIdsForReports = [];
 $_insIds = [];
@@ -1160,7 +1169,7 @@ foreach ($regs as $_r) {
 $_reportsForActs = []; // act_id => report
 if (!empty($_actIdsForReports)) {
     $_reps = $db->select('agreement',
-        ' WHERE documentacial = 8 AND source_id IN (' . implode(',', array_unique($_actIdsForReports)) . ')'
+        ' WHERE documentacial = 4 AND source_id IN (' . implode(',', array_unique($_actIdsForReports)) . ')'
     );
     foreach ($_reps as $_rep) {
         $_reportsForActs[intval($_rep->source_id)] = $_rep;
@@ -1422,7 +1431,7 @@ if (!empty($_insIds)) {
                             : '<span class="material-icons createReport" data-id="'.$reg->id.'" title="Создать доклад о результатах проверки">post_add</span>'
                     ) : '').'
                         <span class="material-icons agreementDoc" data-id="'.$reg->id.'" title="Согласование документа">verified</span>
-                        <span class="material-icons viewDoc" data-id="'.$reg->id.'" title="Просмотр документа">picture_as_pdf</span>
+                        <span class="material-icons viewDoc" data-id="'.$reg->id.'" data-doctype="'.$reg->documentacial.'" title="Просмотр документа">picture_as_pdf</span>
                     </td>
                 </tr>';
             }
@@ -1477,6 +1486,10 @@ if (!empty($_insIds)) {
                     module = 'plans';
                     handler = 'registry_edit';
                     break;
+                case 4:
+                    module = 'documents';
+                    handler = 'edit_report';
+                    break;
                 case 5:
                     module = 'roadmap';
                     handler = 'view_road';
@@ -1493,6 +1506,9 @@ if (!empty($_insIds)) {
             } else if (doc_type === 2) {
                 // Акт - передаём как массив [doc_id, parent_id] для registry_items_edit
                 el_app.dialog_open(handler, [doc_id, 66], module);
+            } else if (doc_type === 4) {
+                // Доклад - передаём report_id для редактирования
+                el_app.dialog_open(handler, {report_id: doc_id}, module);
             } else {
                 // Остальные типы - стандартные параметры
                 el_app.dialog_open(handler, {doc_id: doc_id, ins_id: ins_id, plan_id: plan_id}, module);

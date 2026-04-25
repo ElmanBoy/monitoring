@@ -32,6 +32,11 @@ $docName = '';
 $documentacial = 3;
 $agreementlist = [];
 $outputType = isset($_POST['outputType']) ? intval($_POST['outputType']) : 1;
+
+// Логирование для отладки
+error_log('[PLANPDF] outputType=' . $outputType . ', POST_outputType=' . ($_POST['outputType'] ?? 'not set') . ', GET_outputType=' . ($_GET['outputType'] ?? 'not set') . ', planId=' . $planId . ', docType=' . $docType);
+error_log('[PLANPDF] Full POST: ' . print_r($_POST, true));
+
 $users = $db->getRegistry('users', '', [], ['surname', 'name', 'middle_name', 'position']);
 $ins = $db->getRegistry('institutions');
 
@@ -138,6 +143,20 @@ if (isset($_POST['data']) && strlen($_POST['data']) > 0) { //Предпросм�
     //$document = $db->selectOne('documents', ' WHERE id = ?', [$agr->document]);
     $documentacial = intval($agr->documentacial);
     //print_r($agr);
+
+    // Для доклада (documentacial=4) перенаправляем на report_pdf
+    if ($documentacial == 4) {
+        // Сохраняем параметры для report_pdf
+        if (!isset($_POST['params'])) {
+            $_POST['params'] = [];
+        }
+        $_POST['params']['docId'] = $planId;
+        $_POST['outputType'] = $outputType;
+
+        require_once $_SERVER['DOCUMENT_ROOT'] . '/modules/documents/dialogs/report_pdf.php';
+        die();
+    }
+
     if ($documentacial == 3) { //Просмотр сохраненного плана
         $plan = $db->selectOne('checksplans', ' id = ?', [$agr->source_id]);
         $docId = $agr->id;

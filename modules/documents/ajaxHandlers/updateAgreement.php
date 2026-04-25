@@ -730,29 +730,21 @@ if ($globalStats['rejected'] > 0) {
 
 } elseif ($globalStats['approved'] > 0 && $globalStats['pending'] == 0 && $globalStats['rejected'] == 0) {
     // ──────────────────────────────────────────────────────────
-    // СПЕЦИАЛЬНАЯ ЛОГИКА для ДОКЛАДА (documentacial=8):
+    // СПЕЦИАЛЬНАЯ ЛОГИКА для ДОКЛАДА (documentacial=4):
     // Если все согласовали, но министра ещё нет — добавляем министра
     // ──────────────────────────────────────────────────────────
-    if ($docType == 8) {
-        // Проверяем, есть ли уже министр в agreementList
-        $hasMinister = false;
+    if ($docType == 4) {
+        // Проверяем, есть ли уже подписант (секция с stage='')
+        $hasSignerSection = false;
         foreach ($agreementList as $section) {
-            $startIdx = isset($section[0]['stage']) ? 1 : 0;
-            for ($i = $startIdx; $i < count($section); $i++) {
-                if (!isset($section[$i]['id'])) continue;
-                $userId = intval($section[$i]['id']);
-                // Проверяем, является ли этот пользователь министром
-                $userRec = $db->selectOne('users', ' WHERE id = ?', [$userId]);
-                if ($userRec && strpos($userRec->roles, '2') !== false &&
-                    strpos($userRec->position, 'Министр социального развития') !== false) {
-                    $hasMinister = true;
-                    break 2;
-                }
+            if (isset($section[0]['stage']) && $section[0]['stage'] === '') {
+                $hasSignerSection = true;
+                break;
             }
         }
 
-        // Если министра нет — добавляем и НЕ переводим в finalStatus=1
-        if (!$hasMinister) {
+        // Если подписанта нет — добавляем министра и НЕ переводим в finalStatus=1
+        if (!$hasSignerSection) {
             // Находим министра
             $minister = $db->selectOne('users',
                 " WHERE active = 1 AND roles LIKE '%2%' AND position LIKE '%Министр социального развития Московской области%' LIMIT 1");
@@ -817,10 +809,10 @@ if ($globalStats['rejected'] > 0) {
     }
 
     // ──────────────────────────────────────────────────────────
-    // ТРИГГЕР: Доклад министру ПОДПИСАН (documentacial=8)
+    // ТРИГГЕР: Доклад министру ПОДПИСАН (documentacial=4)
     // → создаём график устранения нарушений + уведомляем ОК
     // ──────────────────────────────────────────────────────────
-    if ($docType == 8 && $finalStatus == 1) {
+    if ($docType == 4 && $finalStatus == 1) {
         $report = $db->selectOne('agreement', ' WHERE id = ?', [$docId]);
         $actId  = intval($report->source_id ?? 0);
         $act    = $actId > 0 ? $db->selectOne('agreement', ' WHERE id = ?', [$actId]) : null;
@@ -925,7 +917,7 @@ if ($globalStats['rejected'] > 0) {
             }
         }
     }
-    // ── Конец триггера documentacial=8 ──────────────────────
+    // ── Конец триггера documentacial=4 ──────────────────────
 
 } else {
     // Только перенаправления, всё ещё в процессе

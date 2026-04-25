@@ -130,7 +130,7 @@ if ($auth->isLogin()) {
                             [$plan->id, $insId]
                         );
                         $reports[$plan->id] = $db->select('agreement',
-                            ' WHERE documentacial = 8 AND plan_id = ? AND ins_id = ?',
+                            ' WHERE documentacial = 4 AND plan_id = ? AND ins_id = ?',
                             [$plan->id, $insId]
                         );
                         $roadmaps[$plan->id] = $db->select('agreement',

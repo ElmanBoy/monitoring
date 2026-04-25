@@ -2,7 +2,7 @@
 /**
  * modules/documents/dialogs/report_pdf.php
  *
- * Генерация PDF-доклада министру (documentacial=8).
+ * Генерация PDF-доклада министру (documentacial=4).
  * Аналог planPdf.php — рендерит HTML → DomPDF.
  *
  * POST params[docId] — id записи доклада в cam_agreement
@@ -27,13 +27,14 @@ $temp = new Templates();
 if (!$auth->isLogin()) { die(); }
 
 $docId = intval($_POST['params']['docId'] ?? $_GET['docId'] ?? 0);
+
 if ($docId === 0) {
-    echo '<script>alert("Не указан id доклада.");</script>';
+    echo '<script>alert("Не указан id доклада."); el_app.dialog_close();</script>';
     die();
 }
 
 // Загружаем доклад
-$rep = $db->selectOne('agreement', ' WHERE id = ? AND documentacial = 8', [$docId]);
+$rep = $db->selectOne('agreement', ' WHERE id = ? AND documentacial = 4', [$docId]);
 if (!$rep) {
     echo '<script>alert("Доклад не найден.");</script>';
     die();
@@ -74,10 +75,21 @@ $body = json_decode($rep->body ?? '{}', true) ?: [];
 $actSentDate = $body['act_sent_date'] ?? ($act->doc_number ?? '');
 $inclObj     = intval($body['include_objections'] ?? 0);
 
-// Предложения
+// Предложения (с учётом новой структуры с иерархией)
 $proposals = [];
 if (!empty($body['proposals']) && is_array($body['proposals'])) {
-    $proposals = array_values(array_filter($body['proposals'], function($p) { return strlen(trim($p)) > 0; }));
+    foreach ($body['proposals'] as $p) {
+        // Поддержка старого формата (просто строка) и нового (массив с text, level, parent)
+        if (is_string($p) && strlen(trim($p)) > 0) {
+            $proposals[] = ['text' => trim($p), 'level' => 1, 'parent' => 0];
+        } elseif (is_array($p) && !empty(trim($p['text'] ?? ''))) {
+            $proposals[] = [
+                'text'   => trim($p['text']),
+                'level'  => intval($p['level'] ?? 1),
+                'parent' => intval($p['parent'] ?? 0)
+            ];
+        }
+    }
 }
 
 // Нарушения — из body['violations'] (сохранены при создании доклада)
@@ -98,6 +110,31 @@ $authorFio  = trim(($repAuthor->surname ?? '') . ' ' .
     mb_substr(trim($repAuthor->middle_name ?? ''), 0, 1) . '.');
 $authorPos  = $repAuthor->position ?? '';
 
+// Получаем подписи для доклада (согласующие + министр)
+$agreementList = json_decode($rep->agreementlist ?? '[]', true) ?: [];
+$signatures = [];
+
+// Загружаем подписи согласующих и министра
+$allSigners = $agreementList; // Список всех подписантов из agreementlist
+foreach ($allSigners as $signer) {
+    $userId = intval($signer['id'] ?? 0);
+    if ($userId > 0) {
+        // Ищем подпись этого пользователя для данного доклада (type=2 для согласования)
+        $sign = $db->selectOne('signs', ' WHERE user_id = ? AND doc_id = ? AND table_name = ? AND type = 2 ORDER BY id DESC LIMIT 1',
+            [$userId, $docId, 'agreement']
+        );
+        if ($sign) {
+            $signData = json_decode($sign->sign, true);
+            if (!empty($signData['certificate_info'])) {
+                $signatures[] = [
+                    'user' => $db->selectOne('users', ' WHERE id = ?', [$userId]),
+                    'stamp' => $temp->getSign($signData['certificate_info'])
+                ];
+            }
+        }
+    }
+}
+
 // Данные приказа
 $order = $planId > 0 && $insId > 0
     ? $db->selectOne('agreement', ' WHERE documentacial = 1 AND plan_id = ? AND ins_id = ?', [$planId, $insId])
@@ -110,13 +147,15 @@ $checkPeriodStart = '';
 $checkPeriodEnd   = '';
 $plan = $planId > 0 ? $db->selectOne('checksplans', ' WHERE id = ?', [$planId]) : null;
 if ($plan) {
-    $checks = json_decode($plan->checks ?? '[]', true) ?: [];
-    foreach ($checks as $ch) {
-        if (intval($ch['institution'] ?? $ch['institutions'] ?? 0) === $insId) {
-            $pArr = explode(' - ', $ch['check_periods'] ?? '');
-            $checkPeriodStart = $date->correctDateFormatFromMysql(trim($pArr[0] ?? ''));
-            $checkPeriodEnd   = $date->correctDateFormatFromMysql(trim($pArr[1] ?? ''));
-            break;
+    $checks = json_decode($plan->checks ?? '[]', true);
+    if (is_array($checks)) {
+        foreach ($checks as $ch) {
+            if (intval($ch['institution'] ?? $ch['institutions'] ?? 0) === $insId) {
+                $pArr = explode(' - ', $ch['check_periods'] ?? '');
+                $checkPeriodStart = $date->correctDateFormatFromMysql(trim($pArr[0] ?? ''));
+                $checkPeriodEnd   = $date->correctDateFormatFromMysql(trim($pArr[1] ?? ''));
+                break;
+            }
         }
     }
 }
@@ -141,12 +180,29 @@ $tplVars = [
 $headerHtml = $tmplDoc ? $temp->twig_parse($tmplDoc->header ?? '', $tplVars) : '';
 
 // Рендерим вводный абзац: если заполнен вручную — берём его,
-// иначе рендерим body шаблона
+// иначе рендерим body шаблона, иначе генерируем автоматически
 $introHtml = '';
 if (strlen($rep->brief ?? '') > 0) {
     $introHtml = nl2br(htmlspecialchars($rep->brief));
 } elseif ($tmplDoc && strlen($tmplDoc->body ?? '') > 0) {
     $introHtml = $temp->twig_parse($tmplDoc->body, $tplVars);
+} else {
+    // Автогенерация вводного текста
+    $introParts = [];
+    if ($orderNumber && $orderDate) {
+        $introParts[] = "на основании приказа от $orderDate №$orderNumber";
+    }
+    if ($checkPeriodStart && $checkPeriodEnd) {
+        $introParts[] = "в период с $checkPeriodStart по $checkPeriodEnd";
+    }
+    $introParts[] = "проведена плановая проверка";
+    if ($insName) {
+        $introParts[] = htmlspecialchars($insName);
+    }
+
+    if (count($introParts) > 0) {
+        $introHtml = 'Управлением финансового контроля и аудита ' . implode(', ', $introParts) . '.';
+    }
 }
 
 // ── HTML для DomPDF ─────────────────────────────────────────
@@ -159,9 +215,9 @@ ob_start();
         <style>
             * { margin: 0; padding: 0; box-sizing: border-box; }
             body {
-                font-family: 'DejaVu Sans', Arial, sans-serif;
-                font-size: 12pt;
-                line-height: 1.5;
+                font-family: 'Times-Roman', 'Times New Roman', serif;
+                font-size: 14pt;
+                line-height: 1.15;
                 color: #000;
                 padding: 20mm 20mm 20mm 30mm;
             }
@@ -281,7 +337,7 @@ ob_start();
         <h2 class="section-title">По результатам проверки установлено следующее.</h2>
         <?php foreach ($violations as $i => $v): ?>
             <div class="violation-item">
-                <?= ($i + 1) . '. ' . htmlspecialchars($v['text'] ?? '') ?>
+                <?= ($i + 1) . '. ' . htmlspecialchars(is_array($v) ? ($v['text'] ?? '') : $v) ?>
             </div>
         <?php endforeach; ?>
     <?php else: ?>
@@ -302,8 +358,29 @@ ob_start();
     <!-- Предложения -->
     <?php if (count($proposals) > 0): ?>
         <div class="proposals-title">Предложения по результатам проверки</div>
-        <?php foreach ($proposals as $i => $proposal): ?>
-            <div class="proposal-item"><?= ($i + 1) . '. ' . htmlspecialchars($proposal) ?></div>
+        <?php
+        $mainCounter = 0;
+        $subCounters = [];
+        foreach ($proposals as $i => $proposal):
+            $text = is_array($proposal) ? $proposal['text'] : $proposal;
+            $level = is_array($proposal) ? intval($proposal['level']) : 1;
+
+            // Формируем номер в зависимости от уровня
+            if ($level === 1) {
+                $mainCounter++;
+                $subCounters[$mainCounter] = 0;
+                $number = $mainCounter . '.';
+                $indent = 0;
+            } else {
+                if (!isset($subCounters[$mainCounter])) $subCounters[$mainCounter] = 0;
+                $subCounters[$mainCounter]++;
+                $number = $mainCounter . '.' . $subCounters[$mainCounter] . '.';
+                $indent = 20;
+            }
+        ?>
+            <div class="proposal-item" style="margin-left: <?= $indent ?>px;">
+                <?= htmlspecialchars($number . ' ' . $text) ?>
+            </div>
         <?php endforeach; ?>
     <?php endif; ?>
 
@@ -322,6 +399,22 @@ ob_start();
         </tr>
     </table>
 
+    <!-- Штампы электронных подписей -->
+    <?php if (count($signatures) > 0): ?>
+        <div style="margin-top: 15mm;">
+            <div style="font-size: 10pt; font-weight: bold; margin-bottom: 5mm; text-align: center;">
+                Электронные подписи
+            </div>
+            <div style="display: flex; flex-wrap: wrap; gap: 5mm; justify-content: flex-start;">
+                <?php foreach ($signatures as $sig): ?>
+                    <div style="margin-bottom: 3mm;">
+                        <?= $sig['stamp'] ?>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    <?php endif; ?>
+
     </body>
     </html>
 <?php
@@ -331,7 +424,7 @@ $html = ob_get_clean();
 $options = new Options();
 $options->set('isHtml5ParserEnabled', true);
 $options->set('isRemoteEnabled', false);
-$options->set('defaultFont', 'DejaVu Sans');
+$options->set('defaultFont', 'Times-Roman');
 $options->set('chroot', $_SERVER['DOCUMENT_ROOT']);
 
 $dompdf = new Dompdf($options);
@@ -339,9 +432,38 @@ $dompdf->loadHtml($html, 'UTF-8');
 $dompdf->setPaper('A4', 'portrait');
 $dompdf->render();
 
-// Если открывается в iframe — inline, иначе attachment
-$inline = intval($_POST['params']['inline'] ?? $_GET['inline'] ?? 1);
-$dompdf->stream(
-    'doklad_' . $insNameShort . '_' . $repDate . '.pdf',
-    ['Attachment' => $inline ? 0 : 1]
-);
+// Проверяем тип вывода: 0 = base64 для iframe, 1 = диалог с PDF, 2 = stream для скачивания
+$outputType = intval($_POST['outputType'] ?? $_GET['outputType'] ?? 1);
+
+if ($outputType == 0) {
+    // Возвращаем base64 для встраивания в iframe
+    echo base64_encode($dompdf->output());
+} elseif ($outputType == 1) {
+    // Генерируем диалог с PDF внутри iframe
+    $pdfData = base64_encode($dompdf->output());
+    $docName = 'Доклад о результатах проверки ' . htmlspecialchars($insNameShort);
+    echo "
+<div class='pop_up drag' style='width: 60vw'>
+    <div class='title handle'>
+        <div class='name'>Просмотр документа &laquo;" . $docName . "&raquo;</div>
+        <div class='button icon close'><span class='material-icons'>close</span></div>
+    </div>
+    <div class='pop_up_body'>
+        <iframe id='pdf-viewer' width='100%' height='600px'></iframe>
+        <div class='confirm'>
+            <button class='button icon close'><span class='material-icons'>close</span>Закрыть</button>
+        </div>
+    </div>
+</div>
+<script>
+    document.getElementById('pdf-viewer').src = `data:application/pdf;base64,$pdfData`;
+</script>
+";
+} else {
+    // Stream для прямого скачивания
+    $inline = intval($_POST['params']['inline'] ?? $_GET['inline'] ?? 1);
+    $dompdf->stream(
+        'doklad_' . $insNameShort . '_' . $repDate . '.pdf',
+        ['Attachment' => $inline ? 0 : 1]
+    );
+}

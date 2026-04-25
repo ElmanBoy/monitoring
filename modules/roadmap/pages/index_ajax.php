@@ -69,7 +69,7 @@ if (!empty($actIds)) {
     }
 }
 
-// Загружаем согласованные доклады (documentacial=8, status=1) для актов одним запросом
+// Загружаем согласованные доклады (documentacial=4, status=1) для актов одним запросом
 // Доклад создаётся ПОСЛЕ согласования акта — его наличие разрешает создание графика
 $reportActIds = [];
 foreach ($regs as $r) {
@@ -81,7 +81,7 @@ foreach ($regs as $r) {
 $reportsMap = []; // act_id => report
 if (!empty($reportActIds)) {
     $reports = $db->select('agreement',
-        ' WHERE documentacial = 8 AND status = 1 AND source_id IN (' . implode(',', array_unique($reportActIds)) . ')'
+        ' WHERE documentacial = 4 AND status = 1 AND source_id IN (' . implode(',', array_unique($reportActIds)) . ')'
     );
     foreach ($reports as $rep) {
         $reportsMap[intval($rep->source_id)] = $rep;
