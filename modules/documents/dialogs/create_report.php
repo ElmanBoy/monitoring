@@ -38,7 +38,26 @@ if (intval($act->status) !== 1) {
 }
 
 // Проверяем — не создан ли доклад уже
-$existReport = $db->selectOne('agreement', ' WHERE documentacial = 8 AND source_id = ?', [$actId]);
+$existReport = $db->selectOne('agreement', ' WHERE documentacial = 4 AND source_id = ?', [$actId]);
+
+// Генерация следующего номера доклада (формат: ДКЛ{номер}-{год})
+$currentYear = date('Y');
+$reportsThisYear = $db->select('agreement',
+    " WHERE documentacial = 4 AND doc_number LIKE 'ДКЛ%-" . $currentYear . "'"
+);
+
+$maxNumber = 999; // Начинаем с 999, чтобы первый номер был 1000
+foreach ($reportsThisYear as $rep) {
+    if (preg_match('/ДКЛ(\d+)-' . $currentYear . '/', $rep->doc_number, $matches)) {
+        $num = intval($matches[1]);
+        if ($num > $maxNumber) {
+            $maxNumber = $num;
+        }
+    }
+}
+
+$nextNumber = $maxNumber + 1;
+$generatedDocNumber = 'ДКЛ' . $nextNumber . '-' . $currentYear;
 
 // Нарушения по акту: ищем через checkstaff по ins_id и plan_id акта
 $insId = intval($act->ins_id ?? $act->source_id ?? 0);
@@ -87,6 +106,15 @@ $objections = json_decode($act->objections ?? '{}', true);
 $hasObjections = !empty($objections['text']) || !empty($objections['files']);
 
 ?>
+<style>
+    #proposals_container .proposal_item .el_data {
+        flex: 1 !important;
+        width: 100% !important;
+    }
+    #proposals_container .proposal_item .el_textarea {
+        width: 100% !important;
+    }
+</style>
 <div class='pop_up drag' style='width:65vw'>
     <div class='title handle'>
         <div class='name'>Доклад министру — «<?= htmlspecialchars($act->name) ?>»</div>
@@ -137,8 +165,8 @@ $hasObjections = !empty($objections['text']) || !empty($objections['files']);
                     <div class='group'>
                         <div class='item w_50'>
                             <div class='el_data'>
-                                <label>Исходящий номер доклада</label>
-                                <input class='el_input' type='text' name='params[doc_number]' placeholder='20Исх-XXXX'>
+                                <label>Исходящий номер доклада <span style='color:var(--color_04);font-size:11px;'>(автоматически сгенерирован, можно изменить)</span></label>
+                                <input class='el_input' type='text' name='params[doc_number]' value='<?= htmlspecialchars($generatedDocNumber) ?>' placeholder='ДКЛ1000-<?= date('Y') ?>'>
                             </div>
                         </div>
                         <div class='item w_50'>
@@ -172,18 +200,27 @@ $hasObjections = !empty($objections['text']) || !empty($objections['files']);
                                 <label>Предложения по результатам проверки</label>
                             </div>
                             <div id='proposals_container'>
-                                <div class='proposal_item'>
-                                    <span class='proposal_number'>1.</span>
-                                    <div class='el_data'>
-                                        <textarea class='el_textarea' name='params[proposals][]' rows='2' placeholder='Введите предложение...'></textarea>
+                                <div class='proposal_item' data-level='1' data-parent='0'>
+                                    <div style='display:flex;align-items:flex-start;gap:10px;width:100%;'>
+                                        <span class='proposal_number' style='padding-top:8px;white-space:nowrap;'>1.</span>
+                                        <div class='el_data' style='flex:1;width:100%;'>
+                                            <textarea class='el_textarea' name='params[proposals][0][text]' rows='3' placeholder='Введите предложение...' style='width:100%;'></textarea>
+                                            <input type='hidden' name='params[proposals][0][level]' value='1'>
+                                            <input type='hidden' name='params[proposals][0][parent]' value='0'>
+                                        </div>
+                                        <div style='display:flex;gap:4px;padding-top:4px;flex-shrink:0;'>
+                                            <button type='button' class='button icon add_subproposal' title='Добавить подпункт'>
+                                                <span class='material-icons'>subdirectory_arrow_right</span>
+                                            </button>
+                                            <button type='button' class='button icon remove_proposal invisible'>
+                                                <span class='material-icons'>close</span>
+                                            </button>
+                                        </div>
                                     </div>
-                                    <button type='button' class='button icon remove_proposal invisible'>
-                                        <span class='material-icons'>close</span>
-                                    </button>
                                 </div>
                             </div>
                             <button type='button' class='button icon text' id='add_proposal'>
-                                <span class='material-icons'>add_circle_outline</span>Ещё предложение
+                                <span class='material-icons'>add_circle_outline</span>Добавить предложение
                             </button>
                         </div>
                     </div>
@@ -295,58 +332,188 @@ $hasObjections = !empty($objections['text']) || !empty($objections['files']);
         agreement_list.agreement_list_init();
         el_app.mainInit();
 
-        var proposalCounter = 1;
+        var proposalIndex = 0;
 
-        // Функция обновления нумерации предложений
+        // Функция обновления нумерации предложений с учётом иерархии
         function updateProposalNumbers() {
-            $('#proposals_container .proposal_item').each(function(index) {
-                $(this).find('.proposal_number').text((index + 1) + '.');
+            var mainCounter = 0;
+            var subCounters = {};
+
+            $('#proposals_container .proposal_item').each(function(idx) {
+                var $item = $(this);
+                var level = parseInt($item.attr('data-level'));
+                var parent = parseInt($item.attr('data-parent'));
+                var number = '';
+
+                if (level === 1) {
+                    mainCounter++;
+                    subCounters[mainCounter] = 0;
+                    number = mainCounter + '.';
+                    $item.attr('data-main-number', mainCounter);
+                } else if (level === 2) {
+                    var parentMain = $item.prevAll('.proposal_item[data-level="1"]').first().attr('data-main-number');
+                    if (!parentMain) parentMain = mainCounter;
+                    if (!subCounters[parentMain]) subCounters[parentMain] = 0;
+                    subCounters[parentMain]++;
+                    number = parentMain + '.' + subCounters[parentMain] + '.';
+                }
+
+                $item.find('.proposal_number').text(number);
+
+                // Обновляем индексы в именах полей
+                var $textarea = $item.find('textarea');
+                var $levelInput = $item.find('input[name*="[level]"]');
+                var $parentInput = $item.find('input[name*="[parent]"]');
+
+                $textarea.attr('name', 'params[proposals][' + idx + '][text]');
+                $levelInput.attr('name', 'params[proposals][' + idx + '][level]').val(level);
+                $parentInput.attr('name', 'params[proposals][' + idx + '][parent]').val(parent);
             });
+
+            // Показываем/скрываем кнопки удаления
+            var totalItems = $('#proposals_container .proposal_item').length;
+            if (totalItems > 1) {
+                $('.remove_proposal').removeClass('invisible');
+            } else {
+                $('.remove_proposal').addClass('invisible');
+            }
         }
 
-        // Добавление нового предложения
-        $('#add_proposal').on('click', function() {
-            proposalCounter++;
+        // Добавление нового основного предложения
+        $('#add_proposal').on('click', function(e) {
+            e.preventDefault();
+            proposalIndex++;
 
-            var $newProposal = $('<div>', {'class': 'proposal_item'});
+            var $newProposal = $('<div>', {
+                'class': 'proposal_item',
+                'data-level': '1',
+                'data-parent': '0'
+            });
 
-            $newProposal.append($('<span>', {'class': 'proposal_number', 'text': proposalCounter + '.'}));
+            var $wrapper = $('<div>', {'style': 'display:flex;align-items:flex-start;gap:10px;width:100%;'});
+            $wrapper.append($('<span>', {'class': 'proposal_number', 'style': 'padding-top:8px;white-space:nowrap;', 'text': '1.'}));
 
-            var $wrap = $('<div>', {'class': 'el_data'});
-            $wrap.append($('<textarea>', {
+            var $dataWrap = $('<div>', {'class': 'el_data', 'style': 'flex:1;width:100%;'});
+            $dataWrap.append($('<textarea>', {
                 'class': 'el_textarea',
-                'name': 'params[proposals][]',
-                'rows': 2,
-                'placeholder': 'Введите предложение...'
+                'name': 'params[proposals][' + proposalIndex + '][text]',
+                'rows': 3,
+                'placeholder': 'Введите предложение...',
+                'style': 'width:100%;'
             }));
-            $newProposal.append($wrap);
+            $dataWrap.append($('<input>', {
+                'type': 'hidden',
+                'name': 'params[proposals][' + proposalIndex + '][level]',
+                'value': '1'
+            }));
+            $dataWrap.append($('<input>', {
+                'type': 'hidden',
+                'name': 'params[proposals][' + proposalIndex + '][parent]',
+                'value': '0'
+            }));
+            $wrapper.append($dataWrap);
 
-            $newProposal.append($('<button>', {
+            var $buttons = $('<div>', {'style': 'display:flex;gap:4px;padding-top:4px;flex-shrink:0;'});
+            $buttons.append($('<button>', {
+                'type': 'button',
+                'class': 'button icon add_subproposal',
+                'title': 'Добавить подпункт',
+                'html': '<span class="material-icons">subdirectory_arrow_right</span>'
+            }));
+            $buttons.append($('<button>', {
                 'type': 'button',
                 'class': 'button icon remove_proposal',
                 'html': '<span class="material-icons">close</span>'
             }));
+            $wrapper.append($buttons);
 
+            $newProposal.append($wrapper);
             $('#proposals_container').append($newProposal);
 
-            // Показываем кнопки удаления, если предложений больше одного
-            if ($('#proposals_container .proposal_item').length > 1) {
-                $('.remove_proposal').removeClass('invisible');
+            updateProposalNumbers();
+        });
+
+        // Добавление подпункта
+        $(document).on('click', '.add_subproposal', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+
+            proposalIndex++;
+            var $parentItem = $(this).closest('.proposal_item');
+            var parentLevel = parseInt($parentItem.attr('data-level'));
+
+            // Подпункт можно добавить только к пункту уровня 1
+            if (parentLevel !== 1) {
+                alert('Подпункты можно добавлять только к основным пунктам');
+                return;
             }
+
+            var $newSubproposal = $('<div>', {
+                'class': 'proposal_item',
+                'data-level': '2',
+                'data-parent': '1'
+            });
+
+            var $wrapper = $('<div>', {'style': 'display:flex;align-items:flex-start;gap:10px;width:100%;'});
+            $wrapper.append($('<span>', {'class': 'proposal_number', 'style': 'padding-top:8px;white-space:nowrap;padding-left:30px;', 'text': '1.1.'}));
+
+            var $dataWrap = $('<div>', {'class': 'el_data', 'style': 'flex:1;width:100%;'});
+            $dataWrap.append($('<textarea>', {
+                'class': 'el_textarea',
+                'name': 'params[proposals][' + proposalIndex + '][text]',
+                'rows': 3,
+                'placeholder': 'Введите подпункт...',
+                'style': 'width:100%;'
+            }));
+            $dataWrap.append($('<input>', {
+                'type': 'hidden',
+                'name': 'params[proposals][' + proposalIndex + '][level]',
+                'value': '2'
+            }));
+            $dataWrap.append($('<input>', {
+                'type': 'hidden',
+                'name': 'params[proposals][' + proposalIndex + '][parent]',
+                'value': '1'
+            }));
+            $wrapper.append($dataWrap);
+
+            var $buttons = $('<div>', {'style': 'display:flex;gap:4px;padding-top:4px;flex-shrink:0;'});
+            $buttons.append($('<button>', {
+                'type': 'button',
+                'class': 'button icon remove_proposal',
+                'html': '<span class="material-icons">close</span>'
+            }));
+            $wrapper.append($buttons);
+
+            $newSubproposal.append($wrapper);
+
+            // Вставляем подпункт после последнего подпункта родителя или после самого родителя
+            var $nextMain = $parentItem.nextAll('.proposal_item[data-level="1"]').first();
+            if ($nextMain.length > 0) {
+                $nextMain.before($newSubproposal);
+            } else {
+                $('#proposals_container').append($newSubproposal);
+            }
+
+            updateProposalNumbers();
         });
 
         // Удаление предложения
-        $(document).on('click', '.remove_proposal', function() {
-            if ($('#proposals_container .proposal_item').length > 1) {
-                $(this).closest('.proposal_item').remove();
-                updateProposalNumbers();
-                proposalCounter = $('#proposals_container .proposal_item').length;
+        $(document).on('click', '.remove_proposal', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
 
-                // Скрываем кнопки удаления, если осталось только одно предложение
-                if ($('#proposals_container .proposal_item').length === 1) {
-                    $('.remove_proposal').addClass('invisible');
-                }
+            var $item = $(this).closest('.proposal_item');
+            var level = parseInt($item.attr('data-level'));
+
+            // Если удаляем основной пункт, удаляем и все его подпункты
+            if (level === 1) {
+                var $subsToRemove = $item.nextUntil('.proposal_item[data-level="1"]');
+                $subsToRemove.remove();
             }
+
+            $item.remove();
+            updateProposalNumbers();
         });
 
         // Создание доклада

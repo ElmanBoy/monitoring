@@ -420,7 +420,11 @@ class Notifications
             $dateEnd = $this->date->correctDateFormatFromMysql($dateArr[1]);
             $dates = 'с ' . $this->date->dateToString($dateStart) . ' по ' . $this->date->dateToString($dateEnd);
 
-            $taskInfo = $this->db->selectOne('tasks', 'WHERE id = ?', [$task->task_id]);
+            // Парсим task_id из JSONB (может быть "[1]" или "[1,2]" или скаляр "1")
+            $taskIdDecoded = json_decode($task->task_id, true);
+            $taskIdFirst = is_array($taskIdDecoded) ? intval($taskIdDecoded[0]) : intval($task->task_id);
+
+            $taskInfo = $this->db->selectOne('tasks', 'WHERE id = ?', [$taskIdFirst]);
             $inspectArr = [];
             $subjectArr = json_decode($taskInfo->subject);
             if (is_array($subjectArr) && count($subjectArr) > 0) {

@@ -2,7 +2,7 @@
 /**
  * modules/documents/ajaxHandlers/create_report.php
  *
- * Создаёт запись доклада министру (documentacial=8) в cam_agreement,
+ * Создаёт запись доклада министру (documentacial=4) в cam_agreement,
  * формирует agreementlist с согласовантами + подписью министра.
  */
 
@@ -31,11 +31,18 @@ $docDate        = trim($_POST['params']['doc_date']           ?? date('Y-m-d'));
 $actSentDate    = trim($_POST['params']['act_sent_date']      ?? '');
 $introText      = trim($_POST['params']['intro_text']         ?? '');
 
-// Получаем предложения как массив и фильтруем пустые
-$proposals      = array_values(array_filter(
-    array_map('trim', (array)($_POST['params']['proposals'] ?? [])),
-    function($val) { return strlen($val) > 0; }
-));
+// Получаем предложения с учётом иерархии (level, parent)
+$proposalsRaw = (array)($_POST['params']['proposals'] ?? []);
+$proposals = [];
+foreach ($proposalsRaw as $idx => $prop) {
+    if (is_array($prop) && !empty(trim($prop['text'] ?? ''))) {
+        $proposals[] = [
+            'text'   => trim($prop['text']),
+            'level'  => intval($prop['level'] ?? 1),
+            'parent' => intval($prop['parent'] ?? 0)
+        ];
+    }
+}
 
 // violation_ids — индексы отмеченных чекбоксов, violation_texts — тексты нарушений
 $checkedIds      = array_map('intval', (array)($_POST['params']['violation_ids']    ?? []));
@@ -64,7 +71,7 @@ if (!$act) {
 }
 
 // Проверяем — нет ли уже доклада
-$existReport = $db->selectOne('agreement', ' WHERE documentacial = 8 AND source_id = ?', [$actId]);
+$existReport = $db->selectOne('agreement', ' WHERE documentacial = 4 AND source_id = ?', [$actId]);
 if ($existReport) {
     echo json_encode(['result' => false, 'resultText' => 'Доклад по этому акту уже создан.', 'report_id' => intval($existReport->id)]);
     die();
@@ -73,7 +80,7 @@ if ($existReport) {
 // ── Формируем agreementlist ───────────────────────────────────
 // ВАЖНО: Министр НЕ добавляется при создании!
 // Министр будет добавлен АВТОМАТИЧЕСКИ после полного согласования
-// (см. updateAgreement.php, documentacial=8, finalStatus=1)
+// (см. updateAgreement.php, documentacial=4, finalStatus=1)
 $agreementList = $agreementListParsed;
 
 // ── Формируем name доклада ────────────────────────────────────
@@ -85,7 +92,7 @@ $reportData = [
     'author'        => intval($_SESSION['user_id']),
     'active'        => 1,
     'name'          => $reportName,
-    'documentacial' => 8,
+    'documentacial' => 4,
     'doc_number'    => $docNumber,
     'status'        => 0,
     'source_id'     => $actId,   // ссылка на акт

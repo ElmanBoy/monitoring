@@ -106,6 +106,8 @@ var el_documents_registry = {
         $(".viewDoc").off("click").on("click", function () {
             let taskId = $(this).data("id");
             let docType = $(this).data("doctype"); // Получаем тип документа
+
+            // Все документы открываем через planPdf (включая доклады)
             el_app.dialog_open("planPdf", {docId: taskId, docType: docType}, "documents");
         });
         $(".agreementDoc").off("click").on("click", function () {
